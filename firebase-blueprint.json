@@ -1,0 +1,195 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role, contact info, and loyalty status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 150 },
+        "phone": { "type": "string", "maxLength": 20 },
+        "role": { "type": "string", "enum": ["CUSTOMER", "ADMIN"] },
+        "memberTier": { "type": "string", "maxLength": 50 },
+        "loyaltyPoints": { "type": "number" },
+        "avatarUrl": { "type": "string", "maxLength": 500 },
+        "emailVerified": { "type": "boolean" },
+        "preferredServices": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "name", "email", "role"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "Salon appointment booking record with live payment and status tracking",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string", "maxLength": 128 },
+        "bookingRef": { "type": "string", "maxLength": 50 },
+        "clientName": { "type": "string", "maxLength": 100 },
+        "clientPhone": { "type": "string", "maxLength": 20 },
+        "clientEmail": { "type": "string", "maxLength": 150 },
+        "serviceId": { "type": "string", "maxLength": 50 },
+        "serviceName": { "type": "string", "maxLength": 150 },
+        "category": { "type": "string", "maxLength": 80 },
+        "date": { "type": "string", "maxLength": 30 },
+        "timeSlot": { "type": "string", "maxLength": 30 },
+        "stylistName": { "type": "string", "maxLength": 100 },
+        "totalAmount": { "type": "number" },
+        "advancePaid": { "type": "number" },
+        "balanceDue": { "type": "number" },
+        "paymentStatus": { "type": "string", "enum": ["PAID", "PENDING", "VERIFIED", "FAILED", "PARTIAL"] },
+        "bookingStatus": { "type": "string", "enum": ["CONFIRMED", "PENDING", "CANCELLED", "COMPLETED"] },
+        "razorpayPaymentId": { "type": "string", "maxLength": 100 },
+        "razorpayOrderId": { "type": "string", "maxLength": 100 },
+        "upiUtr": { "type": "string", "maxLength": 50 },
+        "notes": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["bookingRef", "clientName", "clientPhone", "serviceName", "date", "timeSlot", "totalAmount"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Customer rating and review for salon services",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string", "maxLength": 128 },
+        "clientName": { "type": "string", "maxLength": 100 },
+        "serviceName": { "type": "string", "maxLength": 150 },
+        "rating": { "type": "number" },
+        "comment": { "type": "string", "maxLength": 1000 },
+        "date": { "type": "string", "maxLength": 30 },
+        "verifiedBooking": { "type": "boolean" }
+      },
+      "required": ["clientName", "serviceName", "rating", "comment", "date"]
+    },
+    "Inquiry": {
+      "title": "Inquiry",
+      "description": "Contact and customer consultation inquiry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clientName": { "type": "string", "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 20 },
+        "email": { "type": "string", "maxLength": 150 },
+        "subject": { "type": "string", "maxLength": 150 },
+        "serviceCategory": { "type": "string", "maxLength": 100 },
+        "message": { "type": "string", "maxLength": 1500 },
+        "receivedDate": { "type": "string", "maxLength": 30 },
+        "status": { "type": "string", "enum": ["NEW", "IN PROGRESS", "REPLIED", "CLOSED"] },
+        "ownerReply": { "type": "string", "maxLength": 1000 }
+      },
+      "required": ["clientName", "phone", "message"]
+    },
+    "Offer": {
+      "title": "Offer",
+      "description": "Promotional coupon or seasonal discount",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string", "maxLength": 30 },
+        "title": { "type": "string", "maxLength": 150 },
+        "description": { "type": "string", "maxLength": 500 },
+        "discountPercent": { "type": "number" },
+        "discountAmount": { "type": "number" },
+        "minBookingAmount": { "type": "number" },
+        "validTill": { "type": "string", "maxLength": 30 },
+        "active": { "type": "boolean" }
+      },
+      "required": ["code", "title", "active"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Aggregated customer CRM record for admin analytics",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 20 },
+        "email": { "type": "string", "maxLength": 150 },
+        "totalVisits": { "type": "number" },
+        "totalSpent": { "type": "number" },
+        "lastVisit": { "type": "string", "maxLength": 30 },
+        "favoriteService": { "type": "string", "maxLength": 150 },
+        "tier": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["name", "phone"]
+    },
+    "SalonSetting": {
+      "title": "SalonSetting",
+      "description": "Global salon business configuration and payment settings",
+      "type": "object",
+      "properties": {
+        "salonName": { "type": "string", "maxLength": 100 },
+        "tagline": { "type": "string", "maxLength": 150 },
+        "phone": { "type": "string", "maxLength": 20 },
+        "email": { "type": "string", "maxLength": 150 },
+        "address": { "type": "string", "maxLength": 300 },
+        "openingHours": { "type": "string", "maxLength": 100 },
+        "advancePercentage": { "type": "number" },
+        "currencySymbol": { "type": "string", "maxLength": 5 },
+        "razorpayKeyId": { "type": "string", "maxLength": 100 },
+        "bookingAutoConfirm": { "type": "boolean" },
+        "instagramUrl": { "type": "string", "maxLength": 250 },
+        "mapsUrl": { "type": "string", "maxLength": 250 },
+        "gstNumber": { "type": "string", "maxLength": 100 },
+        "staffType": { "type": "string", "maxLength": 100 }
+      },
+      "required": ["salonName", "phone", "email"]
+    },
+    "GalleryItem": {
+      "title": "GalleryItem",
+      "description": "Salon transformation portfolio image and video records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 150 },
+        "subtitle": { "type": "string", "maxLength": 250 },
+        "category": { "type": "string", "maxLength": 80 },
+        "tag": { "type": "string", "maxLength": 80 },
+        "imageUrl": { "type": "string", "maxLength": 2000000 },
+        "mediaType": { "type": "string", "enum": ["image", "video"] },
+        "videoUrl": { "type": "string", "maxLength": 2000000 },
+        "videoThumbnail": { "type": "string", "maxLength": 2000000 },
+        "duration": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["title", "category", "tag"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profile records containing contact and authorization information"
+    },
+    "/appointments/{appointmentId}": {
+      "schema": { "$ref": "#/entities/Appointment" },
+      "description": "Real-time appointments booked by clients with payment and status details"
+    },
+    "/reviews/{reviewId}": {
+      "schema": { "$ref": "#/entities/Review" },
+      "description": "Customer reviews and feedback for salon services"
+    },
+    "/inquiries/{inquiryId}": {
+      "schema": { "$ref": "#/entities/Inquiry" },
+      "description": "Customer inquiries and consultation questions submitted via contact forms"
+    },
+    "/offers/{offerId}": {
+      "schema": { "$ref": "#/entities/Offer" },
+      "description": "Discount codes, promotional banners and seasonal salon packages"
+    },
+    "/customers/{customerId}": {
+      "schema": { "$ref": "#/entities/Customer" },
+      "description": "Customer CRM records for visits and spend tracking"
+    },
+    "/salon_settings/{settingId}": {
+      "schema": { "$ref": "#/entities/SalonSetting" },
+      "description": "Global salon contact, business hours, and payment configurations"
+    },
+    "/gallery_items/{galleryItemId}": {
+      "schema": { "$ref": "#/entities/GalleryItem" },
+      "description": "Salon transformations photos and uploaded client style videos"
+    }
+  }
+}

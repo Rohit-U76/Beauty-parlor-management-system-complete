@@ -1,0 +1,82 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'rohitumdale@gmail.com' ||
+        request.auth.token.email == 'modernsalon02@gmail.com' ||
+        request.auth.token.email == 'admin@modernsalon.com'
+      );
+    }
+
+    // Users profile collection
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Appointments collection (Real-time booking and status updates)
+    match /appointments/{appointmentId} {
+      allow create: if true; // Allows booking appointments from web app
+      allow read: if isAdmin() || (isSignedIn() && (resource.data.userId == request.auth.uid || resource.data.clientEmail == request.auth.token.email)) || true;
+      allow update: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+    // Customer reviews (Public reading, authenticated or verified client submission, helpful votes)
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if isAdmin() || 
+                       (isSignedIn() && resource.data.userId == request.auth.uid) || 
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['helpfulCount']);
+      allow delete: if isAdmin();
+    }
+
+    // Inquiries from contact page
+    match /inquiries/{inquiryId} {
+      allow create: if true;
+      allow read: if isAdmin() || (isSignedIn() && resource.data.email == request.auth.token.email);
+      allow update, delete: if isAdmin();
+    }
+
+    // Offers & Coupons
+    match /offers/{offerId} {
+      allow read: if true;
+      allow write: if isAdmin() || isSignedIn();
+    }
+
+    // Salon settings & rate cards
+    match /salon_settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin() || isSignedIn();
+    }
+
+    // Customer CRM records
+    match /customers/{customerId} {
+      allow read, write: if isAdmin() || isSignedIn();
+    }
+
+    // Gallery & video showcase collection
+    match /gallery_items/{itemId} {
+      allow read: if true;
+      allow write: if isAdmin() || isSignedIn() || true;
+    }
+  }
+}

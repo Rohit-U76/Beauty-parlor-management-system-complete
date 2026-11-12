@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Production builds
+build/
+dist/
+
+# Testing & Coverage
+coverage/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+.Spotlight-V100
+.Trashes
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files
+.env*
+!.env.example
+
+# IDE & Editor configs
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+
+# Java / Maven build files (for backend-java)
+backend-java/target/
+target/
+*.class
+*.jar
+*.war
+backend-java/.classpath
+backend-java/.project
+backend-java/.settings/
+
+# Local workspace caches & temp files
+.gemini/
+.antigravity/
+*.tmp
+*.bak
+
