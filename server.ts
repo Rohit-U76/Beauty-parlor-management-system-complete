@@ -47,59 +47,23 @@ function initDb() {
         instagramUrl: 'https://www.instagram.com/modern_unisex_salon_mohol?utm_source=qr',
         mapsUrl: 'https://maps.app.goo.gl/CraeBa6gAjWA8o818',
         gstNumber: '27AABCM8104M1Z2 (Available on Invoice)',
-        staffType: 'Self-Employed (Master Stylist & Founder)'
+        staffType: 'Self-Employed (Master Stylist & Founder)',
+        accountHolder: 'MODERN JENTS PARLOUR',
+        bankName: 'HDFC Bank',
+        bankAccountNumber: '50200072074441',
+        bankIfsc: 'HDFC0000635',
+        bankBranch: 'Solapur',
+        bankAccountType: 'Current Account',
+        merchantUpiId: 'ghodakedinesh@ybl',
+        upiId: 'ghodakedinesh@ybl',
+        upiQrCodeUrl: '/assets/aistudio/image_2ca5cc29.png',
+        secondaryUpiId: '8104026257@axl',
+        secondaryAccountHolder: 'DINESH VITTHAL GHODAKE',
+        secondaryUpiQrCodeUrl: '/assets/aistudio/image_fce20bf8.png'
       },
-      inquiries: [
-        {
-          id: 'inq-1',
-          clientName: 'Sneha Patil',
-          phone: '9822109876',
-          email: 'sneha.patil@gmail.com',
-          subject: 'Bridal Package Consultation',
-          serviceCategory: 'Bridal & Pre-Bridal',
-          message: 'Looking for full bridal package details for wedding on Dec 15th.',
-          receivedDate: '2026-03-01',
-          status: 'NEW'
-        },
-        {
-          id: 'inq-2',
-          clientName: 'Amol Shinde',
-          phone: '9158402211',
-          email: 'amol.shinde@outlook.com',
-          subject: 'Keratin Treatment Inquiry',
-          serviceCategory: 'Hair Services',
-          message: 'Is keratin safe for colored hair? What is the duration?',
-          receivedDate: '2026-03-03',
-          status: 'IN PROGRESS'
-        }
-      ],
+      inquiries: [],
       appointments: [],
-      customers: [
-        {
-          id: 'cust-1',
-          name: 'Pooja Kadam',
-          phone: '9822099881',
-          email: 'pooja.kadam@gmail.com',
-          totalVisits: 5,
-          totalSpent: 7500,
-          lastVisit: '2026-08-10',
-          favoriteService: 'O3 Prof. Facial',
-          memberSince: '2026-01-15',
-          tier: 'VIP Member'
-        },
-        {
-          id: 'cust-2',
-          name: 'Rohan Shinde',
-          phone: '9765433445',
-          email: 'rohan.shinde@yahoo.com',
-          totalVisits: 4,
-          totalSpent: 2200,
-          lastVisit: '2026-08-01',
-          favoriteService: 'Advance Hair Cut & Blow Dry',
-          memberSince: '2026-02-10',
-          tier: 'Standard'
-        }
-      ],
+      customers: [],
       notifications: [],
       reviews: []
     };
@@ -112,36 +76,6 @@ function syncCustomerStats(db: any) {
   if (!db.customers) db.customers = [];
   if (!db.appointments) db.appointments = [];
   if (!db.users) db.users = [];
-
-  // Seed default customers if list is empty
-  if (db.customers.length === 0) {
-    db.customers = [
-      {
-        id: 'cust-1',
-        name: 'Pooja Kadam',
-        phone: '9822099881',
-        email: 'pooja.kadam@gmail.com',
-        totalVisits: 5,
-        totalSpent: 7500,
-        lastVisit: '2026-08-10',
-        favoriteService: 'O3 Prof. Facial',
-        memberSince: '2026-01-15',
-        tier: 'VIP Member'
-      },
-      {
-        id: 'cust-2',
-        name: 'Rohan Shinde',
-        phone: '9765433445',
-        email: 'rohan.shinde@yahoo.com',
-        totalVisits: 4,
-        totalSpent: 2200,
-        lastVisit: '2026-08-01',
-        favoriteService: 'Advance Hair Cut & Blow Dry',
-        memberSince: '2026-02-10',
-        tier: 'Standard'
-      }
-    ];
-  }
 
   // Ensure every non-admin user in db.users is present in db.customers
   for (const u of db.users) {
@@ -740,7 +674,7 @@ async function startServer() {
         id: `usr-cust-${Date.now()}`,
         name: name.trim(),
         username: cleanUsername,
-        email: cleanEmail || `${cleanUsername}@example.com`,
+        email: cleanEmail,
         phone: cleanPhone,
         password: password,
         role: 'CUSTOMER',
@@ -1389,6 +1323,23 @@ async function startServer() {
       }
       console.log('[Settings Updated in DB]:', updates);
       res.json({ success: true, settings: db.settings, message: 'Settings updated successfully' });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/admin/clear-past-data', (req, res) => {
+    try {
+      const db = readDb();
+      db.appointments = [];
+      db.customers = [];
+      db.inquiries = [];
+      db.notifications = [];
+      db.broadcastLogs = [];
+      db.verifiedDeposits = [];
+      db.users = (db.users || []).filter((u: any) => u.role === 'ADMIN');
+      writeDb(db);
+      res.json({ success: true, message: 'All past appointments, users, customer CRM, and analytics records cleared.' });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
     }

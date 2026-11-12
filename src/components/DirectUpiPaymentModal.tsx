@@ -50,33 +50,24 @@ const BANK_INFO = {
   accountHolder: 'MODERN JENTS PARLOUR',
   accountNumber: '50200072074441',
   ifsc: 'HDFC0000635',
-  branch: 'SOLAPUR',
+  branch: 'Solapur',
   accountType: 'Current Account',
   bankName: 'HDFC Bank',
   mobile: '8104026257',
   email: 'dineshghodake941@gmail.com',
-  // Bank of India details from official cheque leaf
-  boi: {
-    accountHolder: 'DINESH VITTHAL GHODAKE',
-    accountNumber: '070116310000428',
-    ifsc: 'BKID0000701',
-    branch: 'SUBHASH CHOWK Branch, 142 Murarji Peth, Solapur - 413001',
-    bankName: 'Bank of India',
-    accountType: 'Savings Account'
-  },
   scanner1: {
     id: 'scanner1',
     name: 'MODERN JENTS PARLOUR',
     subtitle: 'Primary Salon Current Account (PhonePe / UPI)',
     upiId: 'ghodakedinesh@ybl',
-    posterImage: '/qr-modern-jents-parlour.jpg'
+    posterImage: '/assets/aistudio/image_2ca5cc29.png'
   },
   scanner2: {
     id: 'scanner2',
     name: 'DINESH VITTHAL GHODAKE',
     subtitle: 'Secondary Owner Account (PhonePe / UPI)',
     upiId: '8104026257@axl',
-    posterImage: '/qr-dinesh-ghodake.jpg'
+    posterImage: '/assets/aistudio/image_fce20bf8.png'
   }
 };
 
@@ -96,7 +87,6 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
   const { settings } = useSalon();
 
   const [selectedOption, setSelectedOption] = useState<ScannerOption>('scanner1');
-  const [selectedBankSubTab, setSelectedBankSubTab] = useState<'hdfc' | 'boi'>('hdfc');
   const [showPosterStandee, setShowPosterStandee] = useState<boolean>(false);
   const [dynamicQrDataUrl, setDynamicQrDataUrl] = useState<string>('');
   const [utrNumber, setUtrNumber] = useState<string>('');
@@ -219,19 +209,19 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
     if (selectedOption === 'scanner2') {
       return {
         id: 'scanner2',
-        name: settings.secondaryAccountHolder || 'DINESH VITTHAL GHODAKE',
+        name: settings.secondaryAccountHolder || BANK_INFO.scanner2.name,
         subtitle: 'Secondary Owner Account (PhonePe / UPI)',
         upiId: settings.secondaryUpiId || BANK_INFO.scanner2.upiId,
         posterImage: settings.secondaryUpiQrCodeUrl || BANK_INFO.scanner2.posterImage
       };
     }
-    // Scanner 1: Primary Salon Current Account (Union Bank / PhonePe QR)
+    // Scanner 1: Primary Salon Current Account (HDFC Bank / PhonePe QR)
     return {
       id: 'scanner1',
-      name: settings.accountHolder || settings.salonName || BANK_INFO.scanner1.name,
-      subtitle: `${settings.bankName || 'Union Bank'} (PhonePe / UPI)`,
-      upiId: settings.merchantUpiId || settings.upiId || '9975236976@ibl',
-      posterImage: settings.upiQrCodeUrl || '/qr-union-bank-phonepe.jpg'
+      name: settings.accountHolder || BANK_INFO.scanner1.name,
+      subtitle: `${settings.bankName || BANK_INFO.bankName} (PhonePe / UPI)`,
+      upiId: settings.merchantUpiId || settings.upiId || BANK_INFO.scanner1.upiId,
+      posterImage: settings.upiQrCodeUrl || BANK_INFO.scanner1.posterImage
     };
   }, [selectedOption, settings]);
 
@@ -348,7 +338,7 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
       ? 'HDFC Bank Direct Transfer'
       : `UPI Scanner: ${currentUpiTarget.name}`;
     const bankLabel = selectedOption === 'bank'
-      ? (selectedBankSubTab === 'boi' ? 'Bank of India' : 'HDFC Bank')
+      ? (settings?.bankName || 'HDFC Bank')
       : currentUpiTarget.name;
 
     setIsVerifying(false);
@@ -367,7 +357,7 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
       ? 'HDFC Bank Direct Transfer'
       : `UPI Scanner: ${currentUpiTarget.name}`;
     const bankLabel = selectedOption === 'bank'
-      ? (selectedBankSubTab === 'boi' ? 'Bank of India' : 'HDFC Bank')
+      ? (settings?.bankName || 'HDFC Bank')
       : currentUpiTarget.name;
     effectiveSuccess(`upi_${cleanUtr}`, cleanUtr, scannerLabel, true, 'ADMIN_MANUAL', bankLabel, uploadedScreenshotUrl);
   };
@@ -480,7 +470,7 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                   <Building2 className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                   <span className="truncate">Bank Account</span>
                 </div>
-                <div className="text-[10px] opacity-80 truncate mt-1">{settings.bankName || 'Union Bank'}</div>
+                <div className="text-[10px] opacity-80 truncate mt-1">{settings.bankName || BANK_INFO.bankName}</div>
               </button>
             </div>
           </div>
@@ -583,7 +573,7 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
             </div>
           )}
 
-          {/* VIEW: DIRECT BANK TRANSFER (HDFC BANK / BANK OF INDIA) */}
+          {/* VIEW: DIRECT BANK TRANSFER (HDFC BANK) */}
           {selectedOption === 'bank' && (
             <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900/90 border border-zinc-200 dark:border-zinc-800 space-y-3">
               <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2">
@@ -591,141 +581,66 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                   <Building2 className="w-4 h-4" />
                   <span>Direct Bank Account Transfer</span>
                 </div>
-                <div className="flex gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedBankSubTab('hdfc')}
-                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold cursor-pointer transition ${
-                      selectedBankSubTab === 'hdfc'
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
-                    }`}
-                  >
-                    HDFC Bank
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedBankSubTab('boi')}
-                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold cursor-pointer transition ${
-                      selectedBankSubTab === 'boi'
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
-                    }`}
-                  >
-                    Bank of India
-                  </button>
-                </div>
+                <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-blue-600 text-white shadow-xs">
+                  {settings.bankName || BANK_INFO.bankName}
+                </span>
               </div>
 
-              {selectedBankSubTab === 'hdfc' ? (
-                <div className="space-y-2 text-[11px]">
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
-                    <span className="text-zinc-500 dark:text-zinc-400">Account Holder:</span>
-                    <div className="flex items-center gap-1.5">
-                      <strong className="font-semibold text-zinc-900 dark:text-zinc-100">{BANK_INFO.accountHolder}</strong>
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(BANK_INFO.accountHolder, 'holder')}
-                        className="text-amber-500 hover:text-amber-400 p-0.5 cursor-pointer"
-                      >
-                        {copiedField === 'holder' ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
-                    <span className="text-zinc-500 dark:text-zinc-400">Account Number:</span>
-                    <div className="flex items-center gap-1.5">
-                      <strong className="font-mono font-bold text-zinc-900 dark:text-zinc-100 text-xs">{BANK_INFO.accountNumber}</strong>
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(BANK_INFO.accountNumber, 'acc')}
-                        className="text-amber-500 hover:text-amber-400 p-0.5 cursor-pointer"
-                      >
-                        {copiedField === 'acc' ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
-                    <span className="text-zinc-500 dark:text-zinc-400">IFSC Code:</span>
-                    <div className="flex items-center gap-1.5">
-                      <strong className="font-mono font-bold text-zinc-900 dark:text-zinc-100">{BANK_INFO.ifsc}</strong>
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(BANK_INFO.ifsc, 'ifsc')}
-                        className="text-amber-500 hover:text-amber-400 p-0.5 cursor-pointer"
-                      >
-                        {copiedField === 'ifsc' ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
-                    <span className="text-zinc-500 dark:text-zinc-400">Bank &amp; Branch:</span>
-                    <strong className="font-semibold text-zinc-900 dark:text-zinc-100">{BANK_INFO.bankName}, {BANK_INFO.branch}</strong>
-                  </div>
-
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
-                    <span className="text-zinc-500 dark:text-zinc-400">Account Type:</span>
-                    <strong className="font-semibold text-zinc-900 dark:text-zinc-100">{BANK_INFO.accountType}</strong>
+              <div className="space-y-2 text-[11px]">
+                <div className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
+                  <span className="text-zinc-500 dark:text-zinc-400">Account Holder:</span>
+                  <div className="flex items-center gap-1.5">
+                    <strong className="font-semibold text-zinc-900 dark:text-zinc-100">{settings.accountHolder || BANK_INFO.accountHolder}</strong>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(settings.accountHolder || BANK_INFO.accountHolder, 'holder')}
+                      className="text-amber-500 hover:text-amber-400 p-0.5 cursor-pointer"
+                    >
+                      {copiedField === 'holder' ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                    </button>
                   </div>
                 </div>
-              ) : (
-                <div className="space-y-2 text-[11px]">
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
-                    <span className="text-zinc-500 dark:text-zinc-400">Account Holder:</span>
-                    <div className="flex items-center gap-1.5">
-                      <strong className="font-semibold text-zinc-900 dark:text-zinc-100">{BANK_INFO.boi.accountHolder}</strong>
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(BANK_INFO.boi.accountHolder, 'holder_boi')}
-                        className="text-amber-500 hover:text-amber-400 p-0.5 cursor-pointer"
-                      >
-                        {copiedField === 'holder_boi' ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                      </button>
-                    </div>
-                  </div>
 
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
-                    <span className="text-zinc-500 dark:text-zinc-400">Account Number:</span>
-                    <div className="flex items-center gap-1.5">
-                      <strong className="font-mono font-bold text-zinc-900 dark:text-zinc-100 text-xs">{BANK_INFO.boi.accountNumber}</strong>
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(BANK_INFO.boi.accountNumber, 'acc_boi')}
-                        className="text-amber-500 hover:text-amber-400 p-0.5 cursor-pointer"
-                      >
-                        {copiedField === 'acc_boi' ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
-                    <span className="text-zinc-500 dark:text-zinc-400">IFSC Code:</span>
-                    <div className="flex items-center gap-1.5">
-                      <strong className="font-mono font-bold text-zinc-900 dark:text-zinc-100">{BANK_INFO.boi.ifsc}</strong>
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(BANK_INFO.boi.ifsc, 'ifsc_boi')}
-                        className="text-amber-500 hover:text-amber-400 p-0.5 cursor-pointer"
-                      >
-                        {copiedField === 'ifsc_boi' ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
-                    <span className="text-zinc-500 dark:text-zinc-400">Bank &amp; Branch:</span>
-                    <strong className="font-semibold text-zinc-900 dark:text-zinc-100">{BANK_INFO.boi.bankName}, {BANK_INFO.boi.branch}</strong>
-                  </div>
-
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
-                    <span className="text-zinc-500 dark:text-zinc-400">Account Type:</span>
-                    <strong className="font-semibold text-zinc-900 dark:text-zinc-100">{BANK_INFO.boi.accountType}</strong>
+                <div className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
+                  <span className="text-zinc-500 dark:text-zinc-400">Account Number:</span>
+                  <div className="flex items-center gap-1.5">
+                    <strong className="font-mono font-bold text-zinc-900 dark:text-zinc-100 text-xs">{settings.bankAccountNumber || BANK_INFO.accountNumber}</strong>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(settings.bankAccountNumber || BANK_INFO.accountNumber, 'acc')}
+                      className="text-amber-500 hover:text-amber-400 p-0.5 cursor-pointer"
+                    >
+                      {copiedField === 'acc' ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                    </button>
                   </div>
                 </div>
-              )}
+
+                <div className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
+                  <span className="text-zinc-500 dark:text-zinc-400">IFSC Code:</span>
+                  <div className="flex items-center gap-1.5">
+                    <strong className="font-mono font-bold text-zinc-900 dark:text-zinc-100">{settings.bankIfsc || BANK_INFO.ifsc}</strong>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(settings.bankIfsc || BANK_INFO.ifsc, 'ifsc')}
+                      className="text-amber-500 hover:text-amber-400 p-0.5 cursor-pointer"
+                    >
+                      {copiedField === 'ifsc' ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
+                  <span className="text-zinc-500 dark:text-zinc-400">Bank &amp; Branch:</span>
+                  <strong className="font-semibold text-zinc-900 dark:text-zinc-100">
+                    {settings.bankName || BANK_INFO.bankName}, {settings.bankBranch || BANK_INFO.branch}
+                  </strong>
+                </div>
+
+                <div className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
+                  <span className="text-zinc-500 dark:text-zinc-400">Account Type:</span>
+                  <strong className="font-semibold text-zinc-900 dark:text-zinc-100">{settings.bankAccountType || BANK_INFO.accountType}</strong>
+                </div>
+              </div>
             </div>
           )}
 

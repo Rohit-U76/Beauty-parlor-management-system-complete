@@ -807,7 +807,7 @@ export const ClientTestimonials: React.FC<ClientTestimonialsProps> = ({
                 <input
                   type="text"
                   required
-                  placeholder="e.g., Priya Sharma"
+                  placeholder="Enter your full name"
                   value={formData.clientName}
                   onChange={e => setFormData({ ...formData, clientName: e.target.value })}
                   className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-zinc-200 placeholder-zinc-500 focus:border-yellow-500 focus:outline-none"

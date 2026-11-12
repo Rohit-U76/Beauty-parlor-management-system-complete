@@ -25,7 +25,6 @@ import {
   RotateCcw,
   X,
   AlertCircle,
-  ExternalLink,
   ChevronDown
 } from 'lucide-react';
 
@@ -47,7 +46,7 @@ const AVAILABLE_ICONS: { name: string; label: string; icon: React.ReactNode }[] 
 ];
 
 export const AdminTermsPolicies: React.FC = () => {
-  const { policies, addPolicy, updatePolicy, deletePolicy, setActiveNavTab, setIsAdminMode } = useSalon();
+  const { policies, addPolicy, updatePolicy, deletePolicy } = useSalon();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
@@ -182,24 +181,24 @@ export const AdminTermsPolicies: React.FC = () => {
     <div className="space-y-6">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-4 right-4 z-50 px-4 py-3 rounded-2xl bg-zinc-900 border border-amber-500/50 shadow-2xl text-xs font-semibold text-amber-300 flex items-center gap-2 animate-bounce">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+        <div className="fixed top-4 right-4 z-50 px-4 py-3 rounded-2xl bg-white dark:bg-zinc-900 border border-purple-300 dark:border-amber-500/50 shadow-2xl text-xs font-semibold text-purple-800 dark:text-amber-300 flex items-center gap-2 animate-bounce">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
           <span>{toastMessage}</span>
         </div>
       )}
 
       {/* Top Header Card */}
-      <div className="p-6 rounded-3xl bg-zinc-900 border border-zinc-800 space-y-4">
+      <div className="p-6 rounded-3xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 space-y-4 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">
+            <div className="w-10 h-10 rounded-2xl bg-purple-100 dark:bg-amber-500/20 text-purple-700 dark:text-amber-400 flex items-center justify-center font-bold">
               <FileText className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="font-serif text-lg sm:text-xl font-bold text-zinc-100">
-                Terms & Conditions Manager
+              <h2 className="font-serif text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-100">
+                Terms &amp; Conditions Manager
               </h2>
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-zinc-600 dark:text-zinc-400">
                 Edit, add, and remove salon terms, cancellation rules, hygiene protocols, and booking policies.
               </p>
             </div>
@@ -207,19 +206,8 @@ export const AdminTermsPolicies: React.FC = () => {
 
           <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={() => {
-                setIsAdminMode(false);
-                setActiveNavTab('terms');
-              }}
-              className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
-              title="Preview Customer Facing Terms Page"
-            >
-              <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
-              <span>View Client Page</span>
-            </button>
-            <button
               onClick={handleResetDefaults}
-              className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 text-xs font-medium flex items-center gap-1.5 transition cursor-pointer"
+              className="px-3.5 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 border border-purple-200 dark:border-transparent text-xs font-medium flex items-center gap-1.5 transition cursor-pointer"
               title="Reset terms to default salon policy"
             >
               <RotateCcw className="w-3.5 h-3.5" />
@@ -227,7 +215,7 @@ export const AdminTermsPolicies: React.FC = () => {
             </button>
             <button
               onClick={openAddModal}
-              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold flex items-center gap-1.5 shadow-md hover:shadow-lg transition cursor-pointer"
+              className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white dark:bg-amber-500 dark:hover:bg-amber-400 dark:text-zinc-950 text-xs font-bold flex items-center gap-1.5 shadow-md hover:shadow-lg transition cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Add New Term / Condition</span>
@@ -236,7 +224,7 @@ export const AdminTermsPolicies: React.FC = () => {
         </div>
 
         {/* Search and Stats Row */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-zinc-800/80">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-purple-100 dark:border-zinc-800/80">
           <div className="md:col-span-2 relative">
             <Search className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
@@ -244,21 +232,21 @@ export const AdminTermsPolicies: React.FC = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search terms (e.g. advance, refund, children, hygiene, cancellation)..."
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500/70"
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:border-purple-500 dark:focus:border-amber-500/70"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 text-xs"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 text-xs"
               >
                 Clear
               </button>
             )}
           </div>
 
-          <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-zinc-950/80 border border-zinc-800/80 text-xs">
-            <span className="text-zinc-400">Active Policies:</span>
-            <span className="font-bold text-amber-400">
+          <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-purple-50/70 dark:bg-zinc-950/80 border border-purple-200 dark:border-zinc-800/80 text-xs">
+            <span className="text-zinc-600 dark:text-zinc-400">Active Policies:</span>
+            <span className="font-bold text-purple-700 dark:text-amber-400">
               {filteredPolicies.length} of {activePoliciesList.length} items
             </span>
           </div>
@@ -273,17 +261,17 @@ export const AdminTermsPolicies: React.FC = () => {
           return (
             <div
               key={policy.id}
-              className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800/90 hover:border-zinc-700 transition flex flex-col justify-between space-y-4 relative group"
+              className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800/90 hover:border-purple-400 dark:hover:border-zinc-700 transition flex flex-col justify-between space-y-4 relative group shadow-sm"
             >
               <div className="space-y-3">
                 {/* Header */}
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-center shrink-0">
+                    <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 flex items-center justify-center shrink-0">
                       {getPolicyIcon(policy.iconName)}
                     </div>
                     <div>
-                      <h3 className="text-sm font-bold text-zinc-100 group-hover:text-amber-300 transition-colors">
+                      <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-purple-700 dark:group-hover:text-amber-300 transition-colors">
                         {policy.title}
                       </h3>
                       <span className="text-[10px] text-zinc-500 font-mono">
@@ -296,14 +284,14 @@ export const AdminTermsPolicies: React.FC = () => {
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
                       onClick={() => openEditModal(policy)}
-                      className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-amber-400 text-xs transition cursor-pointer"
+                      className="p-2 rounded-lg bg-purple-50 hover:bg-purple-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-purple-700 dark:text-zinc-300 hover:text-purple-900 dark:hover:text-amber-400 text-xs transition cursor-pointer"
                       title="Edit Term & Condition"
                     >
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={() => setDeleteConfirmId(policy.id)}
-                      className="p-2 rounded-lg bg-zinc-800 hover:bg-red-500/20 text-zinc-400 hover:text-red-400 text-xs transition cursor-pointer"
+                      className="p-2 rounded-lg bg-purple-50 dark:bg-zinc-800 hover:bg-red-500/20 text-zinc-500 dark:text-zinc-400 hover:text-red-500 dark:hover:text-red-400 text-xs transition cursor-pointer"
                       title="Remove Term & Condition"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -313,17 +301,17 @@ export const AdminTermsPolicies: React.FC = () => {
 
                 {/* Summary */}
                 {policy.summary && (
-                  <p className="text-xs text-zinc-300 font-medium leading-relaxed bg-zinc-950/60 p-2.5 rounded-xl border border-zinc-800/60">
+                  <p className="text-xs text-zinc-700 dark:text-zinc-300 font-medium leading-relaxed bg-purple-50/50 dark:bg-zinc-950/60 p-2.5 rounded-xl border border-purple-100 dark:border-zinc-800/60">
                     {policy.summary}
                   </p>
                 )}
 
                 {/* Points list */}
                 {policy.points && policy.points.length > 0 && (
-                  <ul className="space-y-1.5 pt-1 text-xs text-zinc-400">
+                  <ul className="space-y-1.5 pt-1 text-xs text-zinc-600 dark:text-zinc-400">
                     {policy.points.map((pt, idx) => (
                       <li key={idx} className="flex items-start gap-2">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-amber-500/70 shrink-0 mt-0.5" />
+                        <CheckCircle2 className="w-3.5 h-3.5 text-purple-600 dark:text-amber-500/70 shrink-0 mt-0.5" />
                         <span className="leading-snug">{pt}</span>
                       </li>
                     ))}
@@ -360,15 +348,15 @@ export const AdminTermsPolicies: React.FC = () => {
       </div>
 
       {filteredPolicies.length === 0 && (
-        <div className="p-12 rounded-3xl bg-zinc-900 border border-zinc-800 text-center space-y-3">
-          <FileText className="w-10 h-10 text-zinc-600 mx-auto" />
-          <div className="text-sm font-bold text-zinc-300">No matching terms or conditions found</div>
-          <p className="text-xs text-zinc-500 max-w-sm mx-auto">
+        <div className="p-12 rounded-3xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 text-center space-y-3">
+          <FileText className="w-10 h-10 text-purple-400 dark:text-zinc-600 mx-auto" />
+          <div className="text-sm font-bold text-zinc-900 dark:text-zinc-300">No matching terms or conditions found</div>
+          <p className="text-xs text-zinc-600 dark:text-zinc-500 max-w-sm mx-auto">
             Try adjusting your search keyword or add a new term using the button above.
           </p>
           <button
             onClick={openAddModal}
-            className="mt-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+            className="mt-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white dark:bg-amber-500 dark:hover:bg-amber-400 dark:text-zinc-950 text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Add Term Now</span>
@@ -378,26 +366,26 @@ export const AdminTermsPolicies: React.FC = () => {
 
       {/* Add / Edit Policy Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
-          <div className="w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 dark:bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-lg bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             {/* Modal Header */}
-            <div className="p-5 border-b border-zinc-800 flex items-center justify-between">
+            <div className="p-5 border-b border-purple-200 dark:border-zinc-800 bg-purple-50/60 dark:bg-zinc-900 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">
+                <div className="w-8 h-8 rounded-xl bg-purple-100 dark:bg-amber-500/20 text-purple-700 dark:text-amber-400 flex items-center justify-center font-bold">
                   <FileText className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-serif text-sm font-bold text-zinc-100">
+                  <h3 className="font-serif text-sm font-bold text-zinc-900 dark:text-zinc-100">
                     {editingPolicy ? 'Edit Term & Condition' : 'Add New Term & Condition'}
                   </h3>
-                  <p className="text-[11px] text-zinc-400">
+                  <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
                     {editingPolicy ? `Editing ${editingPolicy.title}` : 'Define a new policy rule for your salon clients'}
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setModalOpen(false)}
-                className="p-1.5 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white transition cursor-pointer"
+                className="p-1.5 rounded-lg bg-purple-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -407,8 +395,8 @@ export const AdminTermsPolicies: React.FC = () => {
             <form onSubmit={handleSavePolicy} className="p-5 space-y-4 overflow-y-auto flex-1">
               {/* Title */}
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-zinc-300 block">
-                  Policy Title <span className="text-amber-400">*</span>
+                <label className="text-xs font-semibold text-zinc-800 dark:text-zinc-300 block">
+                  Policy Title <span className="text-purple-600 dark:text-amber-400">*</span>
                 </label>
                 <input
                   type="text"
@@ -416,13 +404,13 @@ export const AdminTermsPolicies: React.FC = () => {
                   value={formTitle}
                   onChange={(e) => setFormTitle(e.target.value)}
                   placeholder="e.g. Appointment Rescheduling & Advance Transfer"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
                 />
               </div>
 
               {/* Summary */}
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-zinc-300 block">
+                <label className="text-xs font-semibold text-zinc-800 dark:text-zinc-300 block">
                   Summary / Highlight
                 </label>
                 <input
@@ -430,13 +418,13 @@ export const AdminTermsPolicies: React.FC = () => {
                   value={formSummary}
                   onChange={(e) => setFormSummary(e.target.value)}
                   placeholder="e.g. Clients may reschedule up to 3 hours prior with deposit carried forward."
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
                 />
               </div>
 
               {/* Icon Picker */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-300 block">
+                <label className="text-xs font-semibold text-zinc-800 dark:text-zinc-300 block">
                   Select Visual Category Icon
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -449,11 +437,11 @@ export const AdminTermsPolicies: React.FC = () => {
                         onClick={() => setFormIcon(ic.name)}
                         className={`p-2 rounded-xl border text-left flex items-center gap-2 transition cursor-pointer ${
                           isSelected
-                            ? 'bg-amber-500/20 border-amber-500 text-zinc-100'
-                            : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700'
+                            ? 'bg-purple-100 dark:bg-amber-500/20 border-purple-500 dark:border-amber-500 text-purple-900 dark:text-zinc-100 font-semibold'
+                            : 'bg-purple-50/50 dark:bg-zinc-950 border-purple-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-400 hover:border-purple-400 dark:hover:border-zinc-700'
                         }`}
                       >
-                        <div className="p-1 rounded-lg bg-zinc-900 shrink-0">{ic.icon}</div>
+                        <div className="p-1 rounded-lg bg-white dark:bg-zinc-900 shrink-0">{ic.icon}</div>
                         <span className="text-[11px] font-medium truncate">{ic.label}</span>
                       </button>
                     );
@@ -464,8 +452,8 @@ export const AdminTermsPolicies: React.FC = () => {
               {/* Policy Points / Clauses */}
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-zinc-300 block">
-                    Detailed Points & Clauses
+                  <label className="text-xs font-semibold text-zinc-800 dark:text-zinc-300 block">
+                    Detailed Points &amp; Clauses
                   </label>
                   <span className="text-[10px] text-zinc-500 font-mono">One bullet point per line</span>
                 </div>
@@ -474,22 +462,22 @@ export const AdminTermsPolicies: React.FC = () => {
                   value={formPointsText}
                   onChange={(e) => setFormPointsText(e.target.value)}
                   placeholder={`• Advance deposits are non-refundable for no-shows.\n• Rescheduling is complimentary when informed 3 hours in advance.\n• Balances must be settled post service via Cash or UPI.`}
-                  className="w-full p-3 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-amber-500 leading-relaxed font-mono"
+                  className="w-full p-3 rounded-xl bg-white dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-purple-500 dark:focus:border-amber-500 leading-relaxed font-mono"
                 />
               </div>
 
               {/* Actions */}
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-zinc-800">
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-purple-100 dark:border-zinc-800">
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-purple-900 dark:text-zinc-300 text-xs font-medium cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold cursor-pointer"
+                  className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white dark:bg-amber-500 dark:hover:bg-amber-400 dark:text-zinc-950 text-xs font-bold cursor-pointer"
                 >
                   {editingPolicy ? 'Update Term' : 'Save Term & Condition'}
                 </button>

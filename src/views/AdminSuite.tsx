@@ -59,7 +59,8 @@ import {
   Video,
   Play,
   Upload,
-  Film
+  Film,
+  Bell
 } from 'lucide-react';
 import { useSalon } from '../context/SalonContext';
 import { ServiceItem, Appointment, GalleryItem, OfferCoupon, AppointmentStatus, StaffMember, WhatsAppBroadcastLog } from '../types';
@@ -70,6 +71,7 @@ import { AdminTermsPolicies } from '../components/AdminTermsPolicies';
 import { ReceiptModal } from '../components/ReceiptModal';
 import { AdminOfferBroadcastModal } from '../components/AdminOfferBroadcastModal';
 import { AdminSlotBlackoutManager } from '../components/AdminSlotBlackoutManager';
+import { ThemeToggle } from '../components/ThemeToggle';
 
 export const AdminSuite: React.FC = () => {
   const {
@@ -111,7 +113,8 @@ export const AdminSuite: React.FC = () => {
     addStaffMember,
     updateStaffMember,
     deleteStaffMember,
-    fetchBroadcastLogs
+    fetchBroadcastLogs,
+    clearAllPastData
   } = useSalon();
 
   // Search & Filter
@@ -134,6 +137,8 @@ export const AdminSuite: React.FC = () => {
   const [showSmsHubModal, setShowSmsHubModal] = useState(false);
   const [selectedAppForMessaging, setSelectedAppForMessaging] = useState<Appointment | null>(null);
   const [viewingScreenshotUrl, setViewingScreenshotUrl] = useState<string | null>(null);
+  const [showUpcomingAppointmentsModal, setShowUpcomingAppointmentsModal] = useState(false);
+  const [isClearingPastData, setIsClearingPastData] = useState(false);
 
   // Staff State & Form
   const [staffSearch, setStaffSearch] = useState('');
@@ -145,7 +150,7 @@ export const AdminSuite: React.FC = () => {
   const [staffRole, setStaffRole] = useState('Senior Hair Stylist');
   const [staffDepartment, setStaffDepartment] = useState<StaffMember['department']>('Hair Care');
   const [staffExperience, setStaffExperience] = useState('5 Years');
-  const [staffPhone, setStaffPhone] = useState('+91 98765 43210');
+  const [staffPhone, setStaffPhone] = useState('');
   const [staffEmail, setStaffEmail] = useState('');
   const [staffShift, setStaffShift] = useState('9:00 AM - 7:00 PM');
   const [staffStatus, setStaffStatus] = useState<StaffMember['status']>('Available Today');
@@ -398,7 +403,7 @@ export const AdminSuite: React.FC = () => {
     updateAppointmentStatus(app.id, 'CONFIRMED', {
       isBankVerified: true,
       bankVerifiedSource: 'ADMIN_MANUAL',
-      verifiedBankName: 'Union Bank of India (A/c 4079)',
+      verifiedBankName: `${settings.bankName || 'HDFC Bank'} (A/c ${(settings.bankAccountNumber || '50200072074441').slice(-4)})`,
       paymentStatus: 'PAID'
     });
     setActionFeedbackToast(`✅ Confirmed ₹${app.advancePaid} deposit credit for ${app.clientName}! (UTR: ${app.upiTransactionId || 'Manual Verified'})`);
@@ -615,25 +620,25 @@ export const AdminSuite: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col md:flex-row text-left">
+    <div className="min-h-screen bg-[#faf7ff] dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 flex flex-col md:flex-row text-left transition-colors">
       {/* DESKTOP SIDEBAR */}
-      <aside className="hidden md:flex md:w-64 bg-zinc-900 border-r border-zinc-800 flex-col justify-between shrink-0">
+      <aside className="hidden md:flex md:w-64 bg-white dark:bg-zinc-900 border-r border-purple-200 dark:border-zinc-800 flex-col justify-between shrink-0">
         <div>
           {/* Header */}
-          <div className="p-5 border-b border-zinc-800 flex items-center justify-between">
+          <div className="p-5 border-b border-purple-200 dark:border-zinc-800 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">
+              <div className="w-8 h-8 rounded-xl bg-purple-100 dark:bg-amber-500/20 text-purple-700 dark:text-amber-400 flex items-center justify-center font-bold">
                 <Scissors className="w-4 h-4" />
               </div>
               <div>
-                <div className="font-serif text-sm font-bold text-zinc-100 flex items-center gap-1.5">
+                <div className="font-serif text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
                   <span>Modern Salon</span>
                   {isOwnerOnBreakToday && (
                     <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" title="Owner Break Active" />
                   )}
                 </div>
-                <div className="text-[10px] text-zinc-400">
-                  {isOwnerOnBreakToday ? <span className="text-rose-400 font-bold">Owner On Break (Today)</span> : 'Admin Control Panel'}
+                <div className="text-[10px] text-zinc-600 dark:text-zinc-400">
+                  {isOwnerOnBreakToday ? <span className="text-rose-600 dark:text-rose-400 font-bold">Owner On Break (Today)</span> : 'Admin Control Panel'}
                 </div>
               </div>
             </div>
@@ -650,8 +655,8 @@ export const AdminSuite: React.FC = () => {
                   onClick={() => setAdminTab(tab.id as any)}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition cursor-pointer ${
                     isActive
-                      ? 'bg-amber-500 text-zinc-950 font-bold'
-                      : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60'
+                      ? 'bg-purple-600 text-white dark:bg-amber-500 dark:text-zinc-950 font-bold'
+                      : 'text-zinc-700 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-100 hover:bg-purple-50 dark:hover:bg-zinc-800/60'
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
@@ -660,7 +665,7 @@ export const AdminSuite: React.FC = () => {
                   </div>
                   {tab.badge !== undefined && tab.badge > 0 && (
                     <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                      isActive ? 'bg-zinc-950 text-amber-400' : 'bg-amber-500/20 text-amber-400'
+                      isActive ? 'bg-white/20 text-white dark:bg-zinc-950 dark:text-amber-400' : 'bg-purple-100 text-purple-700 dark:bg-amber-500/20 dark:text-amber-400'
                     }`}>
                       {tab.badge}
                     </span>
@@ -672,18 +677,23 @@ export const AdminSuite: React.FC = () => {
         </div>
 
         {/* Admin Profile & Sign Out Controls */}
-        <div className="p-4 border-t border-zinc-800 space-y-3">
+        <div className="p-4 border-t border-purple-200 dark:border-zinc-800 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">Display Theme</span>
+            <ThemeToggle className="!px-2.5 !py-1.5" />
+          </div>
+
           {currentUser && (
-            <div className="p-2.5 rounded-xl bg-zinc-800/60 border border-zinc-700/60 flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-amber-500 text-zinc-950 flex items-center justify-center font-bold text-xs shrink-0">
+            <div className="p-2.5 rounded-xl bg-purple-50/70 dark:bg-zinc-800/60 border border-purple-200 dark:border-zinc-700/60 flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-purple-600 dark:bg-amber-500 text-white dark:text-zinc-950 flex items-center justify-center font-bold text-xs shrink-0">
                 {currentUser.name.charAt(0)}
               </div>
               <div className="overflow-hidden flex-1">
-                <div className="text-xs font-bold text-zinc-200 truncate flex items-center gap-1">
+                <div className="text-xs font-bold text-zinc-900 dark:text-zinc-200 truncate flex items-center gap-1">
                   <span>{currentUser.name}</span>
-                  <Crown className="w-3 h-3 text-amber-400 shrink-0" />
+                  <Crown className="w-3 h-3 text-purple-600 dark:text-amber-400 shrink-0" />
                 </div>
-                <div className="text-[10px] text-zinc-400 truncate font-mono">
+                <div className="text-[10px] text-zinc-600 dark:text-zinc-400 truncate font-mono">
                   Administrator • Secured
                 </div>
               </div>
@@ -694,7 +704,7 @@ export const AdminSuite: React.FC = () => {
           <button
             id="admin-sidebar-signout-btn"
             onClick={() => logout()}
-            className="w-full py-2.5 px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 hover:text-rose-300 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer"
+            className="w-full py-2.5 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer"
             title="Sign out and return to Authorization Page"
           >
             <LogOut className="w-4 h-4" />
@@ -704,32 +714,33 @@ export const AdminSuite: React.FC = () => {
       </aside>
 
       {/* MOBILE TOP BAR */}
-      <div className="md:hidden p-3 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between sticky top-0 z-30">
+      <div className="md:hidden p-3 bg-white dark:bg-zinc-900 border-b border-purple-200 dark:border-zinc-800 flex items-center justify-between sticky top-0 z-30">
         <div className="flex items-center gap-2.5">
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 rounded-xl bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-700/60 focus:outline-none cursor-pointer"
+            className="p-2 rounded-xl bg-purple-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white border border-purple-200 dark:border-zinc-700/60 focus:outline-none cursor-pointer"
             aria-label="Toggle Admin Navigation Menu"
           >
-            {mobileMenuOpen ? <X className="w-5 h-5 text-amber-400" /> : <Menu className="w-5 h-5" />}
+            {mobileMenuOpen ? <X className="w-5 h-5 text-purple-700 dark:text-amber-400" /> : <Menu className="w-5 h-5" />}
           </button>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">
+            <div className="w-7 h-7 rounded-lg bg-purple-100 dark:bg-amber-500/20 text-purple-700 dark:text-amber-400 flex items-center justify-center font-bold">
               <Scissors className="w-4 h-4" />
             </div>
             <div>
-              <span className="font-serif text-sm font-bold text-zinc-100 block leading-tight">Admin Suite</span>
-              <span className="text-[10px] text-zinc-400 capitalize">{adminTab.replace('-', ' ')}</span>
+              <span className="font-serif text-sm font-bold text-zinc-900 dark:text-zinc-100 block leading-tight">Admin Suite</span>
+              <span className="text-[10px] text-zinc-600 dark:text-zinc-400 capitalize">{adminTab.replace('-', ' ')}</span>
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
+          <ThemeToggle className="!px-2 !py-1.5" />
           <button
             id="admin-mobile-signout-btn"
             onClick={() => logout()}
-            className="text-xs text-rose-400 hover:text-rose-300 font-bold px-3 py-2 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center gap-1.5 cursor-pointer active:scale-95"
+            className="text-xs text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 font-bold px-3 py-2 rounded-xl bg-rose-50 dark:bg-rose-500/15 border border-rose-200 dark:border-rose-500/30 flex items-center gap-1.5 cursor-pointer active:scale-95"
             title="Sign out and return to Authorization Page"
           >
             <LogOut className="w-3.5 h-3.5" />
@@ -740,11 +751,11 @@ export const AdminSuite: React.FC = () => {
 
       {/* MOBILE EXPANDABLE DRAWER MENU */}
       {mobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 z-40 bg-black/80 backdrop-blur-sm pt-14 flex flex-col justify-between overflow-y-auto animate-in fade-in duration-150">
+        <div className="md:hidden fixed inset-0 z-40 bg-white/95 dark:bg-black/90 backdrop-blur-sm pt-14 flex flex-col justify-between overflow-y-auto animate-in fade-in duration-150">
           <div className="p-4 space-y-2">
-            <div className="flex items-center justify-between px-2 pb-2 border-b border-zinc-800">
-              <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">Navigation Menu</span>
-              <span className="text-[11px] text-amber-400 font-mono">12 Modules</span>
+            <div className="flex items-center justify-between px-2 pb-2 border-b border-purple-200 dark:border-zinc-800">
+              <span className="text-xs font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">Navigation Menu</span>
+              <span className="text-[11px] text-purple-700 dark:text-amber-400 font-mono">13 Modules</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
@@ -760,8 +771,8 @@ export const AdminSuite: React.FC = () => {
                     }}
                     className={`w-full min-h-[44px] flex items-center justify-between px-4 py-3 rounded-2xl transition cursor-pointer text-left text-sm ${
                       isActive
-                        ? 'bg-amber-500 text-zinc-950 font-bold shadow-lg shadow-amber-500/20'
-                        : 'bg-zinc-900 border border-zinc-800/80 text-zinc-300 hover:bg-zinc-800/80'
+                        ? 'bg-purple-600 text-white dark:bg-amber-500 dark:text-zinc-950 font-bold shadow-lg shadow-purple-600/20 dark:shadow-amber-500/20'
+                        : 'bg-purple-50/70 dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800/80 text-zinc-800 dark:text-zinc-300 hover:bg-purple-100 dark:hover:bg-zinc-800/80'
                     }`}
                   >
                     <div className="flex items-center gap-3">
@@ -770,7 +781,7 @@ export const AdminSuite: React.FC = () => {
                     </div>
                     {tab.badge !== undefined && tab.badge > 0 && (
                       <span className={`px-2 py-0.5 rounded-full text-xs font-extrabold ${
-                        isActive ? 'bg-zinc-950 text-amber-400' : 'bg-amber-500/20 text-amber-400'
+                        isActive ? 'bg-white/20 text-white dark:bg-zinc-950 dark:text-amber-400' : 'bg-purple-100 text-purple-700 dark:bg-amber-500/20 dark:text-amber-400'
                       }`}>
                         {tab.badge}
                       </span>
@@ -782,18 +793,18 @@ export const AdminSuite: React.FC = () => {
           </div>
 
           {/* Drawer Footer with Admin Details & Exit */}
-          <div className="p-4 border-t border-zinc-800 bg-zinc-900/90 space-y-3">
+          <div className="p-4 border-t border-purple-200 dark:border-zinc-800 bg-purple-50/90 dark:bg-zinc-900/90 space-y-3">
             {currentUser && (
-              <div className="flex items-center gap-3 p-3 rounded-xl bg-zinc-800/60 border border-zinc-700/60">
-                <div className="w-9 h-9 rounded-xl bg-amber-500 text-zinc-950 flex items-center justify-center font-bold text-sm">
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-zinc-800/60 border border-purple-200 dark:border-zinc-700/60">
+                <div className="w-9 h-9 rounded-xl bg-purple-600 dark:bg-amber-500 text-white dark:text-zinc-950 flex items-center justify-center font-bold text-sm">
                   {currentUser.name.charAt(0)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-bold text-zinc-100 truncate flex items-center gap-1.5">
+                  <div className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate flex items-center gap-1.5">
                     <span>{currentUser.name}</span>
-                    <Crown className="w-3.5 h-3.5 text-amber-400" />
+                    <Crown className="w-3.5 h-3.5 text-purple-600 dark:text-amber-400" />
                   </div>
-                  <div className="text-[11px] text-zinc-400 truncate">
+                  <div className="text-[11px] text-zinc-600 dark:text-zinc-400 truncate">
                     Administrator • Secured
                   </div>
                 </div>
@@ -802,7 +813,7 @@ export const AdminSuite: React.FC = () => {
 
             <button
               onClick={() => logout()}
-              className="w-full min-h-[44px] py-2.5 px-4 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-400 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full min-h-[44px] py-2.5 px-4 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/15 dark:hover:bg-rose-500/25 border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer"
             >
               <LogOut className="w-4 h-4" />
               <span>Sign Out to Authorization Page</span>
@@ -812,7 +823,7 @@ export const AdminSuite: React.FC = () => {
       )}
 
       {/* MOBILE HORIZONTAL TABS (Touch-friendly pill scroller) */}
-      <div className="md:hidden flex items-center gap-1.5 overflow-x-auto p-2.5 bg-zinc-900/90 border-b border-zinc-800 scrollbar-none text-xs sticky top-[57px] z-20 backdrop-blur-md">
+      <div className="md:hidden flex items-center gap-1.5 overflow-x-auto p-2.5 bg-white/95 dark:bg-zinc-900/90 border-b border-purple-200 dark:border-zinc-800 scrollbar-none text-xs sticky top-[57px] z-20 backdrop-blur-md">
         {navTabs.map(tab => {
           const isActive = adminTab === tab.id;
           return (
@@ -821,14 +832,14 @@ export const AdminSuite: React.FC = () => {
               onClick={() => setAdminTab(tab.id as any)}
               className={`min-h-[36px] px-3.5 py-1.5 rounded-xl whitespace-nowrap font-bold flex items-center gap-1.5 transition active:scale-95 ${
                 isActive
-                  ? 'bg-amber-500 text-zinc-950 shadow-md font-extrabold'
-                  : 'bg-zinc-800/80 text-zinc-300 border border-zinc-700/50 hover:bg-zinc-700/70'
+                  ? 'bg-purple-600 text-white dark:bg-amber-500 dark:text-zinc-950 shadow-md font-extrabold'
+                  : 'bg-purple-50 dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 border border-purple-200 dark:border-zinc-700/50 hover:bg-purple-100 dark:hover:bg-zinc-700/70'
               }`}
             >
               <span>{tab.label}</span>
               {tab.badge !== undefined && tab.badge > 0 && (
                 <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                  isActive ? 'bg-zinc-950 text-amber-400' : 'bg-amber-400/20 text-amber-300'
+                  isActive ? 'bg-white/20 text-white dark:bg-zinc-950 dark:text-amber-400' : 'bg-purple-200/70 text-purple-800 dark:bg-amber-400/20 dark:text-amber-300'
                 }`}>
                   {tab.badge}
                 </span>
@@ -846,8 +857,8 @@ export const AdminSuite: React.FC = () => {
           {adminTab === 'dashboard' && (
             <div className="space-y-6">
               <div>
-                <h1 className="font-serif text-2xl font-bold text-zinc-100">Salon Dashboard</h1>
-                <p className="text-xs text-zinc-400">Overview of bookings, deposits, and salon operations in Mohol.</p>
+                <h1 className="font-serif text-2xl font-bold text-zinc-900 dark:text-zinc-100">Salon Dashboard</h1>
+                <p className="text-xs text-zinc-600 dark:text-zinc-400">Overview of bookings, deposits, and salon operations in Mohol.</p>
               </div>
 
               {/* Owner Break & Schedule Blackout Control Hub */}
@@ -855,242 +866,115 @@ export const AdminSuite: React.FC = () => {
 
               {/* 4 Stat Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-2">
-                  <div className="flex items-center justify-between text-xs text-zinc-400">
+                <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 space-y-2 shadow-sm">
+                  <div className="flex items-center justify-between text-xs text-zinc-600 dark:text-zinc-400">
                     <span>Total Bookings</span>
-                    <Calendar className="w-4 h-4 text-amber-400" />
+                    <Calendar className="w-4 h-4 text-purple-600 dark:text-amber-400" />
                   </div>
-                  <div className="text-2xl font-bold font-mono text-zinc-100">{appointments.length}</div>
-                  <div className="text-[11px] text-emerald-400 font-medium">{confirmedCount} active confirmed</div>
+                  <div className="text-2xl font-bold font-mono text-zinc-900 dark:text-zinc-100">{appointments.length}</div>
+                  <div className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium">{confirmedCount} active confirmed</div>
                 </div>
 
-                <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-2">
-                  <div className="flex items-center justify-between text-xs text-zinc-400">
+                <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 space-y-2 shadow-sm">
+                  <div className="flex items-center justify-between text-xs text-zinc-600 dark:text-zinc-400">
                     <span>{settings.advancePercentage || 10}% Advance Deposits</span>
-                    <DollarSign className="w-4 h-4 text-emerald-400" />
+                    <DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   </div>
-                  <div className="text-2xl font-bold font-mono text-emerald-400">₹{totalAdvanceCollected.toLocaleString()}</div>
-                  <div className="text-[11px] text-zinc-400">Direct Bank UPI Verified</div>
+                  <div className="text-2xl font-bold font-mono text-emerald-700 dark:text-emerald-400">₹{totalAdvanceCollected.toLocaleString()}</div>
+                  <div className="text-[11px] text-zinc-600 dark:text-zinc-400">Direct Bank UPI Verified</div>
                 </div>
 
-                <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-2">
-                  <div className="flex items-center justify-between text-xs text-zinc-400">
+                <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 space-y-2 shadow-sm">
+                  <div className="flex items-center justify-between text-xs text-zinc-600 dark:text-zinc-400">
                     <span>Total Service Value</span>
-                    <TrendingUp className="w-4 h-4 text-blue-400" />
+                    <TrendingUp className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                   </div>
-                  <div className="text-2xl font-bold font-mono text-zinc-100">₹{totalRevenue.toLocaleString()}</div>
-                  <div className="text-[11px] text-zinc-400">Balance paid at salon</div>
+                  <div className="text-2xl font-bold font-mono text-zinc-900 dark:text-zinc-100">₹{totalRevenue.toLocaleString()}</div>
+                  <div className="text-[11px] text-zinc-600 dark:text-zinc-400">Balance paid at salon</div>
                 </div>
 
-                <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-2">
-                  <div className="flex items-center justify-between text-xs text-zinc-400">
+                <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 space-y-2 shadow-sm">
+                  <div className="flex items-center justify-between text-xs text-zinc-600 dark:text-zinc-400">
                     <span>Client Rating</span>
-                    <Star className="w-4 h-4 text-amber-400" />
+                    <Star className="w-4 h-4 text-purple-600 dark:text-amber-400" />
                   </div>
-                  <div className="text-2xl font-bold font-mono text-amber-400">4.9 ★</div>
-                  <div className="text-[11px] text-zinc-400">{reviews.length} verified reviews</div>
+                  <div className="text-2xl font-bold font-mono text-purple-700 dark:text-amber-400">
+                    {reviews.length > 0
+                      ? (reviews.reduce((sum, r) => sum + (r.rating || 5), 0) / reviews.length).toFixed(1)
+                      : '0.0'} ★
+                  </div>
+                  <div className="text-[11px] text-zinc-600 dark:text-zinc-400">{reviews.length} verified reviews</div>
                 </div>
               </div>
 
               {/* Quick Actions */}
-              <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-3">
-                <h3 className="font-serif text-sm font-bold text-zinc-200">Quick Actions</h3>
+              <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 space-y-3 shadow-sm">
+                <h3 className="font-serif text-sm font-bold text-zinc-900 dark:text-zinc-200">Quick Actions</h3>
                 <div className="flex flex-wrap gap-2.5">
                   <button
                     onClick={() => setAdminTab('appointments')}
-                    className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                    className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white dark:bg-amber-500 dark:hover:bg-amber-400 dark:text-zinc-950 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                   >
                     <Calendar className="w-3.5 h-3.5" />
                     <span>View Appointments ({confirmedCount})</span>
                   </button>
                   <button
                     onClick={openAddStaffModal}
-                    className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                    className="px-4 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-purple-900 dark:text-zinc-200 border border-purple-200 dark:border-transparent text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
                   >
-                    <UserCheck className="w-3.5 h-3.5 text-amber-400" />
+                    <UserCheck className="w-3.5 h-3.5 text-purple-700 dark:text-amber-400" />
                     <span>Add Salon Staff</span>
                   </button>
                   <button
                     onClick={() => setShowAddServiceModal(true)}
-                    className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                    className="px-4 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-purple-900 dark:text-zinc-200 border border-purple-200 dark:border-transparent text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
                   >
-                    <Plus className="w-3.5 h-3.5 text-amber-400" />
+                    <Plus className="w-3.5 h-3.5 text-purple-700 dark:text-amber-400" />
                     <span>Add New Service</span>
                   </button>
                   <button
                     onClick={() => setShowAddGalleryModal(true)}
-                    className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                    className="px-4 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-purple-900 dark:text-zinc-200 border border-purple-200 dark:border-transparent text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
                   >
-                    <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
+                    <ImageIcon className="w-3.5 h-3.5 text-purple-700 dark:text-amber-400" />
                     <span>Add Gallery Photo</span>
                   </button>
                 </div>
               </div>
 
-              {/* Dedicated Upcoming Appointments & Arrivals Section */}
-              <div className="p-5 sm:p-6 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4 text-left">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-800">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">
-                      <Calendar className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h3 className="font-serif text-sm font-bold text-zinc-100 flex items-center gap-2">
-                        <span>Upcoming Appointments &amp; Arrivals</span>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500 text-zinc-950">
-                          {upcomingCount} Scheduled
-                        </span>
-                      </h3>
-                      <p className="text-[11px] text-zinc-400">Chronologically sorted upcoming visits with 10% advance deposit</p>
-                    </div>
+              {/* Compact Upcoming Appointments Notification Bar */}
+              <button
+                type="button"
+                onClick={() => setShowUpcomingAppointmentsModal(true)}
+                className="w-full px-4 py-3 rounded-2xl bg-white hover:bg-purple-50/70 dark:bg-zinc-900 dark:hover:bg-zinc-800/90 border border-purple-200 hover:border-purple-400 dark:border-amber-500/30 dark:hover:border-amber-500/60 transition flex items-center justify-between gap-3 text-left shadow-sm cursor-pointer group"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-purple-100 dark:bg-amber-500/15 text-purple-700 dark:text-amber-400 flex items-center justify-center shrink-0 relative">
+                    <Bell className="w-4 h-4" />
+                    {upcomingCount > 0 && (
+                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-purple-600 dark:bg-amber-500 animate-ping opacity-75" />
+                    )}
                   </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        setAppointmentFilter('upcoming');
-                        setAdminTab('appointments');
-                      }}
-                      className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-amber-400 text-xs font-semibold flex items-center gap-1 cursor-pointer"
-                    >
-                      <span>Manage All ({upcomingCount})</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => openBookingModal()}
-                      className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold flex items-center gap-1 cursor-pointer"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Book</span>
-                    </button>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">Upcoming Appointments</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-purple-600 text-white dark:bg-amber-500 dark:text-zinc-950">
+                        {upcomingCount} Scheduled
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-zinc-600 dark:text-zinc-400 truncate mt-0.5">
+                      {upcomingAppointments.length > 0
+                        ? `Next: ${upcomingAppointments[0].clientName} • ${upcomingAppointments[0].serviceName} (${upcomingAppointments[0].date}, ${upcomingAppointments[0].timeSlot})`
+                        : 'No upcoming appointments scheduled. Click to view or schedule.'}
+                    </p>
                   </div>
                 </div>
 
-                {upcomingAppointments.length === 0 ? (
-                  <div className="py-8 text-center space-y-2">
-                    <Calendar className="w-8 h-8 text-zinc-600 mx-auto" />
-                    <p className="text-xs text-zinc-400">No upcoming appointments scheduled.</p>
-                    <button
-                      onClick={() => openBookingModal()}
-                      className="text-xs text-amber-400 hover:underline font-bold"
-                    >
-                      + Schedule an appointment now
-                    </button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {upcomingAppointments.slice(0, 6).map(app => {
-                      const cleanPhone = (app.clientPhone || '').replace(/\D/g, '');
-                      const whatsappDirectUrl = app.whatsappUrl || `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(`Hello ${app.clientName}, your appointment at Modern Salon Mohol for ${app.serviceName} is scheduled for ${app.date} at ${app.timeSlot}. Ref: ${app.bookingRef}. We look forward to welcoming you!`)}`;
-
-                      return (
-                        <div
-                          key={app.id}
-                          className="p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800 hover:border-zinc-700 transition space-y-2.5 text-xs"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-bold text-zinc-100">{app.clientName}</span>
-                                <span className="font-mono text-[10px] text-amber-400 bg-amber-500/10 px-1.5 py-0.2 rounded">
-                                  {app.bookingRef}
-                                </span>
-                              </div>
-                              <div className="text-[11px] text-zinc-400 mt-0.5">
-                                {app.serviceName} {app.stylistName ? `• Stylist: ${app.stylistName}` : ''}
-                              </div>
-                            </div>
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shrink-0">
-                              {getAppStatus(app)}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center justify-between text-[11px] text-zinc-400 pt-1 border-t border-zinc-800/80">
-                            <span className="font-medium text-amber-300">
-                              📅 {app.date} • ⏰ {app.timeSlot}
-                            </span>
-                            <span className="font-mono text-emerald-400 font-semibold">
-                              ₹{app.advancePaid} Deposit (Paid)
-                            </span>
-                          </div>
-
-                          <div className="flex items-center justify-between gap-1.5 pt-1 flex-wrap">
-                            <a
-                              href={whatsappDirectUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-bold text-[11px] flex items-center gap-1 transition"
-                            >
-                              <MessageSquare className="w-3 h-3" />
-                              <span>WhatsApp</span>
-                            </a>
-                            <div className="flex items-center gap-1 flex-wrap">
-                              {app.paymentScreenshotUrl && (
-                                <button
-                                  type="button"
-                                  onClick={() => setViewingScreenshotUrl(app.paymentScreenshotUrl!)}
-                                  className="px-2 py-1 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 text-purple-300 font-bold text-[11px] flex items-center gap-1 transition cursor-pointer"
-                                  title="View Payment Receipt Screenshot uploaded by client"
-                                >
-                                  <ImageIcon className="w-3 h-3 text-purple-400" />
-                                  <span>Screenshot</span>
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => setReceiptAppointment(app)}
-                                className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold text-[11px] flex items-center gap-1 transition cursor-pointer"
-                                title="View & Print Receipt"
-                              >
-                                <Receipt className="w-3 h-3 text-amber-400" />
-                                <span>Receipt</span>
-                              </button>
-                              {getAppStatus(app) !== 'COMPLETED' ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleCompleteAppointment(app)}
-                                  className="px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 font-bold text-[11px] flex items-center gap-1 transition cursor-pointer"
-                                  title="Mark as completed upon salon visit"
-                                >
-                                  <Check className="w-3 h-3" />
-                                  <span>Complete</span>
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => handleReopenAppointment(app)}
-                                  className="px-2 py-1 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 text-[11px] font-semibold transition cursor-pointer"
-                                  title="Reopen booking"
-                                >
-                                  Reopen
-                                </button>
-                              )}
-                              {getAppStatus(app) !== 'CANCELLED' && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleCancelAppointment(app)}
-                                  className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-[11px] transition cursor-pointer"
-                                  title="Cancel appointment"
-                                >
-                                  Cancel
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => setAppointmentToDelete(app)}
-                                className="p-1 rounded-lg bg-rose-600/15 hover:bg-rose-600/25 text-rose-400 transition cursor-pointer"
-                                title="Delete appointment"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+                <div className="flex items-center gap-1.5 text-[11px] font-bold text-purple-700 dark:text-amber-400 shrink-0 group-hover:translate-x-0.5 transition-transform">
+                  <span className="hidden sm:inline">View</span>
+                  <ChevronRight className="w-4 h-4" />
+                </div>
+              </button>
             </div>
           )}
 
@@ -1100,12 +984,12 @@ export const AdminSuite: React.FC = () => {
             <div className="space-y-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h1 className="font-serif text-2xl font-bold text-zinc-100">Appointments Management</h1>
-                  <p className="text-xs text-zinc-400">Track client bookings and 10% advance deposit receipts.</p>
+                  <h1 className="font-serif text-2xl font-bold text-zinc-900 dark:text-zinc-100">Appointments Management</h1>
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400">Track client bookings and 10% advance deposit receipts.</p>
                 </div>
                 <button
                   onClick={() => openBookingModal()}
-                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+                  className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white dark:bg-amber-500 dark:hover:bg-amber-400 dark:text-zinc-950 font-bold text-xs flex items-center gap-1.5 cursor-pointer shrink-0 shadow-sm"
                 >
                   <Plus className="w-4 h-4" />
                   <span>New Appointment</span>
@@ -1116,7 +1000,7 @@ export const AdminSuite: React.FC = () => {
               <AdminSlotBlackoutManager onShowToast={(msg) => setActionFeedbackToast(msg)} />
 
               {/* Filters */}
-              <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 flex flex-col sm:flex-row items-center gap-3">
+              <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 flex flex-col sm:flex-row items-center gap-3 shadow-sm">
                 <div className="relative flex-1 w-full">
                   <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-2.5" />
                   <input
@@ -1124,7 +1008,7 @@ export const AdminSuite: React.FC = () => {
                     placeholder="Search by client name, reference ID, phone, or service..."
                     value={appointmentSearch}
                     onChange={(e) => setAppointmentSearch(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                    className="w-full pl-9 pr-4 py-2 rounded-xl bg-white dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 text-xs text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
                   />
                 </div>
 
@@ -1135,14 +1019,14 @@ export const AdminSuite: React.FC = () => {
                       onClick={() => setAppointmentFilter(st)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize flex items-center gap-1.5 cursor-pointer transition ${
                         appointmentFilter === st
-                          ? 'bg-amber-500 text-zinc-950 font-bold'
-                          : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                          ? 'bg-purple-600 text-white dark:bg-amber-500 dark:text-zinc-950 font-bold'
+                          : 'bg-purple-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-white border border-purple-200 dark:border-transparent'
                       }`}
                     >
                       <span>{st === 'all' ? 'All' : st === 'upcoming' ? 'Upcoming' : st}</span>
                       {st === 'upcoming' && (
                         <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
-                          appointmentFilter === 'upcoming' ? 'bg-zinc-950 text-amber-400' : 'bg-amber-500/20 text-amber-400'
+                          appointmentFilter === 'upcoming' ? 'bg-white/20 text-white dark:bg-zinc-950 dark:text-amber-400' : 'bg-purple-200/80 text-purple-800 dark:bg-amber-500/20 dark:text-amber-400'
                         }`}>
                           {upcomingCount}
                         </span>
@@ -1153,9 +1037,9 @@ export const AdminSuite: React.FC = () => {
               </div>
 
               {/* Desktop Table */}
-              <div className="hidden md:block rounded-2xl bg-zinc-900 border border-zinc-800 overflow-x-auto">
+              <div className="hidden md:block rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 overflow-x-auto shadow-sm">
                 <table className="w-full text-left text-xs min-w-[700px]">
-                  <thead className="bg-zinc-950 text-zinc-400 uppercase font-semibold border-b border-zinc-800">
+                  <thead className="bg-purple-50/90 dark:bg-zinc-950 text-zinc-700 dark:text-zinc-400 uppercase font-semibold border-b border-purple-200 dark:border-zinc-800">
                     <tr>
                       <th className="px-4 py-3">Booking Ref / Date</th>
                       <th className="px-4 py-3">Client</th>
@@ -1165,29 +1049,29 @@ export const AdminSuite: React.FC = () => {
                       <th className="px-4 py-3 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-800">
+                  <tbody className="divide-y divide-purple-100 dark:divide-zinc-800">
                     {filteredAppointments.map(app => (
-                      <tr key={app.id} className="hover:bg-zinc-800/40">
+                      <tr key={app.id} className="hover:bg-purple-50/60 dark:hover:bg-zinc-800/40 transition-colors">
                         <td className="px-4 py-3">
-                          <div className="font-mono font-bold text-amber-400">{app.bookingRef}</div>
-                          <div className="text-zinc-400">{app.date} • {app.timeSlot}</div>
+                          <div className="font-mono font-bold text-purple-700 dark:text-amber-400">{app.bookingRef}</div>
+                          <div className="text-zinc-600 dark:text-zinc-400">{app.date} • {app.timeSlot}</div>
                         </td>
                         <td className="px-4 py-3">
-                          <div className="font-semibold text-zinc-200">{app.clientName}</div>
-                          <div className="text-zinc-400">{app.clientPhone}</div>
+                          <div className="font-semibold text-zinc-900 dark:text-zinc-200">{app.clientName}</div>
+                          <div className="text-zinc-600 dark:text-zinc-400">{app.clientPhone}</div>
                         </td>
                         <td className="px-4 py-3">
-                          <div className="font-semibold text-zinc-300">{app.serviceName}</div>
+                          <div className="font-semibold text-zinc-800 dark:text-zinc-300">{app.serviceName}</div>
                           <div className="text-zinc-500">{app.stylistName}</div>
                         </td>
                         <td className="px-4 py-3">
-                          <div className="font-bold text-zinc-200">₹{app.totalAmount}</div>
-                          <div className="text-emerald-400 font-mono text-[11px]">
+                          <div className="font-bold text-zinc-900 dark:text-zinc-200">₹{app.totalAmount}</div>
+                          <div className="text-emerald-700 dark:text-emerald-400 font-mono text-[11px] font-semibold">
                             {settings.advancePercentage || 10}% Adv: ₹{app.advancePaid}
                           </div>
                           {(app.upiTransactionId || app.razorpayPaymentId) && (
-                            <div className="text-[10px] text-zinc-300 font-mono flex items-center gap-1 mt-0.5" title="UPI Reference / 12-digit UTR">
-                              <span className="text-amber-400 font-bold">UTR:</span>
+                            <div className="text-[10px] text-zinc-700 dark:text-zinc-300 font-mono flex items-center gap-1 mt-0.5" title="UPI Reference / 12-digit UTR">
+                              <span className="text-purple-700 dark:text-amber-400 font-bold">UTR:</span>
                               <span className="truncate max-w-[110px] font-semibold">{app.upiTransactionId || app.razorpayPaymentId}</span>
                               <button
                                 onClick={() => {
@@ -1195,7 +1079,7 @@ export const AdminSuite: React.FC = () => {
                                   setActionFeedbackToast(`Copied UTR: ${app.upiTransactionId || app.razorpayPaymentId}`);
                                   setTimeout(() => setActionFeedbackToast(null), 2500);
                                 }}
-                                className="p-0.5 rounded text-zinc-400 hover:text-white"
+                                className="p-0.5 rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
                                 title="Copy UTR to check bank SMS or statement"
                               >
                                 <Copy className="w-3 h-3" />
@@ -1204,13 +1088,13 @@ export const AdminSuite: React.FC = () => {
                           )}
                           <div className="mt-1">
                             {app.isBankVerified ? (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                                <ShieldCheck className="w-2.5 h-2.5 text-emerald-400" />
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/40">
+                                <ShieldCheck className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
                                 <span>Bank Credited</span>
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                                <Clock className="w-2.5 h-2.5 text-amber-400" />
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30">
+                                <Clock className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
                                 <span>Pending Bank Credit</span>
                               </span>
                             )}
@@ -1219,10 +1103,10 @@ export const AdminSuite: React.FC = () => {
                         <td className="px-4 py-3">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                             getAppStatus(app) === 'CONFIRMED'
-                              ? 'bg-emerald-500/20 text-emerald-400'
+                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
                               : getAppStatus(app) === 'COMPLETED'
-                              ? 'bg-blue-500/20 text-blue-400'
-                              : 'bg-red-500/20 text-red-400'
+                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400'
+                              : 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400'
                           }`}>
                             {getAppStatus(app)}
                           </span>
@@ -1235,7 +1119,7 @@ export const AdminSuite: React.FC = () => {
                                 type="button"
                                 onClick={() => handleConfirmBankCredit(app)}
                                 className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer transition shadow-sm"
-                                title="Confirm that ₹{app.advancePaid} is credited in your Union Bank account"
+                                title={`Confirm that ₹${app.advancePaid} is credited in your ${settings.bankName || 'HDFC Bank'} account`}
                               >
                                 <CheckCircle2 className="w-3.5 h-3.5" />
                                 <span>Confirm Credit</span>
@@ -1246,7 +1130,7 @@ export const AdminSuite: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => handleRejectUtrDeposit(app)}
-                                className="px-2 py-1 rounded-lg bg-red-950/60 hover:bg-red-900 border border-red-500/30 text-red-400 text-[10px] font-semibold transition cursor-pointer"
+                                className="px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/60 dark:hover:bg-red-900 border border-red-300 dark:border-red-500/30 text-red-700 dark:text-red-400 text-[10px] font-semibold transition cursor-pointer"
                                 title="Reject fake/invalid UTR and cancel booking"
                               >
                                 <span>Reject Fake</span>
@@ -1258,7 +1142,7 @@ export const AdminSuite: React.FC = () => {
                                 setSelectedAppForMessaging(app);
                                 setShowSmsHubModal(true);
                               }}
-                              className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition"
+                              className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-500/15 dark:hover:bg-emerald-500/25 border border-emerald-300 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition"
                               title="Send message through WhatsApp"
                             >
                               <MessageSquare className="w-3.5 h-3.5" />
@@ -1269,10 +1153,10 @@ export const AdminSuite: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => setViewingScreenshotUrl(app.paymentScreenshotUrl!)}
-                                className="px-2.5 py-1.5 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 text-purple-300 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition shadow-xs"
+                                className="px-2.5 py-1.5 rounded-lg bg-purple-100 hover:bg-purple-200 dark:bg-purple-500/20 dark:hover:bg-purple-500/30 border border-purple-300 dark:border-purple-500/40 text-purple-700 dark:text-purple-300 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition shadow-xs"
                                 title="View PhonePe Payment Receipt Screenshot uploaded by client"
                               >
-                                <ImageIcon className="w-3.5 h-3.5 text-purple-400" />
+                                <ImageIcon className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
                                 <span>Screenshot</span>
                               </button>
                             )}
@@ -1280,10 +1164,10 @@ export const AdminSuite: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => setReceiptAppointment(app)}
-                              className="px-2 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold text-[11px] flex items-center gap-1 transition cursor-pointer"
+                              className="px-2 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-purple-200 dark:border-transparent text-zinc-800 dark:text-zinc-300 font-semibold text-[11px] flex items-center gap-1 transition cursor-pointer"
                               title="View & Print Official Receipt"
                             >
-                              <Receipt className="w-3.5 h-3.5 text-amber-400" />
+                              <Receipt className="w-3.5 h-3.5 text-purple-600 dark:text-amber-400" />
                               <span>Receipt</span>
                             </button>
 
@@ -1291,7 +1175,7 @@ export const AdminSuite: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => handleCompleteAppointment(app)}
-                                className="px-2.5 py-1.5 rounded-lg bg-emerald-600/20 text-emerald-400 text-[11px] font-bold hover:bg-emerald-600/30 flex items-center gap-1 transition cursor-pointer"
+                                className="px-2.5 py-1.5 rounded-lg bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-600/20 dark:hover:bg-emerald-600/30 text-emerald-800 dark:text-emerald-400 text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
                                 title="Mark as Completed"
                               >
                                 <Check className="w-3 h-3" />
@@ -1301,7 +1185,7 @@ export const AdminSuite: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => handleReopenAppointment(app)}
-                                className="px-2 py-1.5 rounded-lg bg-blue-600/20 text-blue-400 text-[11px] font-semibold hover:bg-blue-600/30 transition cursor-pointer"
+                                className="px-2 py-1.5 rounded-lg bg-blue-100 hover:bg-blue-200 dark:bg-blue-600/20 dark:hover:bg-blue-600/30 text-blue-700 dark:text-blue-400 text-[11px] font-semibold transition cursor-pointer"
                                 title="Reopen Appointment"
                               >
                                 Reopen
@@ -1312,7 +1196,7 @@ export const AdminSuite: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => handleCancelAppointment(app)}
-                                className="px-2 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-[11px] font-semibold transition cursor-pointer"
+                                className="px-2 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-400 text-[11px] font-semibold transition cursor-pointer"
                                 title="Cancel Appointment"
                               >
                                 Cancel
@@ -1322,7 +1206,7 @@ export const AdminSuite: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => setAppointmentToDelete(app)}
-                              className="p-1.5 rounded-lg bg-rose-600/15 hover:bg-rose-600/25 text-rose-400 transition cursor-pointer"
+                              className="p-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 dark:bg-rose-600/15 dark:hover:bg-rose-600/25 text-rose-600 dark:text-rose-400 transition cursor-pointer"
                               title="Delete Appointment Record"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -1338,7 +1222,7 @@ export const AdminSuite: React.FC = () => {
               {/* Mobile Appointment Cards (Clean, high-density, touch-friendly) */}
               <div className="md:hidden space-y-3">
                 {filteredAppointments.length === 0 ? (
-                  <div className="p-8 text-center bg-zinc-900 border border-zinc-800 rounded-2xl text-zinc-400 text-xs">
+                  <div className="p-8 text-center bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 rounded-2xl text-zinc-500 dark:text-zinc-400 text-xs">
                     No appointments match your filter criteria.
                   </div>
                 ) : (
@@ -1350,45 +1234,45 @@ export const AdminSuite: React.FC = () => {
                     return (
                       <div
                         key={app.id}
-                        className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-3 shadow-sm"
+                        className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 space-y-3 shadow-sm"
                       >
                         {/* Card Header */}
                         <div className="flex items-start justify-between gap-2">
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="font-mono text-xs font-bold text-amber-400">
+                              <span className="font-mono text-xs font-bold text-purple-700 dark:text-amber-400">
                                 {app.bookingRef}
                               </span>
                               <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
                                 status === 'CONFIRMED'
-                                  ? 'bg-emerald-500/20 text-emerald-400'
+                                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
                                   : status === 'COMPLETED'
-                                  ? 'bg-blue-500/20 text-blue-400'
-                                  : 'bg-red-500/20 text-red-400'
+                                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400'
+                                  : 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400'
                               }`}>
                                 {status}
                               </span>
                             </div>
-                            <h3 className="font-serif font-bold text-base text-zinc-100 mt-1">
+                            <h3 className="font-serif font-bold text-base text-zinc-900 dark:text-zinc-100 mt-1">
                               {app.clientName}
                             </h3>
                           </div>
 
                           <div className="text-right">
-                            <span className="text-xs text-zinc-400 block">Total Bill</span>
-                            <span className="font-mono font-bold text-sm text-zinc-100">₹{app.totalAmount}</span>
+                            <span className="text-xs text-zinc-500 dark:text-zinc-400 block">Total Bill</span>
+                            <span className="font-mono font-bold text-sm text-zinc-900 dark:text-zinc-100">₹{app.totalAmount}</span>
                           </div>
                         </div>
 
                         {/* Service & Time details */}
-                        <div className="p-2.5 rounded-xl bg-zinc-950/80 border border-zinc-800/80 text-xs space-y-1">
-                          <div className="flex items-center justify-between text-zinc-300">
-                            <span className="font-semibold text-amber-300/90">{app.serviceName}</span>
+                        <div className="p-2.5 rounded-xl bg-purple-50/70 dark:bg-zinc-950/80 border border-purple-200 dark:border-zinc-800/80 text-xs space-y-1">
+                          <div className="flex items-center justify-between text-zinc-800 dark:text-zinc-300">
+                            <span className="font-semibold text-purple-700 dark:text-amber-300/90">{app.serviceName}</span>
                             <span className="text-zinc-500">{app.stylistName}</span>
                           </div>
-                          <div className="flex items-center justify-between text-zinc-400 text-[11px] pt-1 border-t border-zinc-800/60">
+                          <div className="flex items-center justify-between text-zinc-600 dark:text-zinc-400 text-[11px] pt-1 border-t border-purple-200/70 dark:border-zinc-800/60">
                             <span>📅 {app.date} • ⏰ {app.timeSlot}</span>
-                            <span className="font-mono text-emerald-400 font-semibold">
+                            <span className="font-mono text-emerald-700 dark:text-emerald-400 font-semibold">
                               Adv: ₹{app.advancePaid} (Paid)
                             </span>
                           </div>
@@ -1399,9 +1283,9 @@ export const AdminSuite: React.FC = () => {
                           {app.clientPhone && (
                             <a
                               href={`tel:${app.clientPhone}`}
-                              className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 flex-1 justify-center min-h-[40px]"
+                              className="px-3 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-purple-200 dark:border-transparent text-zinc-800 dark:text-zinc-200 text-xs font-semibold flex items-center gap-1.5 flex-1 justify-center min-h-[40px]"
                             >
-                              <Phone className="w-3.5 h-3.5 text-amber-400" />
+                              <Phone className="w-3.5 h-3.5 text-purple-600 dark:text-amber-400" />
                               <span>Call</span>
                             </a>
                           )}
@@ -1410,7 +1294,7 @@ export const AdminSuite: React.FC = () => {
                             href={whatsappDirectUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="px-3 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-400 text-xs font-bold flex items-center gap-1.5 flex-1 justify-center min-h-[40px]"
+                            className="px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-600/20 dark:hover:bg-emerald-600/30 border border-emerald-300 dark:border-emerald-500/40 text-emerald-700 dark:text-emerald-400 text-xs font-bold flex items-center gap-1.5 flex-1 justify-center min-h-[40px]"
                           >
                             <MessageSquare className="w-3.5 h-3.5" />
                             <span>WhatsApp</span>
@@ -1422,7 +1306,7 @@ export const AdminSuite: React.FC = () => {
                               setSelectedAppForMessaging(app);
                               setShowSmsHubModal(true);
                             }}
-                            className="px-3 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center gap-1.5 min-h-[40px] cursor-pointer"
+                            className="px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-500/15 dark:hover:bg-emerald-500/25 border border-emerald-300 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold flex items-center gap-1.5 min-h-[40px] cursor-pointer"
                             title="Send message through WhatsApp"
                           >
                             <MessageSquare className="w-3.5 h-3.5" />
@@ -1433,10 +1317,10 @@ export const AdminSuite: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => setViewingScreenshotUrl(app.paymentScreenshotUrl!)}
-                              className="px-3 py-2 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 text-purple-300 text-xs font-bold flex items-center gap-1.5 min-h-[40px] cursor-pointer"
+                              className="px-3 py-2 rounded-xl bg-purple-100 hover:bg-purple-200 dark:bg-purple-500/20 dark:hover:bg-purple-500/30 border border-purple-300 dark:border-purple-500/40 text-purple-700 dark:text-purple-300 text-xs font-bold flex items-center gap-1.5 min-h-[40px] cursor-pointer"
                               title="View PhonePe Payment Receipt Screenshot"
                             >
-                              <ImageIcon className="w-3.5 h-3.5 text-purple-400" />
+                              <ImageIcon className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
                               <span>Screenshot</span>
                             </button>
                           )}
@@ -1444,21 +1328,21 @@ export const AdminSuite: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => setReceiptAppointment(app)}
-                            className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 min-h-[40px] cursor-pointer"
+                            className="px-3 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-purple-200 dark:border-transparent text-zinc-800 dark:text-zinc-200 text-xs font-semibold flex items-center gap-1.5 min-h-[40px] cursor-pointer"
                             title="View & Print Official Receipt"
                           >
-                            <Receipt className="w-3.5 h-3.5 text-amber-400" />
+                            <Receipt className="w-3.5 h-3.5 text-purple-600 dark:text-amber-400" />
                             <span>Receipt</span>
                           </button>
                         </div>
 
                         {/* Status Change & Delete Buttons on Mobile */}
-                        <div className="flex items-center gap-2 pt-1 border-t border-zinc-800/80">
+                        <div className="flex items-center gap-2 pt-1 border-t border-purple-100 dark:border-zinc-800/80">
                           {status !== 'COMPLETED' ? (
                             <button
                               type="button"
                               onClick={() => handleCompleteAppointment(app)}
-                              className="flex-1 py-2 px-3 rounded-xl bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 border border-emerald-600/40 text-xs font-bold flex items-center justify-center gap-1.5 min-h-[40px] cursor-pointer"
+                              className="flex-1 py-2 px-3 rounded-xl bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-600/20 dark:hover:bg-emerald-600/30 border border-emerald-300 dark:border-emerald-600/40 text-emerald-800 dark:text-emerald-400 text-xs font-bold flex items-center justify-center gap-1.5 min-h-[40px] cursor-pointer"
                             >
                               <CheckCircle2 className="w-3.5 h-3.5" />
                               <span>Complete</span>
@@ -1467,7 +1351,7 @@ export const AdminSuite: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => handleReopenAppointment(app)}
-                              className="flex-1 py-2 px-3 rounded-xl bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-600/40 text-xs font-bold flex items-center justify-center gap-1.5 min-h-[40px] cursor-pointer"
+                              className="flex-1 py-2 px-3 rounded-xl bg-blue-100 hover:bg-blue-200 dark:bg-blue-600/20 dark:hover:bg-blue-600/30 border border-blue-300 dark:border-blue-600/40 text-blue-700 dark:text-blue-400 text-xs font-bold flex items-center justify-center gap-1.5 min-h-[40px] cursor-pointer"
                             >
                               <span>Reopen</span>
                             </button>
@@ -1477,7 +1361,7 @@ export const AdminSuite: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => handleCancelAppointment(app)}
-                              className="py-2 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-xs font-semibold min-h-[40px] cursor-pointer"
+                              className="py-2 px-3 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-400 text-xs font-semibold min-h-[40px] cursor-pointer"
                             >
                               Cancel
                             </button>
@@ -1486,7 +1370,7 @@ export const AdminSuite: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => setAppointmentToDelete(app)}
-                            className="py-2 px-3 rounded-xl bg-rose-600/15 hover:bg-rose-600/25 border border-rose-600/30 text-rose-400 text-xs font-bold flex items-center justify-center gap-1 min-h-[40px] cursor-pointer"
+                            className="py-2 px-3 rounded-xl bg-rose-100 hover:bg-rose-200 dark:bg-rose-600/15 dark:hover:bg-rose-600/25 border border-rose-300 dark:border-rose-600/30 text-rose-700 dark:text-rose-400 text-xs font-bold flex items-center justify-center gap-1 min-h-[40px] cursor-pointer"
                             title="Delete Appointment Record"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -2272,41 +2156,45 @@ export const AdminSuite: React.FC = () => {
           {adminTab === 'themes' && (
             <div className="space-y-6">
               <div>
-                <h1 className="font-serif text-2xl font-bold text-zinc-100">Theme Selector</h1>
-                <p className="text-xs text-zinc-400">Choose between White &amp; Lavender Light mode or Obsidian Gold Dark mode.</p>
+                <h1 className="font-serif text-2xl font-bold text-zinc-900 dark:text-zinc-100">Theme Selector</h1>
+                <p className="text-xs text-zinc-600 dark:text-zinc-400">Choose between White &amp; Lavender Light mode or Obsidian Gold Dark mode.</p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div
                   onClick={() => setTheme('light')}
                   className={`p-6 rounded-2xl border-2 transition cursor-pointer ${
-                    theme === 'light' ? 'border-amber-500 bg-zinc-900' : 'border-zinc-800 bg-zinc-900/60'
+                    theme === 'light'
+                      ? 'border-purple-600 dark:border-amber-500 bg-white dark:bg-zinc-900 shadow-md'
+                      : 'border-purple-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-900/60'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <Sun className="w-5 h-5 text-amber-500" />
-                      <span className="font-bold text-sm text-zinc-100">White &amp; Lavender Light</span>
+                      <Sun className="w-5 h-5 text-purple-600 dark:text-amber-500" />
+                      <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100">White &amp; Lavender Light</span>
                     </div>
-                    {theme === 'light' && <Check className="w-4 h-4 text-emerald-400" />}
+                    {theme === 'light' && <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />}
                   </div>
-                  <p className="text-xs text-zinc-400">Clean, bright aesthetic for daytime salon viewing.</p>
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400">Clean, bright aesthetic for daytime salon viewing.</p>
                 </div>
 
                 <div
                   onClick={() => setTheme('dark')}
                   className={`p-6 rounded-2xl border-2 transition cursor-pointer ${
-                    theme === 'dark' ? 'border-amber-500 bg-zinc-900' : 'border-zinc-800 bg-zinc-900/60'
+                    theme === 'dark'
+                      ? 'border-purple-600 dark:border-amber-500 bg-white dark:bg-zinc-900 shadow-md'
+                      : 'border-purple-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-900/60'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <Moon className="w-5 h-5 text-amber-400" />
-                      <span className="font-bold text-sm text-zinc-100">Obsidian Gold Dark</span>
+                      <Moon className="w-5 h-5 text-purple-600 dark:text-amber-400" />
+                      <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100">Obsidian Gold Dark</span>
                     </div>
-                    {theme === 'dark' && <Check className="w-4 h-4 text-emerald-400" />}
+                    {theme === 'dark' && <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />}
                   </div>
-                  <p className="text-xs text-zinc-400">Deep luxury tone with golden accents.</p>
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400">Deep luxury tone with golden accents.</p>
                 </div>
               </div>
             </div>
@@ -2315,51 +2203,66 @@ export const AdminSuite: React.FC = () => {
           {/* SETTINGS & REAL-WORLD PAYMENT GATEWAY TAB */}
           {adminTab === 'settings' && (
             <div className="space-y-6 max-w-4xl">
-              <div>
-                <h1 className="font-serif text-2xl font-bold text-zinc-100 flex items-center gap-2.5">
-                  <Settings className="w-6 h-6 text-amber-400" />
-                  <span>Salon Settings &amp; Direct Bank UPI Payment Setup</span>
-                </h1>
-                <p className="text-xs text-zinc-400">
-                  Manage confidential salon bank accounts, QR scanners, 10% advance deposit rules, and operational settings with 0% platform deductions.
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h1 className="font-serif text-2xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2.5">
+                    <Settings className="w-6 h-6 text-purple-600 dark:text-amber-400" />
+                    <span>Salon Settings &amp; Direct Bank UPI Payment Setup</span>
+                  </h1>
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                    Manage confidential salon bank accounts, QR scanners, 10% advance deposit rules, and operational settings with 0% platform deductions.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAdminMode(false);
+                    setActiveNavTab('terms');
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-purple-100 hover:bg-purple-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-purple-900 dark:text-zinc-200 border border-purple-200 dark:border-zinc-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shrink-0 self-start sm:self-auto"
+                  title="Preview Customer Facing Terms & Salon Page"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 text-purple-700 dark:text-amber-400" />
+                  <span>View Client Page</span>
+                </button>
               </div>
 
               {/* Status Header Banner */}
-              <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-zinc-900 via-amber-950/20 to-zinc-900 border border-zinc-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-50 via-amber-50/70 to-emerald-50/70 dark:from-zinc-900 dark:via-amber-950/20 dark:to-zinc-900 border border-purple-200 dark:border-zinc-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center font-bold text-lg">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/40 flex items-center justify-center font-bold text-lg">
                     ₹
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-sm text-zinc-100">Payment Routing:</span>
-                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100">Payment Routing:</span>
+                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/30">
                         🟢 Direct Bank &amp; UPI Active (0% Gateway Cut)
                       </span>
                     </div>
-                    <p className="text-xs text-zinc-400 mt-0.5">
-                      Account: <span className="font-mono text-zinc-200 font-semibold">{settings.accountHolder || 'MODERN JENTS PARLOUR'}</span> • HDFC Bank A/C: <span className="font-mono text-zinc-200">{settings.bankAccountNumber || '50200072074441'}</span>
+                    <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
+                      Account: <span className="font-mono text-zinc-900 dark:text-zinc-200 font-semibold">{settings.accountHolder || 'MODERN JENTS PARLOUR'}</span> • HDFC Bank A/C: <span className="font-mono text-zinc-900 dark:text-zinc-200">{settings.bankAccountNumber || '50200072074441'}</span>
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <div className="px-3 py-1.5 rounded-xl bg-zinc-800 border border-zinc-700 text-xs font-mono text-amber-400">
+                  <div className="px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-800 border border-purple-200 dark:border-zinc-700 text-xs font-mono text-purple-700 dark:text-amber-400 font-semibold">
                     IFSC: {settings.bankIfsc || 'HDFC0000635'}
                   </div>
                 </div>
               </div>
 
               {/* CARD 1: DIRECT BANK UPI & QR SCANNERS SETTINGS */}
-              <div className="p-6 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-5 text-xs shadow-sm">
-                <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 space-y-5 text-xs shadow-sm">
+                <div className="flex items-center justify-between border-b border-purple-100 dark:border-zinc-800 pb-3">
                   <div className="space-y-0.5">
-                    <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
-                      <CreditCard className="w-4 h-4 text-amber-400" />
+                    <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                      <CreditCard className="w-4 h-4 text-purple-600 dark:text-amber-400" />
                       <span>1. Official Salon Bank &amp; UPI Scanners (Confidential)</span>
                     </h3>
-                    <p className="text-[11px] text-zinc-400">
+                    <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
                       All advance customer deposits are routed directly into these accounts without third-party fees.
                     </p>
                   </div>
@@ -2367,37 +2270,37 @@ export const AdminSuite: React.FC = () => {
 
                 {/* Scanners 1 & 2 */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Scanner 1 (Primary Union Bank / PhonePe QR) */}
-                  <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-3">
+                  {/* Scanner 1 (Primary HDFC Bank / PhonePe QR) */}
+                  <div className="p-4 rounded-xl bg-purple-50/50 dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 space-y-3">
                     <div className="flex items-center justify-between">
-                      <label className="font-bold text-xs text-zinc-200 flex items-center gap-1.5">
-                        <Smartphone className="w-3.5 h-3.5 text-amber-500" />
+                      <label className="font-bold text-xs text-zinc-900 dark:text-zinc-200 flex items-center gap-1.5">
+                        <Smartphone className="w-3.5 h-3.5 text-purple-600 dark:text-amber-500" />
                         <span>Scanner 1 (Primary Salon QR)</span>
                       </label>
-                      <span className="text-[9px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 font-bold uppercase">PhonePe / Union Bank</span>
+                      <span className="text-[9px] px-2 py-0.5 rounded bg-purple-100 dark:bg-amber-500/20 text-purple-700 dark:text-amber-400 font-bold uppercase">PhonePe / HDFC Bank</span>
                     </div>
 
                     <div>
-                      <label className="text-[10px] text-zinc-400 block mb-1">Payee / Account Holder Name</label>
+                      <label className="text-[10px] text-zinc-600 dark:text-zinc-400 block mb-1">Payee / Account Holder Name</label>
                       <input
                         type="text"
                         value={settings.accountHolder || 'MODERN JENTS PARLOUR'}
                         onChange={(e) => updateSettings({ accountHolder: e.target.value })}
-                        className="w-full px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-700 text-white text-xs font-semibold focus:outline-none focus:border-amber-500"
+                        className="w-full px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 text-zinc-900 dark:text-white text-xs font-semibold focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
                       />
                     </div>
 
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <label className="text-[10px] text-zinc-400 font-semibold">Active Salon UPI ID (VPA)</label>
-                        <span className="text-[9px] text-emerald-400 font-mono">Live on Client Side</span>
+                        <label className="text-[10px] text-zinc-600 dark:text-zinc-400 font-semibold">Active Salon UPI ID (VPA)</label>
+                        <span className="text-[9px] text-emerald-700 dark:text-emerald-400 font-mono font-semibold">Live on Client Side</span>
                       </div>
                       <input
                         type="text"
-                        value={settings.merchantUpiId || settings.upiId || '9975236976@ibl'}
+                        value={settings.merchantUpiId || settings.upiId || 'ghodakedinesh@ybl'}
                         onChange={(e) => updateSettings({ merchantUpiId: e.target.value, upiId: e.target.value })}
-                        placeholder="e.g. 9975236976@ibl"
-                        className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-amber-500/60 text-amber-400 font-mono text-xs font-bold focus:outline-none focus:border-amber-400"
+                        placeholder="e.g. ghodakedinesh@ybl"
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-purple-300 dark:border-amber-500/60 text-purple-700 dark:text-amber-400 font-mono text-xs font-bold focus:outline-none focus:border-purple-500 dark:focus:border-amber-400"
                       />
                       <span className="text-[10px] text-zinc-500 block mt-1">
                         Changing this instantly updates the customer UPI payment modal & dynamic QR code across the website.
@@ -2405,19 +2308,19 @@ export const AdminSuite: React.FC = () => {
                     </div>
 
                     {/* QR Code Poster Image Upload & Preview */}
-                    <div className="pt-2 border-t border-zinc-800 space-y-2">
-                      <label className="text-[10px] text-zinc-400 font-semibold block">Store Standee QR Poster Image</label>
+                    <div className="pt-2 border-t border-purple-200/80 dark:border-zinc-800 space-y-2">
+                      <label className="text-[10px] text-zinc-600 dark:text-zinc-400 font-semibold block">Store Standee QR Poster Image</label>
                       <div className="flex items-center gap-3">
-                        <div className="w-16 h-16 rounded-xl bg-zinc-900 border border-zinc-700 overflow-hidden flex items-center justify-center shrink-0 p-1">
+                        <div className="w-16 h-16 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 overflow-hidden flex items-center justify-center shrink-0 p-1">
                           <img
-                            src={settings.upiQrCodeUrl || '/qr-union-bank-phonepe.jpg'}
+                            src={settings.upiQrCodeUrl || '/assets/aistudio/image_2ca5cc29.png'}
                             alt="Primary QR Standee"
                             className="w-full h-full object-contain"
                           />
                         </div>
                         <div className="space-y-1.5 flex-1">
-                          <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-[11px] font-bold cursor-pointer transition">
-                            <Upload className="w-3 h-3 text-amber-400" />
+                          <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-100 hover:bg-purple-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-purple-900 dark:text-white text-[11px] font-bold cursor-pointer transition">
+                            <Upload className="w-3 h-3 text-purple-700 dark:text-amber-400" />
                             <span>Upload QR Photo</span>
                             <input
                               type="file"
@@ -2439,13 +2342,14 @@ export const AdminSuite: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => updateSettings({
-                              upiQrCodeUrl: '/qr-union-bank-phonepe.jpg',
-                              merchantUpiId: '9975236976@ibl',
-                              upiId: '9975236976@ibl'
+                              accountHolder: 'MODERN JENTS PARLOUR',
+                              upiQrCodeUrl: '/assets/aistudio/image_2ca5cc29.png',
+                              merchantUpiId: 'ghodakedinesh@ybl',
+                              upiId: 'ghodakedinesh@ybl'
                             })}
-                            className="text-[10px] text-amber-400 hover:underline block cursor-pointer"
+                            className="text-[10px] text-purple-700 dark:text-amber-400 hover:underline block cursor-pointer"
                           >
-                            Reset to Official Union Bank PhonePe QR
+                            Reset to Official PhonePe QR (MODERN JENTS PARLOUR)
                           </button>
                         </div>
                       </div>
@@ -2453,32 +2357,32 @@ export const AdminSuite: React.FC = () => {
                   </div>
 
                   {/* Scanner 2 (Secondary / Personal QR) */}
-                  <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-3">
+                  <div className="p-4 rounded-xl bg-purple-50/50 dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 space-y-3">
                     <div className="flex items-center justify-between">
-                      <label className="font-bold text-xs text-zinc-200 flex items-center gap-1.5">
-                        <Smartphone className="w-3.5 h-3.5 text-purple-500" />
+                      <label className="font-bold text-xs text-zinc-900 dark:text-zinc-200 flex items-center gap-1.5">
+                        <Smartphone className="w-3.5 h-3.5 text-purple-600 dark:text-purple-500" />
                         <span>Scanner 2 (Secondary Backup QR)</span>
                       </label>
-                      <span className="text-[9px] px-2 py-0.5 rounded bg-purple-500/20 text-purple-400 font-bold uppercase">PhonePe UPI</span>
+                      <span className="text-[9px] px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400 font-bold uppercase">PhonePe UPI</span>
                     </div>
 
                     <div>
-                      <label className="text-[10px] text-zinc-400 block mb-1">Payee Name</label>
+                      <label className="text-[10px] text-zinc-600 dark:text-zinc-400 block mb-1">Payee Name</label>
                       <input
                         type="text"
                         value={settings.secondaryAccountHolder || 'DINESH VITTHAL GHODAKE'}
                         onChange={(e) => updateSettings({ secondaryAccountHolder: e.target.value })}
-                        className="w-full px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-700 text-white text-xs font-semibold focus:outline-none focus:border-amber-500"
+                        className="w-full px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 text-zinc-900 dark:text-white text-xs font-semibold focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
                       />
                     </div>
 
                     <div>
-                      <label className="text-[10px] text-zinc-400 font-semibold block mb-1">Secondary UPI ID (VPA)</label>
+                      <label className="text-[10px] text-zinc-600 dark:text-zinc-400 font-semibold block mb-1">Secondary UPI ID (VPA)</label>
                       <input
                         type="text"
                         value={settings.secondaryUpiId || '8104026257@axl'}
                         onChange={(e) => updateSettings({ secondaryUpiId: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-700 text-white font-mono text-xs focus:outline-none focus:border-amber-500"
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 text-zinc-900 dark:text-white font-mono text-xs focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
                       />
                       <span className="text-[10px] text-zinc-500 block mt-1">
                         Secondary backup UPI handle for customer scanning.
@@ -2486,19 +2390,19 @@ export const AdminSuite: React.FC = () => {
                     </div>
 
                     {/* Scanner 2 QR Poster */}
-                    <div className="pt-2 border-t border-zinc-800 space-y-2">
-                      <label className="text-[10px] text-zinc-400 font-semibold block">Scanner 2 Poster Standee</label>
+                    <div className="pt-2 border-t border-purple-200/80 dark:border-zinc-800 space-y-2">
+                      <label className="text-[10px] text-zinc-600 dark:text-zinc-400 font-semibold block">Scanner 2 Poster Standee</label>
                       <div className="flex items-center gap-3">
-                        <div className="w-16 h-16 rounded-xl bg-zinc-900 border border-zinc-700 overflow-hidden flex items-center justify-center shrink-0 p-1">
+                        <div className="w-16 h-16 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 overflow-hidden flex items-center justify-center shrink-0 p-1">
                           <img
-                            src={settings.secondaryUpiQrCodeUrl || '/qr-dinesh-ghodake.jpg'}
+                            src={settings.secondaryUpiQrCodeUrl || '/assets/aistudio/image_fce20bf8.png'}
                             alt="Secondary QR Standee"
                             className="w-full h-full object-contain"
                           />
                         </div>
                         <div className="space-y-1.5 flex-1">
-                          <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-[11px] font-bold cursor-pointer transition">
-                            <Upload className="w-3 h-3 text-purple-400" />
+                          <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-100 hover:bg-purple-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-purple-900 dark:text-white text-[11px] font-bold cursor-pointer transition">
+                            <Upload className="w-3 h-3 text-purple-700 dark:text-purple-400" />
                             <span>Upload QR Photo</span>
                             <input
                               type="file"
@@ -2517,6 +2421,17 @@ export const AdminSuite: React.FC = () => {
                               }}
                             />
                           </label>
+                          <button
+                            type="button"
+                            onClick={() => updateSettings({
+                              secondaryAccountHolder: 'DINESH VITTHAL GHODAKE',
+                              secondaryUpiQrCodeUrl: '/assets/aistudio/image_fce20bf8.png',
+                              secondaryUpiId: '8104026257@axl'
+                            })}
+                            className="text-[10px] text-purple-700 dark:text-purple-400 hover:underline block cursor-pointer"
+                          >
+                            Reset to Official PhonePe QR (DINESH VITTHAL GHODAKE)
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -2524,50 +2439,70 @@ export const AdminSuite: React.FC = () => {
                 </div>
 
                 {/* Bank Account Details */}
-                <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-3">
-                  <div className="text-xs font-bold text-blue-400 flex items-center gap-1.5">
+                <div className="p-4 rounded-xl bg-purple-50/50 dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 space-y-3">
+                  <div className="text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
                     <Building2 className="w-4 h-4" />
                     <span>Official Bank Account Details</span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
-                      <label className="font-semibold text-zinc-400 block mb-1">Bank Name</label>
+                      <label className="font-semibold text-zinc-600 dark:text-zinc-400 block mb-1">Bank Name</label>
                       <input
                         type="text"
-                        value={settings.bankName || 'Union Bank of India'}
+                        value={settings.bankName || 'HDFC Bank'}
                         onChange={(e) => updateSettings({ bankName: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-white text-xs font-semibold focus:outline-none focus:border-amber-500"
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 text-zinc-900 dark:text-white text-xs font-semibold focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
                       />
                     </div>
 
                     <div>
-                      <label className="font-semibold text-zinc-400 block mb-1">Account Holder</label>
+                      <label className="font-semibold text-zinc-600 dark:text-zinc-400 block mb-1">Account Holder Name</label>
                       <input
                         type="text"
                         value={settings.accountHolder || 'MODERN JENTS PARLOUR'}
                         onChange={(e) => updateSettings({ accountHolder: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-white text-xs font-semibold focus:outline-none focus:border-amber-500"
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 text-zinc-900 dark:text-white text-xs font-semibold focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
                       />
                     </div>
 
                     <div>
-                      <label className="font-semibold text-zinc-400 block mb-1">Account Number</label>
+                      <label className="font-semibold text-zinc-600 dark:text-zinc-400 block mb-1">Account Number</label>
                       <input
                         type="text"
-                        value={settings.bankAccountNumber || '0701163100004079'}
+                        value={settings.bankAccountNumber || '50200072074441'}
                         onChange={(e) => updateSettings({ bankAccountNumber: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-white font-mono text-xs focus:outline-none focus:border-amber-500"
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
                       />
                     </div>
 
                     <div>
-                      <label className="font-semibold text-zinc-400 block mb-1">IFSC Code &amp; Branch</label>
+                      <label className="font-semibold text-zinc-600 dark:text-zinc-400 block mb-1">IFSC Code</label>
                       <input
                         type="text"
-                        value={settings.bankIfsc || 'UBIN0532151'}
+                        value={settings.bankIfsc || 'HDFC0000635'}
                         onChange={(e) => updateSettings({ bankIfsc: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-white font-mono text-xs focus:outline-none focus:border-amber-500"
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-semibold text-zinc-600 dark:text-zinc-400 block mb-1">Branch</label>
+                      <input
+                        type="text"
+                        value={settings.bankBranch || 'Solapur'}
+                        onChange={(e) => updateSettings({ bankBranch: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 text-zinc-900 dark:text-white text-xs font-semibold focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-semibold text-zinc-600 dark:text-zinc-400 block mb-1">Account Type</label>
+                      <input
+                        type="text"
+                        value={settings.bankAccountType || 'Current Account'}
+                        onChange={(e) => updateSettings({ bankAccountType: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 text-zinc-900 dark:text-white text-xs font-semibold focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
                       />
                     </div>
                   </div>
@@ -2576,78 +2511,78 @@ export const AdminSuite: React.FC = () => {
 
 
               {/* CARD 2: SALON PROFILE & POLICIES */}
-              <div className="p-6 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4 shadow-sm text-xs">
-                <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2 border-b border-zinc-800 pb-3">
-                  <Scissors className="w-4 h-4 text-amber-400" />
+              <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 space-y-4 shadow-sm text-xs">
+                <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2 border-b border-purple-100 dark:border-zinc-800 pb-3">
+                  <Scissors className="w-4 h-4 text-purple-600 dark:text-amber-400" />
                   <span>2. Salon Identity &amp; Contact Details</span>
                 </h3>
 
                 <div>
-                  <label className="font-semibold text-zinc-300 block mb-1">Salon Name</label>
+                  <label className="font-semibold text-zinc-700 dark:text-zinc-300 block mb-1">Salon Name</label>
                   <input
                     type="text"
                     value={settings.salonName}
                     onChange={(e) => updateSettings({ salonName: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-amber-500"
+                    className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="font-semibold text-zinc-300 block mb-1">Helpline Phone *</label>
+                    <label className="font-semibold text-zinc-700 dark:text-zinc-300 block mb-1">Helpline Phone *</label>
                     <input
                       type="text"
                       value={settings.phone}
                       onChange={(e) => updateSettings({ phone: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-white font-mono focus:outline-none focus:border-amber-500"
+                      className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 text-zinc-900 dark:text-white font-mono focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
                     />
                   </div>
                   <div>
-                    <label className="font-semibold text-zinc-300 block mb-1">Official Email</label>
+                    <label className="font-semibold text-zinc-700 dark:text-zinc-300 block mb-1">Official Email</label>
                     <input
                       type="email"
                       value={settings.email}
                       onChange={(e) => updateSettings({ email: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-amber-500"
+                      className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="font-semibold text-zinc-300 block mb-1">Physical Address *</label>
+                  <label className="font-semibold text-zinc-700 dark:text-zinc-300 block mb-1">Physical Address *</label>
                   <input
                     type="text"
                     value={settings.address}
                     onChange={(e) => updateSettings({ address: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-amber-500"
+                    className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
                   />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="font-semibold text-zinc-300 block mb-1">Operating Hours</label>
+                    <label className="font-semibold text-zinc-700 dark:text-zinc-300 block mb-1">Operating Hours</label>
                     <input
                       type="text"
                       value={settings.openingHours || 'Mon - Sun: 09:00 AM - 09:00 PM'}
                       onChange={(e) => updateSettings({ openingHours: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-amber-500"
+                      className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
                     />
                   </div>
                   <div>
-                    <label className="font-semibold text-zinc-300 block mb-1">GST Number (Optional)</label>
+                    <label className="font-semibold text-zinc-700 dark:text-zinc-300 block mb-1">GST Number (Optional)</label>
                     <input
                       type="text"
                       value={settings.gstNumber || ''}
                       onChange={(e) => updateSettings({ gstNumber: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-white font-mono focus:outline-none focus:border-amber-500"
+                      className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 text-zinc-900 dark:text-white font-mono focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
                     />
                   </div>
                 </div>
 
-                <div className="p-4 rounded-xl bg-zinc-950 border border-amber-500/30 space-y-2">
+                <div className="p-4 rounded-xl bg-purple-50/60 dark:bg-zinc-950 border border-purple-200 dark:border-amber-500/30 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-amber-400">Advance Deposit Percentage:</span>
-                    <span className="font-mono font-bold text-amber-400 text-sm">{settings.advancePercentage}% Online Deposit</span>
+                    <span className="font-bold text-purple-700 dark:text-amber-400">Advance Deposit Percentage:</span>
+                    <span className="font-mono font-bold text-purple-700 dark:text-amber-400 text-sm">{settings.advancePercentage}% Online Deposit</span>
                   </div>
                   <input
                     type="range"
@@ -2656,33 +2591,33 @@ export const AdminSuite: React.FC = () => {
                     step={5}
                     value={settings.advancePercentage}
                     onChange={(e) => updateSettings({ advancePercentage: Number(e.target.value) })}
-                    className="w-full accent-amber-500 cursor-pointer"
+                    className="w-full accent-purple-600 dark:accent-amber-500 cursor-pointer"
                   />
-                  <p className="text-[11px] text-zinc-400">
+                  <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
                     Calculates required online reservation deposit for client appointments. Standard recommendation is 10%.
                   </p>
                 </div>
               </div>
 
               {/* CARD 3: ADMIN MASTER SECURITY & PASSWORD */}
-              <div className="p-6 rounded-2xl bg-zinc-900 border border-amber-500/40 space-y-4 shadow-sm text-xs">
-                <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-                  <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-amber-400" />
+              <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-amber-500/40 space-y-4 shadow-sm text-xs">
+                <div className="flex items-center justify-between border-b border-purple-100 dark:border-zinc-800 pb-3">
+                  <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-purple-600 dark:text-amber-400" />
                     <span>3. Unique Admin Password &amp; Master Security Credentials</span>
                   </h3>
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-purple-100 dark:bg-amber-500/10 text-purple-700 dark:text-amber-400 border border-purple-200 dark:border-amber-500/20">
                     Firestore Real-time
                   </span>
                 </div>
 
-                <p className="text-zinc-400 text-[11px] leading-relaxed">
+                <p className="text-zinc-600 dark:text-zinc-400 text-[11px] leading-relaxed">
                   Customize the unique credentials required to unlock the Admin Suite. All defaults have been removed—these settings are saved to Firebase Firestore and sync instantly.
                 </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="font-semibold text-zinc-300 block mb-1">
+                    <label className="font-semibold text-zinc-700 dark:text-zinc-300 block mb-1">
                       Authorized Admin Email *
                     </label>
                     <input
@@ -2692,7 +2627,7 @@ export const AdminSuite: React.FC = () => {
                         const newEmails = [e.target.value.trim().toLowerCase()];
                         updateSettings({ adminEmails: newEmails });
                       }}
-                      className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-white font-mono focus:outline-none focus:border-amber-500"
+                      className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 text-zinc-900 dark:text-white font-mono focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
                       placeholder="dineshghodake941@gmail.com"
                     />
                     <span className="text-[10px] text-zinc-500 mt-1 block">
@@ -2701,14 +2636,14 @@ export const AdminSuite: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="font-semibold text-zinc-300 block mb-1">
+                    <label className="font-semibold text-zinc-700 dark:text-zinc-300 block mb-1">
                       Admin Master Password *
                     </label>
                     <input
                       type="text"
                       value={settings.adminPassword || 'Salon@Owner#2026'}
                       onChange={(e) => updateSettings({ adminPassword: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-white font-mono focus:outline-none focus:border-amber-500"
+                      className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 text-zinc-900 dark:text-white font-mono focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
                       placeholder="e.g. UniqueOwnerPass#2026"
                     />
                     <span className="text-[10px] text-zinc-500 mt-1 block">
@@ -2717,7 +2652,7 @@ export const AdminSuite: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="font-semibold text-zinc-300 block mb-1">
+                    <label className="font-semibold text-zinc-700 dark:text-zinc-300 block mb-1">
                       Admin Quick PIN
                     </label>
                     <input
@@ -2725,7 +2660,7 @@ export const AdminSuite: React.FC = () => {
                       maxLength={8}
                       value={settings.adminPin || '8104'}
                       onChange={(e) => updateSettings({ adminPin: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-white font-mono focus:outline-none focus:border-amber-500"
+                      className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 text-zinc-900 dark:text-white font-mono focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
                       placeholder="e.g. 8104"
                     />
                     <span className="text-[10px] text-zinc-500 mt-1 block">
@@ -2734,13 +2669,44 @@ export const AdminSuite: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-between">
+                <div className="p-3 rounded-xl bg-purple-50/60 dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span className="text-[11px] text-zinc-300">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span className="text-[11px] text-zinc-700 dark:text-zinc-300">
                       Security active: Changes persist to Firebase immediately with zero dummy credentials.
                     </span>
                   </div>
+                </div>
+              </div>
+
+              {/* CARD 4: DASHBOARD DATA MAINTENANCE */}
+              <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 space-y-3 shadow-sm text-xs">
+                <div className="flex items-center justify-between border-b border-purple-100 dark:border-zinc-800 pb-3">
+                  <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                    <Trash2 className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+                    <span>4. Dashboard Data Maintenance</span>
+                  </h3>
+                </div>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                    Clean all past appointments, non-admin users, Customer CRM records, and analytics metrics across dashboards.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={isClearingPastData}
+                    onClick={async () => {
+                      if (!window.confirm('Clear all past appointments, Customer CRM records, and analytics data? This cannot be undone.')) return;
+                      setIsClearingPastData(true);
+                      const res = await clearAllPastData();
+                      setIsClearingPastData(false);
+                      setActionFeedbackToast(res.message);
+                      setTimeout(() => setActionFeedbackToast(null), 4000);
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-600/20 dark:hover:bg-rose-600/30 border border-rose-300 dark:border-rose-500/40 text-rose-700 dark:text-rose-300 font-bold text-xs flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{isClearingPastData ? 'Cleaning...' : 'Clean All Past Dashboard Data'}</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -3675,7 +3641,7 @@ export const AdminSuite: React.FC = () => {
                     required
                     value={staffName}
                     onChange={(e) => setStaffName(e.target.value)}
-                    placeholder="e.g. Priya Sharma"
+                    placeholder="Enter specialist full name"
                     className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500"
                   />
                 </div>
@@ -4011,6 +3977,194 @@ export const AdminSuite: React.FC = () => {
               >
                 Close Preview
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* UPCOMING APPOINTMENTS NOTIFICATION MODAL */}
+      {showUpcomingAppointmentsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-zinc-950/60 dark:bg-black/80 backdrop-blur-md animate-in fade-in">
+          <div className="relative max-w-3xl w-full max-h-[85vh] flex flex-col bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 rounded-3xl overflow-hidden shadow-2xl">
+            <div className="p-4 sm:p-5 border-b border-purple-200 dark:border-zinc-800 bg-purple-50/70 dark:bg-zinc-900 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-purple-100 dark:bg-amber-500/20 text-purple-700 dark:text-amber-400 flex items-center justify-center">
+                  <Calendar className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-serif text-sm sm:text-base font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                    <span>Upcoming Appointments</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-purple-600 text-white dark:bg-amber-500 dark:text-zinc-950">
+                      {upcomingCount} Scheduled
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-zinc-600 dark:text-zinc-400">Chronologically sorted upcoming client bookings</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowUpcomingAppointmentsModal(false);
+                    setAppointmentFilter('upcoming');
+                    setAdminTab('appointments');
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-purple-50 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-purple-200 dark:border-transparent text-purple-700 dark:text-amber-400 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Manage All</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowUpcomingAppointmentsModal(false);
+                    openBookingModal();
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white dark:bg-amber-500 dark:hover:bg-amber-400 dark:text-zinc-950 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Book</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowUpcomingAppointmentsModal(false)}
+                  className="p-1.5 rounded-xl text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-purple-100 dark:hover:bg-zinc-800 cursor-pointer"
+                  title="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 sm:p-5 overflow-y-auto flex-1">
+              {upcomingAppointments.length === 0 ? (
+                <div className="py-10 text-center space-y-2">
+                  <Calendar className="w-8 h-8 text-zinc-400 dark:text-zinc-600 mx-auto" />
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400">No upcoming appointments scheduled.</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowUpcomingAppointmentsModal(false);
+                      openBookingModal();
+                    }}
+                    className="text-xs text-purple-700 dark:text-amber-400 hover:underline font-bold cursor-pointer"
+                  >
+                    + Schedule an appointment now
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {upcomingAppointments.map(app => {
+                    const cleanPhone = (app.clientPhone || '').replace(/\D/g, '');
+                    const whatsappDirectUrl = app.whatsappUrl || `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(`Hello ${app.clientName}, your appointment at Modern Salon Mohol for ${app.serviceName} is scheduled for ${app.date} at ${app.timeSlot}. Ref: ${app.bookingRef}. We look forward to welcoming you!`)}`;
+
+                    return (
+                      <div
+                        key={app.id}
+                        className="p-3.5 rounded-xl bg-purple-50/50 dark:bg-zinc-950/80 border border-purple-200 dark:border-zinc-800 hover:border-purple-300 dark:hover:border-zinc-700 transition space-y-2.5 text-xs"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-zinc-900 dark:text-zinc-100">{app.clientName}</span>
+                              <span className="font-mono text-[10px] text-purple-700 dark:text-amber-400 bg-purple-100 dark:bg-amber-500/10 px-1.5 py-0.2 rounded font-semibold">
+                                {app.bookingRef}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-zinc-600 dark:text-zinc-400 mt-0.5">
+                              {app.serviceName} {app.stylistName ? `• Stylist: ${app.stylistName}` : ''}
+                            </div>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/30 shrink-0">
+                            {getAppStatus(app)}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] text-zinc-600 dark:text-zinc-400 pt-1 border-t border-purple-200/70 dark:border-zinc-800/80">
+                          <span className="font-medium text-purple-700 dark:text-amber-300">
+                            📅 {app.date} • ⏰ {app.timeSlot}
+                          </span>
+                          <span className="font-mono text-emerald-700 dark:text-emerald-400 font-semibold">
+                            ₹{app.advancePaid} Deposit (Paid)
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-1.5 pt-1 flex-wrap">
+                          <a
+                            href={whatsappDirectUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 font-bold text-[11px] flex items-center gap-1 transition"
+                          >
+                            <MessageSquare className="w-3 h-3" />
+                            <span>WhatsApp</span>
+                          </a>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {app.paymentScreenshotUrl && (
+                              <button
+                                type="button"
+                                onClick={() => setViewingScreenshotUrl(app.paymentScreenshotUrl!)}
+                                className="px-2 py-1 rounded-lg bg-purple-100 hover:bg-purple-200 dark:bg-purple-500/20 dark:hover:bg-purple-500/30 border border-purple-300 dark:border-purple-500/40 text-purple-700 dark:text-purple-300 font-bold text-[11px] flex items-center gap-1 transition cursor-pointer"
+                                title="View Payment Receipt Screenshot uploaded by client"
+                              >
+                                <ImageIcon className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+                                <span>Screenshot</span>
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setReceiptAppointment(app)}
+                              className="px-2 py-1 rounded-lg bg-white hover:bg-purple-50 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-purple-200 dark:border-transparent text-zinc-800 dark:text-zinc-300 font-semibold text-[11px] flex items-center gap-1 transition cursor-pointer"
+                              title="View & Print Receipt"
+                            >
+                              <Receipt className="w-3 h-3 text-purple-600 dark:text-amber-400" />
+                              <span>Receipt</span>
+                            </button>
+                            {getAppStatus(app) !== 'COMPLETED' ? (
+                              <button
+                                type="button"
+                                onClick={() => handleCompleteAppointment(app)}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-600/20 dark:hover:bg-emerald-600/30 text-emerald-800 dark:text-emerald-400 font-bold text-[11px] flex items-center gap-1 transition cursor-pointer"
+                                title="Mark as completed upon salon visit"
+                              >
+                                <Check className="w-3 h-3" />
+                                <span>Complete</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleReopenAppointment(app)}
+                                className="px-2 py-1 rounded-lg bg-blue-100 hover:bg-blue-200 dark:bg-blue-600/20 dark:hover:bg-blue-600/30 text-blue-700 dark:text-blue-400 text-[11px] font-semibold transition cursor-pointer"
+                                title="Reopen booking"
+                              >
+                                Reopen
+                              </button>
+                            )}
+                            {getAppStatus(app) !== 'CANCELLED' && (
+                              <button
+                                type="button"
+                                onClick={() => handleCancelAppointment(app)}
+                                className="px-2 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-400 text-[11px] transition cursor-pointer"
+                                title="Cancel appointment"
+                              >
+                                Cancel
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setAppointmentToDelete(app)}
+                              className="p-1 rounded-lg bg-rose-100 hover:bg-rose-200 dark:bg-rose-600/15 dark:hover:bg-rose-600/25 text-rose-600 dark:text-rose-400 transition cursor-pointer"
+                              title="Delete appointment"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>

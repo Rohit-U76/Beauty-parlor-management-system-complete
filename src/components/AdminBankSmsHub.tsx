@@ -311,9 +311,8 @@ export const AdminBankSmsHub: React.FC<AdminBankSmsHubProps> = ({ onShowToast })
               onChange={(e) => setSimBank(e.target.value as any)}
               className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-amber-500"
             >
-              <option value="hdfc">{settings.bankName || 'Union Bank of India'} (A/c ...{(settings.bankAccountNumber || '4079').slice(-5)})</option>
-              <option value="phonepe">PhonePe Merchant ({settings.merchantUpiId || settings.upiId || '9975236976@ibl'})</option>
-              <option value="boi">Bank of India (A/c ...0428)</option>
+              <option value="hdfc">{settings.bankName || 'HDFC Bank'} (A/c ...{(settings.bankAccountNumber || '50200072074441').slice(-4)})</option>
+              <option value="phonepe">PhonePe Merchant ({settings.merchantUpiId || settings.upiId || 'ghodakedinesh@ybl'})</option>
             </select>
           </div>
 

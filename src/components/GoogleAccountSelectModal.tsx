@@ -17,22 +17,10 @@ interface GoogleAccountSelectModalProps {
 
 const PRESET_GOOGLE_ACCOUNTS: GoogleProfile[] = [
   {
-    name: 'Vaishnavi Salunke',
-    email: 'vaishnaviganeshsalunke84@gmail.com',
-    picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
-    sub: 'g_user_vaishnavi_salunke'
-  },
-  {
     name: 'Dinesh Ghodake',
     email: 'dineshghodake941@gmail.com',
     picture: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
     sub: 'g_user_dinesh_ghodake'
-  },
-  {
-    name: 'Pooja Kadam',
-    email: 'pooja.kadam@gmail.com',
-    picture: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80',
-    sub: 'g_user_pooja_kadam'
   }
 ];
 

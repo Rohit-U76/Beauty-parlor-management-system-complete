@@ -231,9 +231,9 @@ export const BookingModal: React.FC = () => {
         date: selectedDate,
         timeSlot: selectedTimeSlot,
         stylistName: selectedStylist,
-        clientName,
-        clientPhone,
-        clientEmail: clientEmail || `${clientName.toLowerCase().replace(/\s+/g, '')}@example.com`,
+        clientName: clientName.trim(),
+        clientPhone: clientPhone.trim(),
+        clientEmail: clientEmail.trim(),
         notes: specialNotes,
         couponCode: appliedCoupon?.code,
         totalAmount: netTotal,
@@ -692,7 +692,7 @@ export const BookingModal: React.FC = () => {
                     <User className="w-4 h-4 text-zinc-400 dark:text-zinc-500 absolute left-3 top-3" />
                     <input
                       type="text"
-                      placeholder="e.g. Pooja Kadam"
+                      placeholder="Enter your full name"
                       value={clientName}
                       onChange={(e) => setClientName(e.target.value)}
                       className="w-full pl-9 pr-3 py-2 rounded-xl bg-white dark:bg-[#0e0e11] border border-purple-200/80 dark:border-zinc-800 text-xs sm:text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:focus:ring-amber-500/40"
@@ -708,7 +708,7 @@ export const BookingModal: React.FC = () => {
                     <Phone className="w-4 h-4 text-zinc-400 dark:text-zinc-500 absolute left-3 top-3" />
                     <input
                       type="tel"
-                      placeholder="e.g. 8104026257"
+                      placeholder="Enter 10-digit mobile number"
                       value={clientPhone}
                       onChange={(e) => setClientPhone(e.target.value)}
                       className="w-full pl-9 pr-3 py-2 rounded-xl bg-white dark:bg-[#0e0e11] border border-purple-200/80 dark:border-zinc-800 text-xs sm:text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:focus:ring-amber-500/40"
@@ -725,7 +725,7 @@ export const BookingModal: React.FC = () => {
                   <Mail className="w-4 h-4 text-zinc-400 dark:text-zinc-500 absolute left-3 top-3" />
                   <input
                     type="email"
-                    placeholder="e.g. yourname@gmail.com"
+                    placeholder="Enter your email address"
                     value={clientEmail}
                     onChange={(e) => setClientEmail(e.target.value)}
                     className="w-full pl-9 pr-3 py-2 rounded-xl bg-white dark:bg-[#0e0e11] border border-purple-200/80 dark:border-zinc-800 text-xs sm:text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:focus:ring-amber-500/40"
@@ -1046,9 +1046,9 @@ export const BookingModal: React.FC = () => {
           advanceAmount={advanceDeposit}
           totalAmount={netTotal}
           serviceName={selectedTier ? `${selectedService.name} (${selectedTier.label})` : selectedService.name}
-          clientName={clientName}
-          clientEmail={clientEmail || `${clientName.toLowerCase().replace(/\s+/g, '')}@example.com`}
-          clientPhone={clientPhone}
+          clientName={clientName.trim()}
+          clientEmail={clientEmail.trim()}
+          clientPhone={clientPhone.trim()}
         />
       )}
 

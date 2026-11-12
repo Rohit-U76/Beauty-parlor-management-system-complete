@@ -130,13 +130,11 @@ export const ClientProfileModal: React.FC = () => {
           preferredSlot: formData.preferredSlot
         });
       } else {
-        // Guest user creating their client profile directly
-        await registerCustomer({
-          name: formData.name.trim(),
-          phone: formData.phone.trim(),
-          email: formData.email.trim() || `${formData.name.toLowerCase().replace(/\s+/g, '')}@example.com`,
-          preferredServices: [formData.skinOrHairType]
-        });
+        setIsSaving(false);
+        setErrorMessage('Please sign up or sign in with your email and password to save your client profile.');
+        closeProfileModal();
+        openAuthModal('customer', 'signup');
+        return;
       }
 
       setIsSaving(false);
@@ -232,7 +230,7 @@ export const ClientProfileModal: React.FC = () => {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Priya Sharma"
+                  placeholder="Enter your full name"
                   value={formData.name}
                   onChange={e => setFormData({ ...formData, name: e.target.value })}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -249,7 +247,7 @@ export const ClientProfileModal: React.FC = () => {
                     type="tel"
                     required
                     maxLength={10}
-                    placeholder="9876543210"
+                    placeholder="10-digit mobile number"
                     value={formData.phone}
                     onChange={e => setFormData({ ...formData, phone: e.target.value.replace(/\D/g, '') })}
                     className="w-full pl-11 pr-3.5 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono"
@@ -263,7 +261,7 @@ export const ClientProfileModal: React.FC = () => {
                 </label>
                 <input
                   type="email"
-                  placeholder="priya@example.com"
+                  placeholder="Enter your email address"
                   value={formData.email}
                   onChange={e => setFormData({ ...formData, email: e.target.value })}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -344,9 +342,6 @@ export const ClientProfileModal: React.FC = () => {
                 >
                   <option value="">Select Preferred Stylist (Optional)</option>
                   <option value="Dinesh Ghodake (Master Stylist)">Dinesh Ghodake (Master Stylist &amp; Founder - Mohol)</option>
-                  <option value="Pooja (Senior Hairdresser)">Pooja (Senior Hairdresser)</option>
-                  <option value="Amit (Creative Colorist)">Amit (Creative Colorist)</option>
-                  <option value="Sneha (Skin & Bridal Expert)">Sneha (Skin &amp; Bridal Expert)</option>
                   {staffMembers && staffMembers.length > 0 && staffMembers.map(st => (
                     <option key={st.id} value={`${st.name} (${st.role})`}>
                       {st.name} ({st.role})

@@ -304,24 +304,24 @@ export const AppointmentReminderToast: React.FC = () => {
                 : 'bottom-20 left-4 sm:bottom-6 sm:left-6'
           }`}
         >
-          <div className="flex items-center rounded-2xl bg-zinc-900/95 border border-yellow-500/40 shadow-2xl backdrop-blur-md p-1 pl-1.5 gap-1 text-[11px] font-bold text-yellow-400 group">
+          <div className="flex items-center rounded-2xl bg-white/95 dark:bg-zinc-900/95 border border-purple-300 dark:border-yellow-500/40 shadow-2xl shadow-purple-500/10 dark:shadow-black/50 backdrop-blur-md p-1 pl-1.5 gap-1 text-[11px] font-bold text-purple-700 dark:text-yellow-400 group">
             {/* Dedicated Movable Touch & Mouse Grip Handle */}
             <div
               onMouseDown={handleMouseDown}
               onTouchStart={handleTouchStart}
-              className="cursor-grab active:cursor-grabbing p-1.5 text-zinc-400 hover:text-yellow-400 flex items-center justify-center touch-none select-none rounded-lg hover:bg-zinc-800"
+              className="cursor-grab active:cursor-grabbing p-1.5 text-zinc-500 dark:text-zinc-400 hover:text-purple-700 dark:hover:text-yellow-400 flex items-center justify-center touch-none select-none rounded-lg hover:bg-purple-50 dark:hover:bg-zinc-800"
               title="Click & drag anywhere on screen (Desktop & Mobile)"
             >
-              <Move className="w-3.5 h-3.5 text-yellow-500/80" />
+              <Move className="w-3.5 h-3.5 text-purple-600 dark:text-yellow-500/80" />
             </div>
 
             <button
               id="simulate-24h-reminder-btn"
               onClick={() => handleTestReminder()}
-              className="px-2.5 py-1.5 rounded-xl hover:bg-zinc-800 text-yellow-400 flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
+              className="px-2.5 py-1.5 rounded-xl hover:bg-purple-50 dark:hover:bg-zinc-800 text-purple-700 dark:text-yellow-400 flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
               title="Test 24-hour in-app appointment reminder notification"
             >
-              <div className="w-2 h-2 rounded-full bg-yellow-400 animate-ping" />
+              <div className="w-2 h-2 rounded-full bg-purple-600 dark:bg-yellow-400 animate-ping" />
               <Bell className="w-3.5 h-3.5 group-hover:rotate-12 transition-transform" />
               <span>Test 24-Hr Reminder Alert</span>
             </button>
@@ -330,7 +330,7 @@ export const AppointmentReminderToast: React.FC = () => {
               <button
                 type="button"
                 onClick={handleResetPosition}
-                className="p-1 text-[10px] text-zinc-500 hover:text-yellow-400 cursor-pointer"
+                className="p-1 text-[10px] text-zinc-500 hover:text-purple-700 dark:hover:text-yellow-400 cursor-pointer"
                 title="Reset position to default"
               >
                 <RotateCcw className="w-3 h-3" />
@@ -340,7 +340,7 @@ export const AppointmentReminderToast: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsSimTriggerDismissed(true)}
-              className="p-1 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 cursor-pointer"
+              className="p-1 rounded-lg text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-purple-50 dark:hover:bg-zinc-800 cursor-pointer"
               title="Close notification trigger"
             >
               <X className="w-3.5 h-3.5" />
@@ -623,18 +623,18 @@ export const AppointmentReminderToast: React.FC = () => {
 
               {/* Multi-appointment pagination if > 1 upcoming */}
               {upcomingReminders.length > 1 && (
-                <div className="flex items-center justify-between pt-1 text-[11px] text-zinc-400">
+                <div className="flex items-center justify-between pt-1 text-[11px] text-zinc-600 dark:text-zinc-400">
                   <span>Appointment {activeToastIndex + 1} of {upcomingReminders.length}</span>
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => setActiveToastIndex(prev => (prev - 1 + upcomingReminders.length) % upcomingReminders.length)}
-                      className="p-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200"
+                      className="p-1 rounded bg-purple-100 hover:bg-purple-200 text-purple-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-200 cursor-pointer"
                     >
                       <ChevronLeft className="w-3 h-3" />
                     </button>
                     <button
                       onClick={() => setActiveToastIndex(prev => (prev + 1) % upcomingReminders.length)}
-                      className="p-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200"
+                      className="p-1 rounded bg-purple-100 hover:bg-purple-200 text-purple-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-200 cursor-pointer"
                     >
                       <ChevronRight className="w-3 h-3" />
                     </button>

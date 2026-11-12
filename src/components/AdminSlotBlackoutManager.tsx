@@ -149,15 +149,15 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
   const isTodayBlocked = isOwnerOnBreakToday || activeRules.some(r => r.date === todayStr && r.allDay);
 
   return (
-    <div className="rounded-3xl bg-zinc-900 border-2 border-amber-500/30 shadow-2xl overflow-hidden text-left transition-all">
+    <div className="rounded-3xl bg-white dark:bg-zinc-900 border-2 border-purple-200 dark:border-amber-500/30 shadow-xl dark:shadow-2xl overflow-hidden text-left transition-all">
       {/* Top Banner / Quick Master Controls Bar */}
-      <div className="p-4 sm:p-5 bg-gradient-to-r from-zinc-900 via-zinc-900 to-amber-950/20 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800">
+      <div className="p-4 sm:p-5 bg-gradient-to-r from-purple-50/90 via-white to-amber-50/80 dark:from-zinc-900 dark:via-zinc-900 dark:to-amber-950/20 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-purple-200/80 dark:border-zinc-800">
         <div className="flex items-start sm:items-center gap-3.5">
           <div
             className={`w-11 h-11 rounded-2xl flex items-center justify-center font-bold shrink-0 transition-colors ${
               isTodayBlocked
-                ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-lg shadow-rose-500/10'
-                : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-lg shadow-emerald-500/10'
+                ? 'bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-300 dark:border-rose-500/40 shadow-lg shadow-rose-500/10'
+                : 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/40 shadow-lg shadow-emerald-500/10'
             }`}
           >
             {isTodayBlocked ? (
@@ -169,27 +169,27 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
 
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="font-serif text-base sm:text-lg font-bold text-zinc-100 flex items-center gap-2">
+              <h3 className="font-serif text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
                 <span>Owner Break &amp; Slot Availability</span>
               </h3>
               {isTodayBlocked ? (
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center gap-1">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-400 border border-rose-300 dark:border-rose-500/30 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping" />
                   Today Unavailable
                 </span>
               ) : (
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/30 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                   Salon Open for Bookings
                 </span>
               )}
               {activeRules.length > 0 && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30">
                   {activeRules.length} Blackout Window{activeRules.length > 1 ? 's' : ''} Configured
                 </span>
               )}
             </div>
-            <p className="text-xs text-zinc-400 mt-0.5">
+            <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
               {isTodayBlocked
                 ? 'Customers currently see all today’s booking slots as unavailable / owner on break.'
                 : 'Customers can book available slots. Click below whenever you want to take a break or schedule off-hours.'}
@@ -199,7 +199,7 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
 
         {/* Master Action Buttons */}
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* Quick One-Click Toggle Button (Requested by User) */}
+          {/* Quick One-Click Toggle Button */}
           <button
             type="button"
             id="admin-quick-break-toggle-btn"
@@ -224,9 +224,9 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
             type="button"
             id="admin-manage-blackouts-btn"
             onClick={() => setIsManagerExpanded(!isManagerExpanded)}
-            className="px-3.5 py-2.5 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/80 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+            className="px-3.5 py-2.5 rounded-2xl bg-purple-100 hover:bg-purple-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-purple-900 dark:text-zinc-200 border border-purple-200 dark:border-zinc-700/80 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
           >
-            <CalendarDays className="w-4 h-4 text-amber-400" />
+            <CalendarDays className="w-4 h-4 text-purple-700 dark:text-amber-400" />
             <span>{isManagerExpanded ? 'Hide Schedule Settings' : 'Schedule Specific Day & Time Off'}</span>
             {isManagerExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
@@ -235,23 +235,23 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
 
       {/* Action Success Toast Banner */}
       {actionSuccess && (
-        <div className="px-5 py-2.5 bg-amber-500/15 border-b border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center gap-2 animate-in slide-in-from-top duration-200">
-          <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
+        <div className="px-5 py-2.5 bg-amber-50 dark:bg-amber-500/15 border-b border-amber-200 dark:border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs font-semibold flex items-center gap-2 animate-in slide-in-from-top duration-200">
+          <CheckCircle2 className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
           <span>{actionSuccess}</span>
         </div>
       )}
 
       {/* Expanded Scheduler & Blackout Controls */}
       {isManagerExpanded && (
-        <div className="p-4 sm:p-6 space-y-6 bg-zinc-950/40">
+        <div className="p-4 sm:p-6 space-y-6 bg-purple-50/40 dark:bg-zinc-950/40">
           
           {/* Top Bar inside expansion: Subtitle & "+ Add Leave Window" button */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-800">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-purple-200/80 dark:border-zinc-800">
             <div>
-              <h4 className="font-serif text-sm font-bold text-zinc-100 flex items-center gap-2">
+              <h4 className="font-serif text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
                 <span>Manage Leaves, Holidays &amp; Time-Slot Blackouts</span>
               </h4>
-              <p className="text-[11px] text-zinc-400">
+              <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
                 Choose any specific day (e.g. tomorrow, next week) and either block the entire day or only specific hours (e.g. 02:00 PM to 06:00 PM).
               </p>
             </div>
@@ -260,7 +260,7 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
               type="button"
               id="admin-add-blackout-rule-btn"
               onClick={() => setShowAddForm(!showAddForm)}
-              className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 transition-all cursor-pointer"
+              className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white dark:bg-amber-500 dark:hover:bg-amber-400 dark:text-zinc-950 font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-purple-600/20 dark:shadow-amber-500/20 transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>{showAddForm ? 'Cancel Form' : 'Block Specific Date / Time'}</span>
@@ -271,19 +271,19 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
           {showAddForm && (
             <form
               onSubmit={handleCreateBlockout}
-              className="p-4 sm:p-5 rounded-2xl bg-zinc-900 border border-amber-500/30 space-y-4 animate-in fade-in duration-200"
+              className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-amber-500/30 space-y-4 animate-in fade-in duration-200 shadow-sm"
             >
-              <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
-                <div className="text-xs font-bold text-amber-400 flex items-center gap-2">
+              <div className="flex items-center justify-between border-b border-purple-100 dark:border-zinc-800 pb-2.5">
+                <div className="text-xs font-bold text-purple-700 dark:text-amber-400 flex items-center gap-2">
                   <ShieldAlert className="w-4 h-4" />
                   <span>Configure New Slot Blackout / Owner Leave</span>
                 </div>
-                <span className="text-[10px] text-zinc-400 font-mono">Real-time synced to client portal</span>
+                <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono">Real-time synced to client portal</span>
               </div>
 
               {/* 1. Date Selection with Quick Buttons */}
               <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-zinc-300">
+                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                   Select Date for Leave / Blackout *
                 </label>
                 <div className="flex flex-wrap items-center gap-2">
@@ -292,8 +292,8 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
                     onClick={() => setTargetDate(todayStr)}
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
                       targetDate === todayStr
-                        ? 'bg-amber-500 text-zinc-950 shadow-sm'
-                        : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                        ? 'bg-purple-600 text-white dark:bg-amber-500 dark:text-zinc-950 shadow-sm'
+                        : 'bg-purple-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 border border-purple-200 dark:border-transparent'
                     }`}
                   >
                     Today ({todayStr})
@@ -303,8 +303,8 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
                     onClick={() => setTargetDate(tomorrowStr)}
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
                       targetDate === tomorrowStr
-                        ? 'bg-amber-500 text-zinc-950 shadow-sm'
-                        : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                        ? 'bg-purple-600 text-white dark:bg-amber-500 dark:text-zinc-950 shadow-sm'
+                        : 'bg-purple-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 border border-purple-200 dark:border-transparent'
                     }`}
                   >
                     Tomorrow ({tomorrowStr})
@@ -314,8 +314,8 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
                     onClick={() => setTargetDate(dayAfterStr)}
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
                       targetDate === dayAfterStr
-                        ? 'bg-amber-500 text-zinc-950 shadow-sm'
-                        : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                        ? 'bg-purple-600 text-white dark:bg-amber-500 dark:text-zinc-950 shadow-sm'
+                        : 'bg-purple-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 border border-purple-200 dark:border-transparent'
                     }`}
                   >
                     Day After ({dayAfterStr})
@@ -328,7 +328,7 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
                       value={targetDate}
                       onChange={e => setTargetDate(e.target.value)}
                       required
-                      className="w-full px-3 py-1.5 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-100 text-xs font-mono focus:border-amber-400 focus:outline-none"
+                      className="w-full px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-800 border border-purple-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 text-xs font-mono focus:border-purple-500 dark:focus:border-amber-400 focus:outline-none"
                     />
                   </div>
                 </div>
@@ -336,15 +336,15 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
 
               {/* 2. Block Scope: All Day vs Time Range vs Specific Slots */}
               <div className="space-y-2">
-                <label className="block text-xs font-semibold text-zinc-300">
+                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                   Select Time Scope to Make Unavailable *
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                   <label
                     className={`p-3 rounded-xl border flex items-center gap-2.5 cursor-pointer transition ${
                       blockScope === 'ALL_DAY'
-                        ? 'bg-amber-500/15 border-amber-500 text-amber-300 font-bold'
-                        : 'bg-zinc-800/80 border-zinc-700/80 text-zinc-300 hover:border-zinc-600'
+                        ? 'bg-purple-100/80 dark:bg-amber-500/15 border-purple-500 dark:border-amber-500 text-purple-900 dark:text-amber-300 font-bold'
+                        : 'bg-purple-50/50 dark:bg-zinc-800/80 border-purple-200 dark:border-zinc-700/80 text-zinc-700 dark:text-zinc-300 hover:border-purple-400 dark:hover:border-zinc-600'
                     }`}
                   >
                     <input
@@ -352,19 +352,19 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
                       name="blockScope"
                       checked={blockScope === 'ALL_DAY'}
                       onChange={() => setBlockScope('ALL_DAY')}
-                      className="accent-amber-500 cursor-pointer"
+                      className="accent-purple-600 dark:accent-amber-500 cursor-pointer"
                     />
                     <div>
                       <div className="font-bold">Full Day Off</div>
-                      <div className="text-[10px] text-zinc-400">All 10 daily slots unavailable</div>
+                      <div className="text-[10px] text-zinc-600 dark:text-zinc-400">All 10 daily slots unavailable</div>
                     </div>
                   </label>
 
                   <label
                     className={`p-3 rounded-xl border flex items-center gap-2.5 cursor-pointer transition ${
                       blockScope === 'TIME_RANGE'
-                        ? 'bg-amber-500/15 border-amber-500 text-amber-300 font-bold'
-                        : 'bg-zinc-800/80 border-zinc-700/80 text-zinc-300 hover:border-zinc-600'
+                        ? 'bg-purple-100/80 dark:bg-amber-500/15 border-purple-500 dark:border-amber-500 text-purple-900 dark:text-amber-300 font-bold'
+                        : 'bg-purple-50/50 dark:bg-zinc-800/80 border-purple-200 dark:border-zinc-700/80 text-zinc-700 dark:text-zinc-300 hover:border-purple-400 dark:hover:border-zinc-600'
                     }`}
                   >
                     <input
@@ -372,19 +372,19 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
                       name="blockScope"
                       checked={blockScope === 'TIME_RANGE'}
                       onChange={() => setBlockScope('TIME_RANGE')}
-                      className="accent-amber-500 cursor-pointer"
+                      className="accent-purple-600 dark:accent-amber-500 cursor-pointer"
                     />
                     <div>
                       <div className="font-bold">Specific Time Range</div>
-                      <div className="text-[10px] text-zinc-400">Between start and end time</div>
+                      <div className="text-[10px] text-zinc-600 dark:text-zinc-400">Between start and end time</div>
                     </div>
                   </label>
 
                   <label
                     className={`p-3 rounded-xl border flex items-center gap-2.5 cursor-pointer transition ${
                       blockScope === 'SPECIFIC_SLOTS'
-                        ? 'bg-amber-500/15 border-amber-500 text-amber-300 font-bold'
-                        : 'bg-zinc-800/80 border-zinc-700/80 text-zinc-300 hover:border-zinc-600'
+                        ? 'bg-purple-100/80 dark:bg-amber-500/15 border-purple-500 dark:border-amber-500 text-purple-900 dark:text-amber-300 font-bold'
+                        : 'bg-purple-50/50 dark:bg-zinc-800/80 border-purple-200 dark:border-zinc-700/80 text-zinc-700 dark:text-zinc-300 hover:border-purple-400 dark:hover:border-zinc-600'
                     }`}
                   >
                     <input
@@ -392,11 +392,11 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
                       name="blockScope"
                       checked={blockScope === 'SPECIFIC_SLOTS'}
                       onChange={() => setBlockScope('SPECIFIC_SLOTS')}
-                      className="accent-amber-500 cursor-pointer"
+                      className="accent-purple-600 dark:accent-amber-500 cursor-pointer"
                     />
                     <div>
                       <div className="font-bold">Pick Specific Slots</div>
-                      <div className="text-[10px] text-zinc-400">Select individual slot buttons</div>
+                      <div className="text-[10px] text-zinc-600 dark:text-zinc-400">Select individual slot buttons</div>
                     </div>
                   </label>
                 </div>
@@ -404,18 +404,18 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
 
               {/* Conditional Inputs based on Block Scope */}
               {blockScope === 'TIME_RANGE' && (
-                <div className="p-3.5 rounded-xl bg-zinc-800/60 border border-zinc-700/60 space-y-2">
-                  <div className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-amber-400" />
+                <div className="p-3.5 rounded-xl bg-purple-50/70 dark:bg-zinc-800/60 border border-purple-200 dark:border-zinc-700/60 space-y-2">
+                  <div className="text-xs font-semibold text-zinc-800 dark:text-zinc-300 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-purple-600 dark:text-amber-400" />
                     <span>Choose Unavailable Time Range (From - To)</span>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <span className="text-[10px] text-zinc-400 block mb-1">Start Time (From):</span>
+                      <span className="text-[10px] text-zinc-600 dark:text-zinc-400 block mb-1">Start Time (From):</span>
                       <select
                         value={rangeStartSlot}
                         onChange={e => setRangeStartSlot(e.target.value)}
-                        className="w-full p-2 rounded-xl bg-zinc-900 border border-zinc-700 text-zinc-200 text-xs font-mono focus:border-amber-400 focus:outline-none"
+                        className="w-full p-2 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-200 text-xs font-mono focus:border-purple-500 dark:focus:border-amber-400 focus:outline-none"
                       >
                         {SALON_TIME_SLOTS.map(slot => (
                           <option key={slot} value={slot}>
@@ -426,11 +426,11 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
                     </div>
 
                     <div>
-                      <span className="text-[10px] text-zinc-400 block mb-1">End Time (Until):</span>
+                      <span className="text-[10px] text-zinc-600 dark:text-zinc-400 block mb-1">End Time (Until):</span>
                       <select
                         value={rangeEndSlot}
                         onChange={e => setRangeEndSlot(e.target.value)}
-                        className="w-full p-2 rounded-xl bg-zinc-900 border border-zinc-700 text-zinc-200 text-xs font-mono focus:border-amber-400 focus:outline-none"
+                        className="w-full p-2 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-200 text-xs font-mono focus:border-purple-500 dark:focus:border-amber-400 focus:outline-none"
                       >
                         {SALON_TIME_SLOTS.map(slot => (
                           <option key={slot} value={slot}>
@@ -440,17 +440,17 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
                       </select>
                     </div>
                   </div>
-                  <p className="text-[11px] text-amber-300/80">
+                  <p className="text-[11px] text-purple-700 dark:text-amber-300/80">
                     All appointment slots occurring between {rangeStartSlot} and {rangeEndSlot} will show as Unavailable.
                   </p>
                 </div>
               )}
 
               {blockScope === 'SPECIFIC_SLOTS' && (
-                <div className="p-3.5 rounded-xl bg-zinc-800/60 border border-zinc-700/60 space-y-2">
-                  <div className="text-xs font-semibold text-zinc-300 flex items-center justify-between">
+                <div className="p-3.5 rounded-xl bg-purple-50/70 dark:bg-zinc-800/60 border border-purple-200 dark:border-zinc-700/60 space-y-2">
+                  <div className="text-xs font-semibold text-zinc-800 dark:text-zinc-300 flex items-center justify-between">
                     <span>Click the slots you want to freeze:</span>
-                    <span className="text-[10px] text-amber-400 font-mono">
+                    <span className="text-[10px] text-purple-700 dark:text-amber-400 font-mono">
                       {chosenSpecificSlots.length} slot(s) selected
                     </span>
                   </div>
@@ -464,13 +464,13 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
                           onClick={() => handleToggleSpecificSlot(slot)}
                           className={`p-2 rounded-xl border text-xs font-mono font-bold transition flex items-center justify-between cursor-pointer ${
                             isChosen
-                              ? 'bg-rose-500/20 border-rose-500 text-rose-300 shadow-sm'
-                              : 'bg-zinc-900 border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-600'
+                              ? 'bg-rose-100 dark:bg-rose-500/20 border-rose-400 dark:border-rose-500 text-rose-700 dark:text-rose-300 shadow-sm'
+                              : 'bg-white dark:bg-zinc-900 border-purple-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:border-purple-400 dark:hover:border-zinc-600'
                           }`}
                         >
                           <span>{slot}</span>
                           {isChosen ? (
-                            <span className="text-[9px] text-rose-400 font-black">LOCKED</span>
+                            <span className="text-[9px] text-rose-600 dark:text-rose-400 font-black">LOCKED</span>
                           ) : (
                             <span className="text-[9px] text-zinc-500">Open</span>
                           )}
@@ -484,7 +484,7 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
               {/* 3. Reason & Title */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-semibold text-zinc-400 mb-1">
+                  <label className="block text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 mb-1">
                     Label / Title (For Admin Reference)
                   </label>
                   <input
@@ -492,12 +492,12 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
                     value={blockTitle}
                     onChange={e => setBlockTitle(e.target.value)}
                     placeholder="e.g. Personal Break, Half-Day Off, Renovation"
-                    className="w-full px-3 py-2 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs focus:border-amber-400 focus:outline-none"
+                    className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-800 border border-purple-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-200 text-xs focus:border-purple-500 dark:focus:border-amber-400 focus:outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-zinc-400 mb-1">
+                  <label className="block text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 mb-1">
                     Client Notification Reason
                   </label>
                   <input
@@ -505,24 +505,24 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
                     value={blockReason}
                     onChange={e => setBlockReason(e.target.value)}
                     placeholder="Shown to clients if they inspect this date"
-                    className="w-full px-3 py-2 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs focus:border-amber-400 focus:outline-none"
+                    className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-800 border border-purple-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-200 text-xs focus:border-purple-500 dark:focus:border-amber-400 focus:outline-none"
                   />
                 </div>
               </div>
 
               {/* Submit / Cancel Buttons */}
-              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-zinc-800">
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-purple-100 dark:border-zinc-800">
                 <button
                   type="button"
                   onClick={() => setShowAddForm(false)}
-                  className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs transition cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-purple-100 hover:bg-purple-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-purple-900 dark:text-zinc-300 font-bold text-xs transition cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   id="admin-submit-blackout-rule-btn"
-                  className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-extrabold text-xs shadow-lg shadow-amber-500/20 transition cursor-pointer"
+                  className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white dark:bg-amber-500 dark:hover:bg-amber-400 dark:text-zinc-950 font-extrabold text-xs shadow-lg shadow-purple-600/20 dark:shadow-amber-500/20 transition cursor-pointer"
                 >
                   Apply &amp; Block Slots Now
                 </button>
@@ -532,8 +532,8 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
 
           {/* List of Configured Blackout Windows */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between text-xs text-zinc-400">
-              <span className="font-bold text-zinc-300">
+            <div className="flex items-center justify-between text-xs text-zinc-600 dark:text-zinc-400">
+              <span className="font-bold text-zinc-800 dark:text-zinc-300">
                 Active &amp; Scheduled Blackout Rules ({blockedWindows.length})
               </span>
               <span className="text-[11px]">
@@ -543,12 +543,12 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
 
             {/* Quick Today's Status Card if Today is active */}
             {isOwnerOnBreakToday && (
-              <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-2.5 text-rose-300">
-                  <Lock className="w-4 h-4 text-rose-400 shrink-0" />
+              <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-500/10 border border-rose-300 dark:border-rose-500/30 flex items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2.5 text-rose-800 dark:text-rose-300">
+                  <Lock className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
                   <div>
                     <strong className="block font-bold">Quick Break (Active Today: {todayStr})</strong>
-                    <span className="text-[11px] text-rose-400/80">
+                    <span className="text-[11px] text-rose-700 dark:text-rose-400/80">
                       Master toggle is ON: All remaining slots for today are locked for customer bookings.
                     </span>
                   </div>
@@ -565,12 +565,12 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
             )}
 
             {blockedWindows.length === 0 && !isOwnerOnBreakToday ? (
-              <div className="p-6 rounded-2xl bg-zinc-900/60 border border-dashed border-zinc-800 text-center space-y-2">
-                <div className="w-10 h-10 rounded-2xl bg-zinc-800 flex items-center justify-center mx-auto text-zinc-500">
-                  <Calendar className="w-5 h-5 text-amber-400/70" />
+              <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900/60 border border-dashed border-purple-300 dark:border-zinc-800 text-center space-y-2">
+                <div className="w-10 h-10 rounded-2xl bg-purple-100 dark:bg-zinc-800 flex items-center justify-center mx-auto text-purple-600 dark:text-zinc-500">
+                  <Calendar className="w-5 h-5 text-purple-600 dark:text-amber-400/70" />
                 </div>
-                <div className="text-xs font-bold text-zinc-300">All Appointment Slots Currently Open</div>
-                <p className="text-[11px] text-zinc-500 max-w-md mx-auto">
+                <div className="text-xs font-bold text-zinc-900 dark:text-zinc-300">All Appointment Slots Currently Open</div>
+                <p className="text-[11px] text-zinc-600 dark:text-zinc-500 max-w-md mx-auto">
                   No date or time-slot blackout rules are active. When you need time off tomorrow or on any future date, click "Block Specific Date / Time" above to freeze appointments for that period.
                 </p>
               </div>
@@ -590,17 +590,17 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
                       key={rule.id}
                       className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
                         rule.active
-                          ? 'bg-zinc-900 border-zinc-700/80 shadow-md'
-                          : 'bg-zinc-900/40 border-zinc-800 opacity-60'
+                          ? 'bg-white dark:bg-zinc-900 border-purple-200 dark:border-zinc-700/80 shadow-md'
+                          : 'bg-white/60 dark:bg-zinc-900/40 border-purple-100 dark:border-zinc-800 opacity-60'
                       }`}
                     >
                       <div className="space-y-1.5">
                         <div className="flex items-start justify-between gap-2">
                           <div>
-                            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-purple-100 dark:bg-amber-500/10 text-purple-800 dark:text-amber-400 border border-purple-200 dark:border-amber-500/20">
                               {dateLabel}
                             </span>
-                            <h5 className="font-bold text-xs text-zinc-100 mt-1">
+                            <h5 className="font-bold text-xs text-zinc-900 dark:text-zinc-100 mt-1">
                               {rule.title || 'Owner Break'}
                             </h5>
                           </div>
@@ -609,8 +609,8 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
                           <span
                             className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                               rule.active
-                                ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
-                                : 'bg-zinc-800 text-zinc-500'
+                                ? 'bg-rose-100 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-500/30'
+                                : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-500'
                             }`}
                           >
                             {rule.active ? 'Active (Slots Blocked)' : 'Paused (Open)'}
@@ -618,8 +618,8 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
                         </div>
 
                         {/* Scope Description */}
-                        <div className="text-[11px] text-zinc-300 font-medium flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <div className="text-[11px] text-zinc-700 dark:text-zinc-300 font-medium flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-purple-600 dark:text-amber-400 shrink-0" />
                           <span>
                             {rule.allDay
                               ? 'Full Day Off (All 10 Slots Unavailable)'
@@ -630,31 +630,31 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
                         </div>
 
                         {rule.reason && (
-                          <div className="text-[10px] text-zinc-400 italic">
+                          <div className="text-[10px] text-zinc-500 dark:text-zinc-400 italic">
                             "{rule.reason}"
                           </div>
                         )}
                       </div>
 
                       {/* Rule Actions: Toggle Active and Delete */}
-                      <div className="flex items-center justify-between pt-2 border-t border-zinc-800/80 text-xs">
+                      <div className="flex items-center justify-between pt-2 border-t border-purple-100 dark:border-zinc-800/80 text-xs">
                         <button
                           type="button"
                           onClick={() => handleToggleRuleActive(rule)}
                           className={`font-semibold flex items-center gap-1.5 transition cursor-pointer text-xs ${
                             rule.active
-                              ? 'text-amber-400 hover:text-amber-300'
-                              : 'text-zinc-400 hover:text-zinc-200'
+                              ? 'text-purple-700 hover:text-purple-900 dark:text-amber-400 dark:hover:text-amber-300'
+                              : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'
                           }`}
                         >
                           {rule.active ? (
                             <>
-                              <ToggleRight className="w-4 h-4 text-emerald-400" />
+                              <ToggleRight className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                               <span>Pause Blackout</span>
                             </>
                           ) : (
                             <>
-                              <ToggleLeft className="w-4 h-4 text-zinc-500" />
+                              <ToggleLeft className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
                               <span>Reactivate Blackout</span>
                             </>
                           )}
@@ -663,7 +663,7 @@ export const AdminSlotBlackoutManager: React.FC<AdminSlotBlackoutManagerProps> =
                         <button
                           type="button"
                           onClick={() => handleDeleteRule(rule.id, rule.date)}
-                          className="p-1.5 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
+                          className="p-1.5 rounded-lg text-zinc-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition cursor-pointer"
                           title="Delete blackout rule"
                         >
                           <Trash2 className="w-3.5 h-3.5" />

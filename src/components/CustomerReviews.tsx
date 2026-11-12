@@ -620,7 +620,7 @@ export const CustomerReviews: React.FC<CustomerReviewsProps> = ({
               {/* Client Name */}
               <div>
                 <label className="block text-xs font-bold text-zinc-300 mb-1">
-                  Your Name (e.g. Pooja Kadam, Mohol):
+                  Your Full Name:
                 </label>
                 <input
                   type="text"

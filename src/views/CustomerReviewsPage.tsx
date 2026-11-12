@@ -58,7 +58,7 @@ export const CustomerReviewsPage: React.FC = () => {
   const totalReviewsCount = reviews.length;
   const avgRating = totalReviewsCount > 0 
     ? (reviews.reduce((acc, r) => acc + r.rating, 0) / totalReviewsCount).toFixed(1)
-    : '4.9';
+    : '0.0';
 
   const filteredReviews = useMemo(() => {
     const list = reviews.filter(rev => {
@@ -376,7 +376,7 @@ export const CustomerReviewsPage: React.FC = () => {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Pooja Deshmukh"
+                  placeholder="Enter your full name"
                   value={formData.clientName}
                   onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
                   className="w-full px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:border-amber-500"

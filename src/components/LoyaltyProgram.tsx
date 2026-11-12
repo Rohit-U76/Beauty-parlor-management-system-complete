@@ -38,13 +38,7 @@ export const LoyaltyProgram: React.FC = () => {
     }
   }, [currentUser]);
 
-  // Quick Preset demo profiles
-  const sampleProfiles = [
-    { name: 'Pooja Kadam (5 Visits)', phone: '9822099881', visits: 5, tier: 'VIP Member' },
-    { name: 'Rohan Shinde (4 Visits)', phone: '9765433445', visits: 4, tier: 'Standard' },
-    { name: 'Tanvi Gaikwad (9 Visits)', phone: '9822144556', visits: 9, tier: 'VIP Member' },
-    { name: 'New Client (0 Visits)', phone: '9123456789', visits: 0, tier: 'New Client' }
-  ];
+  // Real phone/account visit lookup only (no dummy preset profiles)
 
   // User appointments count for currentUser
   const currentUserVisits = useMemo(() => {
@@ -147,12 +141,6 @@ export const LoyaltyProgram: React.FC = () => {
   const handleLookup = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setIsManualSimulation(false);
-  };
-
-  const handleSelectPreset = (preset: typeof sampleProfiles[0]) => {
-    setIsManualSimulation(false);
-    setPhoneNumber(preset.phone);
-    setSimulatedVisits(preset.visits);
   };
 
   const incrementVisit = () => {
@@ -480,25 +468,6 @@ export const LoyaltyProgram: React.FC = () => {
               <span>Track Visits</span>
             </button>
           </form>
-
-          {/* Quick preset selector */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
-            <span className="text-[11px] text-zinc-500 whitespace-nowrap mr-1">Quick Demo:</span>
-            {sampleProfiles.map(p => (
-              <button
-                key={p.phone}
-                type="button"
-                onClick={() => handleSelectPreset(p)}
-                className={`px-2.5 py-1 rounded-lg text-[10px] font-medium whitespace-nowrap transition cursor-pointer ${
-                  phoneNumber.includes(p.phone)
-                    ? 'bg-yellow-500 text-zinc-950 font-bold'
-                    : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                {p.name.split(' ')[0]} ({p.visits}V)
-              </button>
-            ))}
-          </div>
         </div>
       </div>
 

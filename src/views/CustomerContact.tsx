@@ -16,10 +16,10 @@ export const CustomerContact: React.FC = () => {
     if (!name || !message) return;
 
     addContactInquiry({
-      name,
-      email: email || 'client@example.com',
-      phone: phone || '+91 98000 00000',
-      message
+      name: name.trim(),
+      email: email.trim(),
+      phone: phone.trim(),
+      message: message.trim()
     });
 
     setSubmitted(true);

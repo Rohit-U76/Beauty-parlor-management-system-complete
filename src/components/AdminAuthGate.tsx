@@ -16,16 +16,20 @@ import { useSalon } from '../context/SalonContext';
 import { ModernSalonLogo } from './ModernSalonLogo';
 
 export const AdminAuthGate: React.FC = () => {
-  const { login, loginWithGoogle, setIsAdminMode, setActiveNavTab, settings } = useSalon();
+  const { login, loginWithGoogle, sendAdminPasswordResetEmail, setIsAdminMode, setActiveNavTab } = useSalon();
   const [adminIdentifier, setAdminIdentifier] = useState('');
   const [adminSecret, setAdminSecret] = useState('');
   const [showSecret, setShowSecret] = useState(false);
+  const [isForgotMode, setIsForgotMode] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
+    setSuccessMsg('');
     setIsLoading(true);
 
     const res = await login(adminIdentifier, adminSecret, 'ADMIN');
@@ -36,8 +40,25 @@ export const AdminAuthGate: React.FC = () => {
     }
   };
 
+  const handleSendAdminReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setSuccessMsg('');
+    setIsLoading(true);
+
+    const res = await sendAdminPasswordResetEmail(resetEmail);
+    setIsLoading(false);
+
+    if (res.success) {
+      setSuccessMsg(res.message);
+    } else {
+      setErrorMsg(res.message);
+    }
+  };
+
   const handleGoogleAdminLogin = async () => {
     setErrorMsg('');
+    setSuccessMsg('');
     setIsLoading(true);
     try {
       const res = await loginWithGoogle({ forRole: 'ADMIN' });
@@ -86,10 +107,12 @@ export const AdminAuthGate: React.FC = () => {
           </div>
 
           <h1 className="text-xl font-serif font-bold text-zinc-900 dark:text-white">
-            Staff Security Clearance
+            {isForgotMode ? 'Reset Admin Password' : 'Staff Security Clearance'}
           </h1>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-xs mx-auto">
-            Please authenticate with your unique owner password or PIN to access administrative controls.
+            {isForgotMode
+              ? 'Enter your authorized administrator email address to receive a Firebase password reset link.'
+              : 'Please authenticate with your owner email and password to access administrative controls.'}
           </p>
         </div>
 
@@ -102,60 +125,121 @@ export const AdminAuthGate: React.FC = () => {
             </div>
           )}
 
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
-                Admin Email / Username
-              </label>
-              <div className="relative">
-                <Mail className="w-4 h-4 absolute left-3.5 top-3 text-zinc-400" />
-                <input
-                  type="text"
-                  required
-                  placeholder="Enter admin email or username"
-                  value={adminIdentifier}
-                  onChange={(e) => setAdminIdentifier(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:border-amber-500 transition font-mono"
-                />
-              </div>
+          {successMsg && (
+            <div className="p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-xs text-emerald-700 dark:text-emerald-300 flex items-start gap-2 animate-in fade-in">
+              <Sparkles className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+              <span>{successMsg}</span>
             </div>
+          )}
 
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                  Unique Admin Password or PIN
+          {isForgotMode ? (
+            <form onSubmit={handleSendAdminReset} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                  Authorized Administrator Email *
                 </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 absolute left-3.5 top-3 text-zinc-400" />
+                  <input
+                    type="email"
+                    required
+                    placeholder="Enter authorized admin email"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:border-amber-500 transition font-mono"
+                  />
+                </div>
               </div>
-              <div className="relative">
-                <KeyRound className="w-4 h-4 absolute left-3.5 top-3 text-zinc-400" />
-                <input
-                  type={showSecret ? 'text' : 'password'}
-                  required
-                  placeholder="Enter unique Admin Password or PIN"
-                  value={adminSecret}
-                  onChange={(e) => setAdminSecret(e.target.value)}
-                  className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:border-amber-500 transition font-mono"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowSecret(!showSecret)}
-                  className="absolute right-3 top-2.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 cursor-pointer"
-                >
-                  {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition active:scale-[0.99] cursor-pointer disabled:opacity-50"
-            >
-              <Lock className="w-4 h-4" />
-              <span>{isLoading ? 'Verifying Credentials...' : 'Unlock Admin Suite'}</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </form>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition active:scale-[0.99] cursor-pointer disabled:opacity-50"
+              >
+                <Mail className="w-4 h-4" />
+                <span>{isLoading ? 'Sending Reset Email...' : 'Send Password Reset Link'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsForgotMode(false);
+                  setErrorMsg('');
+                  setSuccessMsg('');
+                }}
+                className="w-full py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back to Admin Sign In</span>
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                  Admin Email / Username
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 absolute left-3.5 top-3 text-zinc-400" />
+                  <input
+                    type="text"
+                    required
+                    placeholder="Enter admin email or username"
+                    value={adminIdentifier}
+                    onChange={(e) => setAdminIdentifier(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:border-amber-500 transition font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                    Admin Password
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsForgotMode(true);
+                      setErrorMsg('');
+                      setSuccessMsg('');
+                    }}
+                    className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
+                  >
+                    Forgot / Reset Password?
+                  </button>
+                </div>
+                <div className="relative">
+                  <KeyRound className="w-4 h-4 absolute left-3.5 top-3 text-zinc-400" />
+                  <input
+                    type={showSecret ? 'text' : 'password'}
+                    required
+                    placeholder="Enter admin password"
+                    value={adminSecret}
+                    onChange={(e) => setAdminSecret(e.target.value)}
+                    className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:border-amber-500 transition font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSecret(!showSecret)}
+                    className="absolute right-3 top-2.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 cursor-pointer"
+                  >
+                    {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition active:scale-[0.99] cursor-pointer disabled:opacity-50"
+              >
+                <Lock className="w-4 h-4" />
+                <span>{isLoading ? 'Verifying Credentials...' : 'Unlock Admin Suite'}</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </form>
+          )}
 
           {/* Google Admin Login */}
           <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800 space-y-2">

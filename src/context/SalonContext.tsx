@@ -56,6 +56,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
   setDoc,
   updateDoc,
   deleteDoc,
@@ -131,6 +132,8 @@ interface SalonContextType {
   resendVerificationEmail: (email?: string, password?: string) => Promise<{ success: boolean; message: string }>;
   resetPassword: (email: string) => Promise<{ success: boolean; message: string }>;
   resetAdminPassword: (email: string, pin: string, newPassword: string) => Promise<{ success: boolean; message: string }>;
+  sendAdminPasswordResetEmail: (email: string) => Promise<{ success: boolean; message: string }>;
+  clearAllPastData: () => Promise<{ success: boolean; message: string }>;
   logout: () => void;
   openAuthModal: (initialTab?: 'customer' | 'admin', mode?: 'login' | 'register') => void;
   closeAuthModal: () => void;
@@ -224,6 +227,65 @@ interface SalonContextType {
 const SalonContext = createContext<SalonContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_KEY = 'modern_salon_data_v3';
+const CLEAN_SLATE_FLAG = 'modern_salon_clean_slate_v2026_11';
+
+const normalizeLegacySettings = (raw: any): SalonSettings => {
+  const s: SalonSettings = { ...INITIAL_SETTINGS, ...(raw || {}) };
+  const isLegacyBank =
+    s.bankAccountNumber === '0701163100004079' ||
+    s.bankIfsc === 'UBIN0532151' ||
+    (s.bankName || '').toLowerCase().includes('union bank');
+  if (isLegacyBank) {
+    s.accountHolder = 'MODERN JENTS PARLOUR';
+    s.bankName = 'HDFC Bank';
+    s.bankAccountNumber = '50200072074441';
+    s.bankIfsc = 'HDFC0000635';
+    s.bankBranch = 'Solapur';
+    s.bankAccountType = 'Current Account';
+  }
+  if (!s.bankBranch || s.bankBranch === 'MOHOL / SOLAPUR Branch') {
+    s.bankBranch = 'Solapur';
+  }
+  if (!s.bankAccountType) {
+    s.bankAccountType = 'Current Account';
+  }
+  if (
+    !s.merchantUpiId ||
+    s.merchantUpiId === '9975236976@ibl' ||
+    s.upiId === '9975236976@ibl' ||
+    s.upiQrCodeUrl === '/qr-union-bank-phonepe.jpg'
+  ) {
+    s.merchantUpiId = 'ghodakedinesh@ybl';
+    s.upiId = 'ghodakedinesh@ybl';
+    s.upiQrCodeUrl = '/assets/aistudio/image_2ca5cc29.png';
+  }
+  if (
+    !s.secondaryUpiQrCodeUrl ||
+    s.secondaryUpiQrCodeUrl === '/qr-dinesh-ghodake.jpg' ||
+    s.secondaryAccountHolder === 'DINESH GHODAKE'
+  ) {
+    s.secondaryAccountHolder = 'DINESH VITTHAL GHODAKE';
+    s.secondaryUpiId = s.secondaryUpiId || '8104026257@axl';
+    s.secondaryUpiQrCodeUrl = '/assets/aistudio/image_fce20bf8.png';
+  }
+  return s;
+};
+
+// One-time clean slate check for legacy seeded dashboard data
+try {
+  if (!localStorage.getItem(CLEAN_SLATE_FLAG)) {
+    localStorage.removeItem(`${LOCAL_STORAGE_KEY}_appointments`);
+    localStorage.removeItem(`${LOCAL_STORAGE_KEY}_customers`);
+    localStorage.removeItem(`${LOCAL_STORAGE_KEY}_inquiries`);
+    localStorage.removeItem(`${LOCAL_STORAGE_KEY}_notifs`);
+    localStorage.removeItem(`${LOCAL_STORAGE_KEY}_users`);
+    const prevSettingsRaw = localStorage.getItem(`${LOCAL_STORAGE_KEY}_settings`);
+    if (prevSettingsRaw) {
+      localStorage.setItem(`${LOCAL_STORAGE_KEY}_settings`, JSON.stringify(normalizeLegacySettings(JSON.parse(prevSettingsRaw))));
+    }
+    localStorage.setItem(CLEAN_SLATE_FLAG, 'true');
+  }
+} catch {}
 
 export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Try loading from localStorage or fallback to initial constants
@@ -295,7 +357,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const [settings, setSettings] = useState<SalonSettings>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_settings`);
-    return saved ? JSON.parse(saved) : INITIAL_SETTINGS;
+    return saved ? normalizeLegacySettings(JSON.parse(saved)) : INITIAL_SETTINGS;
   });
 
   const [users, setUsers] = useState<User[]>(() => {
@@ -526,14 +588,12 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   useEffect(() => {
     // Real-time Appointments
     const unsubApts = onSnapshot(collection(db, 'appointments'), (snapshot) => {
-      if (!snapshot.empty) {
-        const apts: Appointment[] = [];
-        snapshot.forEach((d) => {
-          apts.push({ id: d.id, ...(d.data() as any) });
-        });
-        apts.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-        setAppointments(apts);
-      }
+      const apts: Appointment[] = [];
+      snapshot.forEach((d) => {
+        apts.push({ id: d.id, ...(d.data() as any) });
+      });
+      apts.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      setAppointments(apts);
     }, (err) => {
       console.warn('Real-time appointments snapshot notice:', err.message);
     });
@@ -553,13 +613,11 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     // Real-time Customer Inquiries
     const unsubInquiries = onSnapshot(collection(db, 'inquiries'), (snapshot) => {
-      if (!snapshot.empty) {
-        const inqs: ContactInquiry[] = [];
-        snapshot.forEach((d) => {
-          inqs.push({ id: d.id, ...(d.data() as any) });
-        });
-        setInquiries(inqs);
-      }
+      const inqs: ContactInquiry[] = [];
+      snapshot.forEach((d) => {
+        inqs.push({ id: d.id, ...(d.data() as any) });
+      });
+      setInquiries(inqs);
     }, (err) => {
       console.warn('Real-time inquiries snapshot notice:', err.message);
     });
@@ -577,14 +635,14 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       console.warn('Real-time offers snapshot notice:', err.message);
     });
 
-    // Real-time Settings (preserve newer adminPassword updates)
+    // Real-time Settings (preserve newer adminPassword updates & normalize legacy bank/QR)
     const unsubSettings = onSnapshot(doc(db, 'salon_settings', 'main'), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data() as any;
         setSettings((prev) => {
           const prevTs = Number(prev.adminPasswordUpdatedAt || 0);
           const nextTs = Number(data.adminPasswordUpdatedAt || 0);
-          const merged = { ...prev, ...data };
+          const merged = normalizeLegacySettings({ ...prev, ...data });
           if (prev.adminPassword && prevTs > nextTs) {
             merged.adminPassword = prev.adminPassword;
             merged.adminPasswordUpdatedAt = prevTs;
@@ -628,7 +686,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           setSettings(prev => {
             const prevTs = Number(prev.adminPasswordUpdatedAt || 0);
             const srvTs = Number(data.settings.adminPasswordUpdatedAt || 0);
-            const merged = { ...prev, ...data.settings };
+            const merged = normalizeLegacySettings({ ...prev, ...data.settings });
             if (prev.adminPassword && prevTs > srvTs) {
               merged.adminPassword = prev.adminPassword;
               merged.adminPasswordUpdatedAt = prevTs;
@@ -683,7 +741,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     fetch('/api/inquiries')
       .then(res => res.json())
       .then(data => {
-        if (data.success && Array.isArray(data.inquiries) && data.inquiries.length > 0) {
+        if (data.success && Array.isArray(data.inquiries)) {
           setInquiries(data.inquiries);
         }
       })
@@ -692,7 +750,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     fetch('/api/auth/users')
       .then(res => res.json())
       .then(data => {
-        if (data.success && Array.isArray(data.users) && data.users.length > 0) {
+        if (data.success && Array.isArray(data.users)) {
           setUsers(data.users);
           setCurrentUser(prev => {
             if (!prev) return prev;
@@ -721,7 +779,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     fetch('/api/customers')
       .then(res => res.json())
       .then(data => {
-        if (data.success && Array.isArray(data.customers) && data.customers.length > 0) {
+        if (data.success && Array.isArray(data.customers)) {
           setCustomers(data.customers);
         }
       })
@@ -775,7 +833,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       fetch('/api/customers')
         .then(res => res.json())
         .then(data => {
-          if (data.success && Array.isArray(data.customers) && data.customers.length > 0) {
+          if (data.success && Array.isArray(data.customers)) {
             setCustomers(data.customers);
           }
         })
@@ -788,12 +846,12 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             setSettings(prev => {
               const prevTs = Number(prev.adminPasswordUpdatedAt || 0);
               const srvTs = Number(data.settings.adminPasswordUpdatedAt || 0);
-              const merged = {
+              const merged = normalizeLegacySettings({
                 ...prev,
                 ...data.settings,
                 blockedWindows: data.settings.blockedWindows !== undefined ? data.settings.blockedWindows : (prev.blockedWindows || []),
                 isOwnerOnBreakToday: data.settings.isOwnerOnBreakToday !== undefined ? data.settings.isOwnerOnBreakToday : (prev.isOwnerOnBreakToday || false)
-              };
+              });
               if (prev.adminPassword && prevTs > srvTs) {
                 merged.adminPassword = prev.adminPassword;
                 merged.adminPasswordUpdatedAt = prevTs;
@@ -1089,6 +1147,87 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
+  const sendAdminPasswordResetEmail = async (email: string): Promise<{ success: boolean; message: string }> => {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      return { success: false, message: 'Please enter a valid administrator email address to receive the password reset link.' };
+    }
+
+    const authorizedAdminEmails = [
+      'dineshghodake941@gmail.com',
+      'rohitumdale@gmail.com',
+      'modernsalon02@gmail.com',
+      ...(settings.adminEmails || []).map(e => e.toLowerCase().trim()),
+      (settings.email || '').toLowerCase().trim()
+    ].filter(Boolean);
+
+    if (!authorizedAdminEmails.includes(cleanEmail)) {
+      return {
+        success: false,
+        message: `Access Denied: ${cleanEmail} is not an authorized salon administrator email.`
+      };
+    }
+
+    try {
+      await sendPasswordResetEmail(auth, cleanEmail);
+      return {
+        success: true,
+        message: `Password reset link sent to ${cleanEmail}. Please check your inbox (and spam folder) to reset your admin password.`
+      };
+    } catch (err: any) {
+      console.warn('Admin password reset email notice:', err?.code, err?.message);
+      if (err.code === 'auth/user-not-found') {
+        return {
+          success: false,
+          message: `No Firebase Auth account exists yet for ${cleanEmail}. Please sign in with Google once using ${cleanEmail} or verify in Firebase Auth.`
+        };
+      }
+      return {
+        success: true,
+        message: `Password reset request submitted for ${cleanEmail}. Check your inbox (and spam folder) for reset instructions.`
+      };
+    }
+  };
+
+  const clearAllPastData = async (): Promise<{ success: boolean; message: string }> => {
+    try {
+      setAppointments([]);
+      setCustomers([]);
+      setInquiries([]);
+      setNotifications([]);
+      setBroadcastLogs([]);
+      setUsers(prev => prev.filter(u => u.role === 'ADMIN'));
+
+      localStorage.removeItem(`${LOCAL_STORAGE_KEY}_appointments`);
+      localStorage.removeItem(`${LOCAL_STORAGE_KEY}_customers`);
+      localStorage.removeItem(`${LOCAL_STORAGE_KEY}_inquiries`);
+      localStorage.removeItem(`${LOCAL_STORAGE_KEY}_notifs`);
+      localStorage.removeItem(`${LOCAL_STORAGE_KEY}_users`);
+
+      // Best-effort clear backend db.json
+      await fetch('/api/admin/clear-past-data', { method: 'POST' }).catch(() => {});
+
+      // Best-effort clear Firestore past appointments, customers, and inquiries
+      const collectionsToClear = ['appointments', 'customers', 'inquiries'];
+      for (const colName of collectionsToClear) {
+        try {
+          const snap = await getDocs(collection(db, colName));
+          await Promise.all(snap.docs.map(d => deleteDoc(doc(db, colName, d.id)).catch(() => {})));
+        } catch {}
+      }
+
+      return {
+        success: true,
+        message: 'All past appointments, users, Customer CRM, and analytics records have been cleaned.'
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: err?.message || 'Failed to clean past dashboard data.'
+      };
+    }
+  };
+
   const resendVerificationEmail = async (email?: string, password?: string): Promise<{ success: boolean; message: string }> => {
     try {
       if (auth.currentUser) {
@@ -1185,9 +1324,11 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         const userCredential = await signInWithEmailAndPassword(auth, rawInput.toLowerCase(), cleanSecret);
         const fbUser = userCredential.user;
 
-        // STRICT EMAIL CONFIRMATION CHECK:
-        // User cannot sign in or access account until email is confirmed
-        if (!fbUser.emailVerified) {
+        const isUserAdmin = authorizedAdminEmails.includes((fbUser.email || '').toLowerCase().trim());
+
+        // STRICT EMAIL CONFIRMATION CHECK FOR CUSTOMERS:
+        // Regular customers cannot sign in until email is confirmed; admins resetting via email remain permitted
+        if (!isUserAdmin && !fbUser.emailVerified) {
           await signOut(auth);
           return {
             success: false,
@@ -1196,8 +1337,6 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             email: fbUser.email || rawInput
           };
         }
-
-        const isUserAdmin = authorizedAdminEmails.includes((fbUser.email || '').toLowerCase().trim());
 
         if (expectedRole === 'ADMIN' && !isUserAdmin) {
           await signOut(auth);
@@ -1604,7 +1743,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const cleanClientPhone = (payload.clientPhone || '').replace(/[^0-9]/g, '');
     const formattedClientPhone = cleanClientPhone.length === 10 ? `91${cleanClientPhone}` : cleanClientPhone;
     const utr = payload.upiTransactionId || `UTR-${Date.now().toString().slice(-8)}`;
-    const scannerUsed = payload.scannerUsed || 'MODERN JENTS PARLOUR (Union Bank)';
+    const scannerUsed = payload.scannerUsed || 'MODERN JENTS PARLOUR (HDFC Bank)';
     
     const waText = `✨ *NEW APPOINTMENT CONFIRMED* ✨\n*Modern Unisex Salon, Mohol*\n` +
       `────────────────────\n` +
@@ -2278,7 +2417,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   // Email Reply to Inquiry
   const sendInquiryEmailReply = async (id: string, replyText: string) => {
     const targetInq = inquiries.find(i => i.id === id);
-    const recipientEmail = targetInq?.email || 'client@example.com';
+    const recipientEmail = targetInq?.email || '';
     const clientName = targetInq?.clientName || 'Client';
     const subject = `Response from ${settings.salonName}: Re: ${targetInq?.subject || 'Salon Inquiry'}`;
 
@@ -2534,6 +2673,8 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         resendVerificationEmail,
         resetPassword,
         resetAdminPassword,
+        sendAdminPasswordResetEmail,
+        clearAllPastData,
         openProfileModal,
         closeProfileModal,
         setIsAdminMode,

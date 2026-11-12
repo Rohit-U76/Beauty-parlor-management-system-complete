@@ -40,6 +40,7 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [savedNotice, setSavedNotice] = useState('');
   const [guestSuccessMsg, setGuestSuccessMsg] = useState('');
+  const [formError, setFormError] = useState('');
 
   // Client profile form data
   const [formData, setFormData] = useState({
@@ -104,9 +105,10 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError('');
 
     if (!formData.name.trim() || !formData.phone.trim()) {
-      alert('Please provide your name and mobile number.');
+      setFormError('Please provide your name and mobile number.');
       return;
     }
 
@@ -131,27 +133,17 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
           preferredServices: formData.skinOrHairType ? [formData.skinOrHairType] : []
         });
         setIsSaving(false);
-        setSavedNotice(res.message || 'Profile saved and synchronized with database!');
+        setSavedNotice(res.message || 'Profile saved and synchronized with salon database!');
         setProfileSaved(true);
         setTimeout(() => setProfileSaved(false), 4000);
       } else {
-        // Guest registering directly from profile view
-        const res = await registerCustomer({
-          name: formData.name.trim(),
-          phone: formData.phone.trim(),
-          email: formData.email.trim() || `${formData.name.toLowerCase().replace(/\s+/g, '')}@example.com`,
-          preferredServices: formData.skinOrHairType ? [formData.skinOrHairType] : []
-        });
         setIsSaving(false);
-        if (res.success) {
-          setGuestSuccessMsg('Profile created successfully!');
-          setProfileSaved(true);
-          setTimeout(() => setProfileSaved(false), 4000);
-        }
+        setFormError('Please create an account or sign in to save your client profile.');
+        openAuthModal('customer', 'signup');
       }
-    } catch (err: any) {
+    } catch {
       setIsSaving(false);
-      alert('Failed to save profile. Please check connection and try again.');
+      setFormError('Failed to save profile. Please check connection and try again.');
     }
   };
 
@@ -229,12 +221,19 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
         </div>
       </div>
 
+      {formError && (
+        <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/50 border border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-xs font-bold flex items-center gap-2.5 shadow-sm">
+          <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0" />
+          <span>{formError}</span>
+        </div>
+      )}
+
       {/* Success Notification Banner */}
       {profileSaved && (
         <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs font-bold flex items-center justify-between gap-3 shadow-md animate-in fade-in slide-in-from-top-2 duration-300">
           <div className="flex items-center gap-2.5">
             <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-            <span>{savedNotice || guestSuccessMsg || 'Client profile and styling preferences updated & synchronized with MySQL database successfully!'}</span>
+            <span>{savedNotice || guestSuccessMsg || 'Client profile and styling preferences updated & synchronized successfully!'}</span>
           </div>
           <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold shrink-0">✓ Saved</span>
         </div>
@@ -313,7 +312,7 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
                   type="email"
                   value={formData.email}
                   onChange={e => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="client@example.com"
+                  placeholder="Enter your email address"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
               </div>

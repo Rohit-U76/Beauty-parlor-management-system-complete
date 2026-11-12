@@ -78,23 +78,23 @@ Salon Helpline: +91 ${salonPhone}
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in">
-      <div className="relative max-w-xl w-full bg-zinc-900 border border-amber-500/30 rounded-3xl shadow-2xl overflow-hidden my-6 text-left">
+    <div className="fixed inset-0 z-50 bg-black/60 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in">
+      <div className="relative max-w-xl w-full bg-white dark:bg-zinc-900 border border-purple-200 dark:border-amber-500/30 rounded-3xl shadow-2xl overflow-hidden my-6 text-left">
         
         {/* Top Header Bar */}
-        <div className="p-4 sm:p-5 bg-zinc-950 border-b border-zinc-800 flex items-center justify-between">
+        <div className="p-4 sm:p-5 bg-purple-50/70 dark:bg-zinc-950 border-b border-purple-200 dark:border-zinc-800 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <div className="w-9 h-9 rounded-xl bg-purple-100 dark:bg-amber-500/15 border border-purple-300 dark:border-amber-500/30 flex items-center justify-center text-purple-700 dark:text-amber-400">
               <Receipt className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-serif text-base font-bold text-zinc-100 flex items-center gap-2">
+              <h3 className="font-serif text-base font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
                 <span>Official Salon Tax Receipt</span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/30">
                   Paid
                 </span>
               </h3>
-              <p className="text-[11px] text-zinc-400">
+              <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
                 Booking Reference #{appointment.bookingRef}
               </p>
             </div>
@@ -102,7 +102,7 @@ Salon Helpline: +91 ${salonPhone}
 
           <button
             onClick={onClose}
-            className="p-2 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-white transition cursor-pointer"
+            className="p-2 rounded-xl bg-purple-100 hover:bg-purple-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -209,13 +209,13 @@ Salon Helpline: +91 ${salonPhone}
         </div>
 
         {/* Action Buttons Toolbar */}
-        <div className="p-4 bg-zinc-950 border-t border-zinc-800 flex flex-wrap items-center justify-between gap-2">
+        <div className="p-4 bg-purple-50/70 dark:bg-zinc-950 border-t border-purple-200 dark:border-zinc-800 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 flex-1 min-w-[200px]">
             <button
               type="button"
               onClick={handlePrint}
               disabled={isPrinting}
-              className="flex-1 py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+              className="flex-1 py-2.5 px-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white dark:bg-amber-500 dark:hover:bg-amber-400 dark:text-zinc-950 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-50"
             >
               <Printer className="w-4 h-4" />
               <span>{isPrinting ? 'Printing...' : 'Print / Save PDF'}</span>
@@ -224,10 +224,10 @@ Salon Helpline: +91 ${salonPhone}
             <button
               type="button"
               onClick={() => downloadReceiptFile(appointment)}
-              className="py-2.5 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold text-xs flex items-center justify-center gap-1.5 border border-zinc-700 transition cursor-pointer"
+              className="py-2.5 px-3 rounded-xl bg-white hover:bg-purple-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 font-semibold text-xs flex items-center justify-center gap-1.5 border border-purple-200 dark:border-zinc-700 transition cursor-pointer"
               title="Download HTML file"
             >
-              <Download className="w-4 h-4 text-amber-400" />
+              <Download className="w-4 h-4 text-purple-600 dark:text-amber-400" />
               <span className="hidden sm:inline">Download</span>
             </button>
           </div>
@@ -237,7 +237,7 @@ Salon Helpline: +91 ${salonPhone}
               href={whatsappShareUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="py-2.5 px-3 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 font-bold text-xs flex items-center justify-center gap-1.5 transition"
+              className="py-2.5 px-3 rounded-xl bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-600/20 dark:hover:bg-emerald-600/30 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/30 font-bold text-xs flex items-center justify-center gap-1.5 transition"
             >
               <Share2 className="w-3.5 h-3.5" />
               <span>WhatsApp</span>
@@ -246,9 +246,9 @@ Salon Helpline: +91 ${salonPhone}
             <button
               type="button"
               onClick={handleCopy}
-              className="py-2.5 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold text-xs flex items-center justify-center gap-1.5 border border-zinc-700 transition cursor-pointer"
+              className="py-2.5 px-3 rounded-xl bg-white hover:bg-purple-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-300 font-semibold text-xs flex items-center justify-center gap-1.5 border border-purple-200 dark:border-zinc-700 transition cursor-pointer"
             >
-              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
               <span>{copied ? 'Copied!' : 'Copy'}</span>
             </button>
           </div>

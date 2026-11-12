@@ -53,74 +53,72 @@ export const AdminCharts: React.FC = () => {
   const [revenueTimeframe, setRevenueTimeframe] = useState<'all' | 'recent'>('all');
   const [serviceMetric, setServiceMetric] = useState<'bookings' | 'revenue'>('bookings');
 
-  // 1. Monthly Revenue & 10% Advance Deposit Dataset
+  // 1. Monthly Revenue & 10% Advance Deposit Dataset (100% Real Appointments)
   const monthlyRevenueData = useMemo(() => {
-    // Base monthly trend with realistic salon season fluctuations
-    const baseMonths = [
-      { month: 'Jan', revenue: 98000, advance: 9800, bookings: 42, avgTicket: 2333 },
-      { month: 'Feb', revenue: 112000, advance: 11200, bookings: 48, avgTicket: 2333 },
-      { month: 'Mar', revenue: 125000, advance: 12500, bookings: 54, avgTicket: 2314 },
-      { month: 'Apr', revenue: 142000, advance: 14200, bookings: 62, avgTicket: 2290 },
-      { month: 'May', revenue: 168000, advance: 16800, bookings: 75, avgTicket: 2240 },
-      { month: 'Jun', revenue: 155000, advance: 15500, bookings: 68, avgTicket: 2279 },
-      { month: 'Jul', revenue: 184000, advance: 18400, bookings: 82, avgTicket: 2243 },
-      { month: 'Aug', revenue: 210000, advance: 21000, bookings: 94, avgTicket: 2234 },
-    ];
+    const activeApts = appointments.filter(a => a.bookingStatus !== 'CANCELLED');
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const now = new Date();
 
-    // Compute active appointment additions to current month (Aug)
-    const activeAppTotal = appointments.reduce((acc, a) => acc + (a.totalAmount || 0), 0);
-    const activeAppAdvance = appointments.reduce((acc, a) => acc + (a.advancePaid || 0), 0);
+    // Build rolling 6-month baseline buckets ending at current month
+    const buckets = new Map<string, { month: string; revenue: number; advance: number; bookings: number; avgTicket: number }>();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      buckets.set(key, {
+        month: monthNames[d.getMonth()],
+        revenue: 0,
+        advance: 0,
+        bookings: 0,
+        avgTicket: 0
+      });
+    }
 
-    const updated = baseMonths.map((m, idx) => {
-      if (idx === baseMonths.length - 1) {
-        return {
-          ...m,
-          revenue: m.revenue + activeAppTotal,
-          advance: m.advance + activeAppAdvance,
-          bookings: m.bookings + appointments.length,
-          avgTicket: Math.round((m.revenue + activeAppTotal) / (m.bookings + appointments.length))
-        };
-      }
-      return m;
+    activeApts.forEach(a => {
+      const dateStr = a.date || a.createdAt || '';
+      const parsed = dateStr ? new Date(dateStr) : now;
+      const d = isNaN(parsed.getTime()) ? now : parsed;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const existing = buckets.get(key) || {
+        month: `${monthNames[d.getMonth()]} '${String(d.getFullYear()).slice(-2)}`,
+        revenue: 0,
+        advance: 0,
+        bookings: 0,
+        avgTicket: 0
+      };
+      existing.revenue += Number(a.totalAmount) || 0;
+      existing.advance += Number(a.advancePaid) || 0;
+      existing.bookings += 1;
+      existing.avgTicket = existing.bookings > 0 ? Math.round(existing.revenue / existing.bookings) : 0;
+      buckets.set(key, existing);
     });
 
-    return revenueTimeframe === 'recent' ? updated.slice(-4) : updated;
+    const sorted = Array.from(buckets.entries())
+      .sort(([kA], [kB]) => kA.localeCompare(kB))
+      .map(([, val]) => val);
+
+    return revenueTimeframe === 'recent' ? sorted.slice(-4) : sorted;
   }, [appointments, revenueTimeframe]);
 
-  // 2. Service Popularity & Category Breakdown Dataset
-  const { servicePopularityData, categoryDistributionData, topPerformingService } = useMemo(() => {
-    // Count bookings and revenue mapped to services
+  // 2. Service Popularity & Category Breakdown Dataset (100% Real Appointments)
+  const { servicePopularityData, categoryDistributionData, topPerformingService, activeBookingsCount } = useMemo(() => {
+    const activeApts = appointments.filter(a => a.bookingStatus !== 'CANCELLED');
     const serviceCounts: Record<string, { bookings: number; revenue: number; category: string; price: number }> = {};
 
-    // Initialize with available service catalog
-    services.forEach(s => {
-      // Seed realistic benchmark counts + dynamic appointments
-      const initialBookings = s.popular ? 28 : 14;
-      serviceCounts[s.name] = {
-        bookings: initialBookings,
-        revenue: initialBookings * s.price,
-        category: s.category,
-        price: s.price
-      };
-    });
-
-    // Add actual appointment counts from state
-    appointments.forEach(a => {
-      if (a.serviceName) {
-        if (!serviceCounts[a.serviceName]) {
-          serviceCounts[a.serviceName] = {
-            bookings: 0,
-            revenue: 0,
-            category: a.category || 'General',
-            price: a.totalAmount || 1000
-          };
-        }
-        serviceCounts[a.serviceName].bookings += 1;
-        serviceCounts[a.serviceName].revenue += (a.totalAmount || 0);
+    activeApts.forEach(a => {
+      const sName = a.serviceName || 'Salon Service';
+      if (!serviceCounts[sName]) {
+        serviceCounts[sName] = {
+          bookings: 0,
+          revenue: 0,
+          category: a.category || 'General',
+          price: Number(a.totalAmount) || 0
+        };
       }
+      serviceCounts[sName].bookings += 1;
+      serviceCounts[sName].revenue += Number(a.totalAmount) || 0;
     });
 
-    // Format for Service Popularity Bar Chart (Top 6)
+    // Format for Service Popularity Bar Chart (Top 6 booked services)
     const popularityArray = Object.entries(serviceCounts)
       .map(([name, data]) => ({
         name: name.length > 20 ? name.substring(0, 18) + '...' : name,
@@ -136,32 +134,45 @@ export const AdminCharts: React.FC = () => {
     // Format for Category Distribution Pie Chart
     const categoryTotals: Record<string, number> = {};
     Object.values(serviceCounts).forEach(item => {
-      const cat = item.category || 'Other';
-      categoryTotals[cat] = (categoryTotals[cat] || 0) + item.revenue;
+      if (item.revenue > 0) {
+        const cat = item.category || 'Other';
+        categoryTotals[cat] = (categoryTotals[cat] || 0) + item.revenue;
+      }
     });
 
-    const categoryArray = Object.entries(categoryTotals).map(([cat, total]) => ({
-      name: cat,
-      value: total
-    })).sort((a, b) => b.value - a.value);
+    const categoryArray = Object.entries(categoryTotals)
+      .map(([cat, total]) => ({
+        name: cat,
+        value: total
+      }))
+      .sort((a, b) => b.value - a.value);
 
-    const topService = popularityArray[0] || { fullName: 'Radiance Facial Therapy', bookings: 32, revenue: 57600 };
+    const topService = popularityArray[0] || { fullName: 'No bookings yet', bookings: 0, revenue: 0 };
 
     return {
       servicePopularityData: popularityArray,
       categoryDistributionData: categoryArray,
-      topPerformingService: topService
+      topPerformingService: topService,
+      activeBookingsCount: activeApts.length
     };
-  }, [appointments, services]);
+  }, [appointments]);
 
-  // Overall totals for overview metric cards
+  // Overall totals for overview metric cards (computed strictly from active appointments)
   const totalRevenueSum = useMemo(() => {
-    return monthlyRevenueData.reduce((acc, cur) => acc + cur.revenue, 0);
-  }, [monthlyRevenueData]);
+    return appointments
+      .filter(a => a.bookingStatus !== 'CANCELLED')
+      .reduce((acc, cur) => acc + (Number(cur.totalAmount) || 0), 0);
+  }, [appointments]);
 
   const totalAdvanceSum = useMemo(() => {
-    return monthlyRevenueData.reduce((acc, cur) => acc + cur.advance, 0);
-  }, [monthlyRevenueData]);
+    return appointments
+      .filter(a => a.bookingStatus !== 'CANCELLED')
+      .reduce((acc, cur) => acc + (Number(cur.advancePaid) || 0), 0);
+  }, [appointments]);
+
+  const avgTicketValue = useMemo(() => {
+    return activeBookingsCount > 0 ? Math.round(totalRevenueSum / activeBookingsCount) : 0;
+  }, [totalRevenueSum, activeBookingsCount]);
 
   // Custom Chart Tooltip for Revenue
   const CustomRevenueTooltip = ({ active, payload, label }: any) => {
@@ -273,7 +284,7 @@ export const AdminCharts: React.FC = () => {
           </div>
           <div className="text-[11px] text-emerald-500 flex items-center gap-1 mt-1 font-semibold">
             <ArrowUpRight className="w-3.5 h-3.5" />
-            <span>+18.4% month-over-month</span>
+            <span>{activeBookingsCount} active booking{activeBookingsCount === 1 ? '' : 's'}</span>
           </div>
         </div>
 
@@ -315,10 +326,10 @@ export const AdminCharts: React.FC = () => {
             <Calendar className="w-4 h-4 text-blue-400" />
           </div>
           <div className="text-2xl font-bold text-zinc-100 font-mono">
-            ₹2,280
+            ₹{avgTicketValue.toLocaleString()}
           </div>
           <div className="text-[11px] text-zinc-400 mt-1">
-            Across {services.length} luxury services
+            Across {services.length} salon services
           </div>
         </div>
       </div>
@@ -356,7 +367,7 @@ export const AdminCharts: React.FC = () => {
                     : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                All 8 Months
+                All Months
               </button>
               <button
                 type="button"
@@ -574,48 +585,55 @@ export const AdminCharts: React.FC = () => {
 
           {/* Popularity Bar Chart */}
           <div className="h-64 sm:h-72 w-full pt-1">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={servicePopularityData}
-                layout="vertical"
-                margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
-              >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke={isDark ? '#27272a' : '#e2e8f0'}
-                  horizontal={false}
-                />
-                <XAxis
-                  type="number"
-                  stroke={isDark ? '#71717a' : '#64748b'}
-                  fontSize={11}
-                  tickLine={false}
-                  tickFormatter={(val) => serviceMetric === 'revenue' ? `₹${val / 1000}k` : `${val}`}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  stroke={isDark ? '#a1a1aa' : '#334155'}
-                  fontSize={11}
-                  tickLine={false}
-                  width={110}
-                />
-                <Tooltip content={<CustomPopularityTooltip />} />
-                <Bar
-                  dataKey={serviceMetric}
-                  fill={COLORS.gold}
-                  radius={[0, 6, 6, 0]}
-                  maxBarSize={22}
+            {servicePopularityData.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center text-xs text-zinc-500 gap-2 border border-dashed border-zinc-800 rounded-2xl">
+                <Scissors className="w-6 h-6 text-zinc-600" />
+                <span>No service bookings recorded yet.</span>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={servicePopularityData}
+                  layout="vertical"
+                  margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
                 >
-                  {servicePopularityData.map((_, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={PIE_COLORS[index % PIE_COLORS.length]}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke={isDark ? '#27272a' : '#e2e8f0'}
+                    horizontal={false}
+                  />
+                  <XAxis
+                    type="number"
+                    stroke={isDark ? '#71717a' : '#64748b'}
+                    fontSize={11}
+                    tickLine={false}
+                    tickFormatter={(val) => serviceMetric === 'revenue' ? `₹${val}` : `${val}`}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    stroke={isDark ? '#a1a1aa' : '#334155'}
+                    fontSize={11}
+                    tickLine={false}
+                    width={110}
+                  />
+                  <Tooltip content={<CustomPopularityTooltip />} />
+                  <Bar
+                    dataKey={serviceMetric}
+                    fill={COLORS.gold}
+                    radius={[0, 6, 6, 0]}
+                    maxBarSize={22}
+                  >
+                    {servicePopularityData.map((_, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={PIE_COLORS[index % PIE_COLORS.length]}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -637,67 +655,80 @@ export const AdminCharts: React.FC = () => {
             </div>
 
             <div className="h-52 sm:h-56 w-full relative flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={categoryDistributionData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={80}
-                    paddingAngle={4}
-                    dataKey="value"
-                  >
-                    {categoryDistributionData.map((_, index) => (
-                      <Cell
-                        key={`cat-cell-${index}`}
-                        fill={PIE_COLORS[index % PIE_COLORS.length]}
-                        stroke={isDark ? '#141418' : '#ffffff'}
-                        strokeWidth={2}
+              {categoryDistributionData.length === 0 ? (
+                <div className="text-center text-xs text-zinc-500 space-y-1">
+                  <PieIcon className="w-6 h-6 text-zinc-600 mx-auto" />
+                  <div>No category revenue recorded yet.</div>
+                </div>
+              ) : (
+                <>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={categoryDistributionData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={55}
+                        outerRadius={80}
+                        paddingAngle={4}
+                        dataKey="value"
+                      >
+                        {categoryDistributionData.map((_, index) => (
+                          <Cell
+                            key={`cat-cell-${index}`}
+                            fill={PIE_COLORS[index % PIE_COLORS.length]}
+                            stroke={isDark ? '#141418' : '#ffffff'}
+                            strokeWidth={2}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value: any) => [`₹${Number(value).toLocaleString()}`, 'Revenue']}
+                        contentStyle={{
+                          backgroundColor: isDark ? '#09090b' : '#ffffff',
+                          borderColor: isDark ? '#27272a' : '#e2e8f0',
+                          borderRadius: '12px',
+                          fontSize: '12px',
+                          color: isDark ? '#f4f4f5' : '#0f172a'
+                        }}
                       />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value: any) => [`₹${Number(value).toLocaleString()}`, 'Revenue']}
-                    contentStyle={{
-                      backgroundColor: isDark ? '#09090b' : '#ffffff',
-                      borderColor: isDark ? '#27272a' : '#e2e8f0',
-                      borderRadius: '12px',
-                      fontSize: '12px',
-                      color: isDark ? '#f4f4f5' : '#0f172a'
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+                    </PieChart>
+                  </ResponsiveContainer>
 
-              {/* Center Stat Badge */}
-              <div className="absolute flex flex-col items-center justify-center pointer-events-none text-center">
-                <span className="text-[10px] text-zinc-400 uppercase font-mono tracking-widest">
-                  DEPARTMENTS
-                </span>
-                <span className="text-lg font-bold text-yellow-400 font-serif">
-                  {categoryDistributionData.length}
-                </span>
-              </div>
+                  {/* Center Stat Badge */}
+                  <div className="absolute flex flex-col items-center justify-center pointer-events-none text-center">
+                    <span className="text-[10px] text-zinc-400 uppercase font-mono tracking-widest">
+                      DEPARTMENTS
+                    </span>
+                    <span className="text-lg font-bold text-yellow-400 font-serif">
+                      {categoryDistributionData.length}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
           {/* Category Legend List */}
           <div className="space-y-1.5 pt-2 border-t border-zinc-800/60 text-xs">
-            {categoryDistributionData.slice(0, 4).map((cat, idx) => (
-              <div key={cat.name} className="flex items-center justify-between">
-                <div className="flex items-center gap-2 truncate">
-                  <span
-                    className="w-2.5 h-2.5 rounded-full shrink-0"
-                    style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }}
-                  ></span>
-                  <span className="text-zinc-300 truncate">{cat.name}</span>
+            {categoryDistributionData.length === 0 ? (
+              <div className="text-zinc-500 text-center py-1">No department earnings yet</div>
+            ) : (
+              categoryDistributionData.slice(0, 4).map((cat, idx) => (
+                <div key={cat.name} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 truncate">
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }}
+                    ></span>
+                    <span className="text-zinc-300 truncate">{cat.name}</span>
+                  </div>
+                  <span className="font-mono font-semibold text-zinc-200 shrink-0">
+                    ₹{cat.value.toLocaleString()}
+                  </span>
                 </div>
-                <span className="font-mono font-semibold text-zinc-200 shrink-0">
-                  ₹{(cat.value / 1000).toFixed(0)}k
-                </span>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>

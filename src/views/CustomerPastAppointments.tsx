@@ -414,7 +414,7 @@ export const CustomerPastAppointments: React.FC = () => {
                       )}
                       <span className="truncate">
                         {apt.isBankVerified
-                          ? `Bank Deposit Confirmed in Union Bank A/c 4079 (UTR: ${apt.upiTransactionId || apt.razorpayPaymentId})`
+                          ? `Bank Deposit Confirmed in ${settings?.bankName || 'HDFC Bank'} A/c ${(settings?.bankAccountNumber || '50200072074441').slice(-4)} (UTR: ${apt.upiTransactionId || apt.razorpayPaymentId})`
                           : `UTR #${apt.upiTransactionId || 'Processing'} — Bank credit confirmation in progress`}
                       </span>
                     </div>
@@ -544,7 +544,11 @@ export const CustomerPastAppointments: React.FC = () => {
             </div>
             <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 space-y-1">
               <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">Satisfaction Rate</span>
-              <div className="text-xl sm:text-2xl font-bold text-amber-600 dark:text-amber-400 font-mono">4.9 ★ (CSAT 98%)</div>
+              <div className="text-xl sm:text-2xl font-bold text-amber-600 dark:text-amber-400 font-mono">
+                {reviews.length > 0
+                  ? `${(reviews.reduce((sum, r) => sum + (Number(r.rating) || 0), 0) / reviews.length).toFixed(1)} ★`
+                  : '0.0 ★'}
+              </div>
             </div>
           </div>
 
@@ -723,7 +727,7 @@ export const CustomerPastAppointments: React.FC = () => {
                           )}
                           <span className="truncate">
                             {apt.isBankVerified
-                              ? `Bank Deposit Confirmed in Union Bank A/c 4079 (UTR: ${apt.upiTransactionId || apt.razorpayPaymentId})`
+                              ? `Bank Deposit Confirmed in ${settings?.bankName || 'HDFC Bank'} A/c ${(settings?.bankAccountNumber || '50200072074441').slice(-4)} (UTR: ${apt.upiTransactionId || apt.razorpayPaymentId})`
                               : `UTR #${apt.upiTransactionId || 'Processing'} — Bank credit verification pending`}
                           </span>
                         </div>
