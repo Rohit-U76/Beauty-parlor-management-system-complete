@@ -6,7 +6,6 @@ import {
   Mail,
   Calendar,
   Crown,
-  Gift,
   Heart,
   Save,
   CheckCircle2,
@@ -114,7 +113,7 @@ export const ClientProfileModal: React.FC = () => {
     try {
       if (currentUser) {
         // Save updates to current user
-        updateCurrentUser({
+        await updateCurrentUser({
           name: formData.name.trim(),
           phone: formData.phone.trim(),
           email: formData.email.trim(),
@@ -186,7 +185,7 @@ export const ClientProfileModal: React.FC = () => {
               </div>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
                 {currentUser
-                  ? `Keep your styling preferences & appointment details updated • ${currentUser.loyaltyPoints || 100} Reward Pts`
+                  ? 'Keep your styling preferences & appointment details updated'
                   : 'Enter your details below to save your personalized salon preferences'}
               </p>
             </div>
@@ -290,16 +289,13 @@ export const ClientProfileModal: React.FC = () => {
             </div>
           </div>
 
-          {/* Section 2: Celebration Dates */}
+          {/* Section 2: Details */}
           <div className="space-y-3 pt-2 border-t border-zinc-200 dark:border-zinc-800">
             <div className="flex items-center justify-between">
-              <div className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
-                <Gift className="w-3.5 h-3.5" />
-                <span>Special Occasion Perks</span>
+              <div className="text-xs font-bold uppercase tracking-wider text-purple-600 dark:text-amber-400 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Details</span>
               </div>
-              <span className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full font-semibold">
-                Get 15% discount on special days (available only if coupon is applied/available)
-              </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -469,7 +465,7 @@ export const ClientProfileModal: React.FC = () => {
                 ) : (
                   <Save className="w-4 h-4" />
                 )}
-                <span>{currentUser ? 'Save Changes' : 'Save & Join (100 pts)'}</span>
+                <span>{currentUser ? 'Save Changes' : 'Save & Join'}</span>
               </button>
             </div>
           </div>

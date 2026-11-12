@@ -5,21 +5,13 @@ import {
   Star,
   Search,
   CheckCircle2,
-  ShieldCheck,
   Sparkles,
-  SlidersHorizontal,
   Wand2,
   Table,
   LayoutGrid,
-  Info,
-  Tag,
-  Gift,
   Plus,
   Check,
-  ShoppingBag,
-  Percent,
-  Flame,
-  Zap
+  Flame
 } from 'lucide-react';
 import { useSalon } from '../context/SalonContext';
 import { ServiceItem } from '../types';
@@ -43,22 +35,13 @@ export const CustomerServices: React.FC = () => {
     return services.filter(s => selectedBundleServiceIds.includes(s.id));
   }, [services, selectedBundleServiceIds]);
 
-  const discountRate = useMemo(() => {
-    const count = selectedBundleServices.length;
-    if (count <= 1) return 0;
-    if (count === 2) return 10;
-    if (count === 3) return 15;
-    return 20;
-  }, [selectedBundleServices.length]);
+  const discountRate = 0;
 
   const originalTotalPrice = useMemo(() => {
     return selectedBundleServices.reduce((sum, s) => sum + s.price, 0);
   }, [selectedBundleServices]);
 
-  const discountAmount = useMemo(() => {
-    if (discountRate === 0) return 0;
-    return Math.round((originalTotalPrice * discountRate) / 100);
-  }, [originalTotalPrice, discountRate]);
+  const discountAmount = 0;
 
   const finalDiscountedPrice = Math.max(0, originalTotalPrice - discountAmount);
   const advancePercentage = settings.advancePercentage || 10;
@@ -94,19 +77,18 @@ export const CustomerServices: React.FC = () => {
     const namesList = selectedBundleServices.map(s => s.name).join(' + ');
     const compositeService: ServiceItem = {
       id: `bundle-cart-${Date.now()}`,
-      name: `✨ Discount Bundle: ${namesList} (${selectedBundleServices.length} Services • ${discountRate}% OFF)`,
+      name: `Multi-Service Selection: ${namesList} (${selectedBundleServices.length} ${selectedBundleServices.length === 1 ? 'Service' : 'Services'})`,
       category: selectedBundleServices[0]?.category || 'Bridal & Pre-Bridal',
       gender: selectedBundleServices.some(s => s.gender === 'women') ? 'women' : 'unisex',
       durationMinutes: totalDuration,
       price: finalDiscountedPrice,
-      priceDisplay: `₹${finalDiscountedPrice.toLocaleString()} (MRP ₹${originalTotalPrice.toLocaleString()})`,
+      priceDisplay: `₹${finalDiscountedPrice.toLocaleString()}`,
       advanceDeposit: advanceDeposit,
-      description: `Custom bundle of ${selectedBundleServices.length} services: ${selectedBundleServices.map(s => `${s.name} (₹${s.price})`).join(', ')}. Includes ${discountRate}% bundle discount savings of ₹${discountAmount}.`,
+      description: `Selected ${selectedBundleServices.length} salon services: ${selectedBundleServices.map(s => `${s.name} (₹${s.price})`).join(', ')}.`,
       imageUrl: selectedBundleServices[0]?.imageUrl || 'https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=600&q=80',
       rating: 5.0,
       reviewsCount: 140,
       benefits: [
-        `Bundle Savings: ₹${discountAmount.toLocaleString()} (${discountRate}% Discount Applied)`,
         `${settings.advancePercentage || 10}% Online Advance Deposit: ₹${advanceDeposit.toLocaleString()} secured`,
         `Remaining ${100 - (settings.advancePercentage || 10)}% Balance: ₹${(finalDiscountedPrice - advanceDeposit).toLocaleString()} payable at salon`,
         ...selectedBundleServices.map(s => `Included: ${s.name} (${s.durationMinutes} mins)`)
@@ -157,10 +139,10 @@ export const CustomerServices: React.FC = () => {
             <span>Modern Unisex Salon Mohol • Rate Card</span>
           </div>
           <h1 className="font-serif text-2xl sm:text-4xl font-bold text-zinc-900 dark:text-zinc-100">
-            Service Menu, Pricing &amp; Bundles
+            Service Menu &amp; Rate Card
           </h1>
           <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 max-w-2xl leading-relaxed">
-            Transparent pricing with {settings.advancePercentage || 10}% advance deposit to secure your appointment. Bundle multiple services together to unlock up to <strong>20% discounts</strong> before booking!
+            Transparent, fixed salon pricing with {settings.advancePercentage || 10}% advance deposit to secure your appointment slot.
           </p>
         </div>
 
@@ -417,12 +399,12 @@ export const CustomerServices: React.FC = () => {
                         {isBundled ? (
                           <>
                             <Check className="w-3.5 h-3.5 text-amber-500" />
-                            <span>In Bundle</span>
+                            <span>Selected</span>
                           </>
                         ) : (
                           <>
                             <Plus className="w-3.5 h-3.5" />
-                            <span>+ Bundle</span>
+                            <span>Select</span>
                           </>
                         )}
                       </button>

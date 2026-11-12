@@ -21,7 +21,6 @@ import {
   Star,
   MessageSquare,
   Crown,
-  Gift,
   LogIn,
   MapPin,
   ExternalLink,
@@ -279,13 +278,6 @@ export const CustomerPastAppointments: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2 text-xs flex-wrap">
-            {currentUser.loyaltyPoints !== undefined && (
-              <div className="px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200 flex items-center gap-2 font-mono">
-                <Gift className="w-4 h-4 text-amber-500" />
-                <span>Rewards: <strong className="text-purple-600 dark:text-purple-400 font-bold">{currentUser.loyaltyPoints} pts</strong></span>
-              </div>
-            )}
-
             <button
               onClick={openProfileModal}
               className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm"
@@ -500,11 +492,6 @@ export const CustomerPastAppointments: React.FC = () => {
         >
           <Crown className="w-4 h-4 text-amber-500" />
           <span>Client Profile &amp; Preferences</span>
-          {currentUser?.loyaltyPoints !== undefined && (
-            <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-mono font-bold">
-              {currentUser.loyaltyPoints} pts
-            </span>
-          )}
         </button>
 
         <button

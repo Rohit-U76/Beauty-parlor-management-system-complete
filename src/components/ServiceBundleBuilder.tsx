@@ -1,24 +1,15 @@
 import React, { useState, useMemo } from 'react';
 import {
   Sparkles,
-  Plus,
-  Minus,
   Trash2,
   Check,
   CheckCircle2,
   Calendar,
   Clock,
-  ArrowRight,
-  Tag,
-  Gift,
-  Zap,
   ShieldCheck,
   Layers,
   Scissors,
   X,
-  ChevronRight,
-  Info,
-  Percent,
   ShoppingBag,
   Search,
   CheckSquare,
@@ -52,60 +43,60 @@ export const PREDEFINED_BUNDLES: PredefinedBundlePreset[] = [
   {
     id: 'bridal-glow-ultimate',
     name: '👑 Ultimate Bridal & Royal Glow Transformation',
-    badge: 'Save 20% • Bridal Favorite',
-    discountPercent: 20,
+    badge: 'Bridal Favorite',
+    discountPercent: 0,
     description: 'Complete royal wedding makeover with HD bridal makeup, O3+ facial whitening glow, and hair therapy styling.',
-    serviceIds: ['srv-wom-1', 'srv-sk-6', 'srv-ch-4'], // Bridal 4D Makeover, O3+ Facial, Hair Spa/Treatment
+    serviceIds: ['srv-wom-1', 'srv-sk-6', 'srv-ch-4'],
     imageUrl: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=600&q=80',
     gender: 'women'
   },
   {
     id: 'hydra-glow-makeover',
     name: '✨ Golden Hydra & Hair Styling Glow Duo',
-    badge: 'Save 15% • Trending',
-    discountPercent: 15,
+    badge: 'Trending',
+    discountPercent: 0,
     description: 'Deep pore vacuum hydration with customized hair shaping and intense nutritive conditioning.',
-    serviceIds: ['srv-sk-7', 'srv-hr-5'], // Hydrafacial glow + Advance Hair Cut
+    serviceIds: ['srv-sk-7', 'srv-hr-5'],
     imageUrl: 'https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=600&q=80',
     gender: 'women'
   },
   {
     id: 'men-executive-grooming',
     name: "💈 Gentleman's Head-to-Toe Executive Package",
-    badge: "Save 15% • Men's Top Choice",
-    discountPercent: 15,
+    badge: "Men's Top Choice",
+    discountPercent: 0,
     description: "Precision haircut, luxury beard sculpting spa, and refreshing charcoal d-tan face treatment.",
-    serviceIds: ['srv-men-1', 'srv-men-2'], // Men fade & beard sculpt + Charcoal D-tan facial
+    serviceIds: ['srv-men-1', 'srv-men-2'],
     imageUrl: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&w=600&q=80',
     gender: 'men'
   },
   {
     id: 'hair-transformation-combo',
     name: '🧪 Keratin Gloss & Precision Layer Sculpt',
-    badge: 'Save 15% • Frizz-Free',
-    discountPercent: 15,
+    badge: 'Frizz-Free',
+    discountPercent: 0,
     description: 'Professional protein botox/keratin treatment with customized face-framing layer cut and shine serum blowdry.',
-    serviceIds: ['srv-ch-3', 'srv-hr-5'], // Keratin treatment + Advance Hair Cut
+    serviceIds: ['srv-ch-3', 'srv-hr-5'],
     imageUrl: 'https://images.unsplash.com/photo-1562322140-8baeececf3df?auto=format&fit=crop&w=600&q=80',
     gender: 'women'
   },
   {
     id: 'balayage-glamour-pack',
     name: '🎨 Balayage Color Radiance & Deep Mask',
-    badge: 'Save 18% • Premium',
-    discountPercent: 18,
+    badge: 'Premium',
+    discountPercent: 0,
     description: 'Bespoke hand-painted balayage highlights with bond-protecting mask and glam waves.',
-    serviceIds: ['srv-cl-4', 'srv-ch-4'], // Balayage Color Tech + Hair Treatment Spa & Repair
+    serviceIds: ['srv-cl-4', 'srv-ch-4'],
     imageUrl: 'https://images.unsplash.com/photo-1595476108010-b4d1f102b1b1?auto=format&fit=crop&w=600&q=80',
     gender: 'women'
   },
   {
     id: 'party-ready-express',
     name: '🌸 Party Glamour & Express Skin Glow',
-    badge: 'Save 12% • Event Ready',
-    discountPercent: 12,
+    badge: 'Event Ready',
+    discountPercent: 0,
     description: '3D party makeup with light clean-up exfoliation and elegant hair curling or blowout.',
-    serviceIds: ['srv-mu-2', 'srv-sk-3'], // HD Make Up + Face Clean Up
+    serviceIds: ['srv-mu-2', 'srv-sk-3'],
     imageUrl: 'https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=600&q=80',
     gender: 'women'
   }
@@ -133,30 +124,12 @@ export const ServiceBundleBuilder: React.FC<ServiceBundleBuilderProps> = ({
     return services.filter(s => selectedServiceIds.includes(s.id));
   }, [services, selectedServiceIds]);
 
-  // Calculate Tiered Discount Percentage
-  // 1 item = 0%
-  // 2 items = 10%
-  // 3 items = 15%
-  // 4+ items = 20%
-  const discountRate = useMemo(() => {
-    const count = selectedServices.length;
-    if (count <= 1) return 0;
-    if (count === 2) return 10;
-    if (count === 3) return 15;
-    return 20;
-  }, [selectedServices.length]);
-
-  // Pricing math
+  // Pricing math (no bundle discounts — transparent fixed total)
   const originalTotalPrice = useMemo(() => {
     return selectedServices.reduce((sum, s) => sum + s.price, 0);
   }, [selectedServices]);
 
-  const discountAmount = useMemo(() => {
-    if (discountRate === 0) return 0;
-    return Math.round((originalTotalPrice * discountRate) / 100);
-  }, [originalTotalPrice, discountRate]);
-
-  const finalDiscountedPrice = Math.max(0, originalTotalPrice - discountAmount);
+  const finalDiscountedPrice = originalTotalPrice;
   
   const totalDuration = useMemo(() => {
     return selectedServices.reduce((sum, s) => sum + s.durationMinutes, 0);
@@ -165,16 +138,6 @@ export const ServiceBundleBuilder: React.FC<ServiceBundleBuilderProps> = ({
   const advancePercentage = settings.advancePercentage || 10;
   const advanceDeposit = Math.round((finalDiscountedPrice * advancePercentage) / 100);
   const balanceAtSalon = finalDiscountedPrice - advanceDeposit;
-
-  // Next tier incentive message
-  const nextTierInfo = useMemo(() => {
-    const count = selectedServices.length;
-    if (count === 0) return { needed: 2, nextRate: 10, text: 'Select 2 services to unlock 10% Bundle Discount!' };
-    if (count === 1) return { needed: 1, nextRate: 10, text: 'Add 1 more service to unlock 10% Bundle Discount!' };
-    if (count === 2) return { needed: 1, nextRate: 15, text: 'Add 1 more service to upgrade to 15% Discount!' };
-    if (count === 3) return { needed: 1, nextRate: 20, text: 'Add 1 more service to unlock Maximum 20% Mega Savings!' };
-    return { needed: 0, nextRate: 20, text: '🎉 Maximum 20% Mega Discount Unlocked!' };
-  }, [selectedServices.length]);
 
   // Service categories for filtering in the picker
   const categories = useMemo(() => {
@@ -200,25 +163,23 @@ export const ServiceBundleBuilder: React.FC<ServiceBundleBuilderProps> = ({
   const handleLaunchBooking = () => {
     if (selectedServices.length === 0) return;
 
-    // Construct a composite bundle service item
     const namesList = selectedServices.map(s => s.name).join(' + ');
     const bundleService: ServiceItem = {
       id: `bundle-custom-${Date.now()}`,
-      name: `✨ Discount Bundle: ${namesList} (${selectedServices.length} Services • ${discountRate}% OFF)`,
+      name: `Multi-Service Selection: ${namesList} (${selectedServices.length} Services)`,
       category: selectedServices[0]?.category || 'Bridal & Pre-Bridal',
       gender: selectedServices.some(s => s.gender === 'women') ? 'women' : 'unisex',
       durationMinutes: totalDuration,
       price: finalDiscountedPrice,
-      priceDisplay: `₹${finalDiscountedPrice.toLocaleString()} (MRP ₹${originalTotalPrice.toLocaleString()})`,
+      priceDisplay: `₹${finalDiscountedPrice.toLocaleString()}`,
       advanceDeposit: advanceDeposit,
-      description: `Custom bundled combo of ${selectedServices.length} salon services: ${selectedServices.map(s => `${s.name} (₹${s.price})`).join(', ')}. Includes ${discountRate}% bundle discount savings of ₹${discountAmount}.`,
+      description: `Selected ${selectedServices.length} salon services: ${selectedServices.map(s => `${s.name} (₹${s.price})`).join(', ')}.`,
       imageUrl: selectedServices[0]?.imageUrl || 'https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=600&q=80',
       rating: 5.0,
       reviewsCount: 128,
       benefits: [
-        `Bundle Savings: ₹${discountAmount.toLocaleString()} (${discountRate}% OFF applied)`,
-        `10% Online Advance Deposit: ₹${advanceDeposit.toLocaleString()} locked slot`,
-        `Remaining 90% Balance: ₹${balanceAtSalon.toLocaleString()} payable at salon`,
+        `${advancePercentage}% Online Advance Deposit: ₹${advanceDeposit.toLocaleString()} locked slot`,
+        `Remaining ${100 - advancePercentage}% Balance: ₹${balanceAtSalon.toLocaleString()} payable at salon`,
         ...selectedServices.map(s => `Included: ${s.name} (${s.durationMinutes} mins)`)
       ]
     };
@@ -228,7 +189,7 @@ export const ServiceBundleBuilder: React.FC<ServiceBundleBuilderProps> = ({
 
   return (
     <div className="space-y-8 text-left">
-      {/* 1. HERO PROMO BANNER & DISCOUNT TIERS */}
+      {/* 1. HERO BANNER */}
       <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-amber-500/15 via-pink-500/10 to-amber-600/15 border border-amber-500/30 shadow-md relative overflow-hidden">
         <div className="absolute -right-12 -top-12 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
@@ -236,59 +197,17 @@ export const ServiceBundleBuilder: React.FC<ServiceBundleBuilderProps> = ({
           <div className="space-y-2.5 max-w-2xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 text-xs font-bold border border-amber-500/30">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Multi-Service Smart Bundle Engine</span>
+              <span>Multi-Service Session Planner</span>
             </div>
             <h2 className="font-serif text-2xl sm:text-3xl font-extrabold text-zinc-900 dark:text-zinc-100">
-              Bundle Any Services &amp; Save Up To 20%
+              Combine Multiple Services in One Visit
             </h2>
             <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed">
-              Combine haircuts, facials, bridal makeups, and chemical treatments into one customized session. Pay only a <strong>10% advance deposit</strong> today with the remaining balance due after your pampering session!
+              Select haircuts, facials, bridal makeups, and chemical treatments into one customized session. Pay only a <strong>{advancePercentage}% advance deposit</strong> today with the remaining balance due after your visit!
             </p>
           </div>
-
-          {/* Discount Tier Cards */}
-          <div className="grid grid-cols-3 gap-2.5 shrink-0">
-            <div className={`p-3 rounded-2xl border text-center transition-all ${
-              discountRate === 10
-                ? 'bg-amber-500 text-zinc-950 border-amber-400 font-bold scale-105 shadow-md'
-                : 'bg-white/80 dark:bg-zinc-900/80 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300'
-            }`}>
-              <div className="text-[10px] uppercase font-bold tracking-tight">2 Services</div>
-              <div className="text-base sm:text-lg font-black font-mono mt-0.5">10% OFF</div>
-              <div className="text-[9px] opacity-80 mt-0.5">Combo Tier</div>
-            </div>
-
-            <div className={`p-3 rounded-2xl border text-center transition-all ${
-              discountRate === 15
-                ? 'bg-amber-500 text-zinc-950 border-amber-400 font-bold scale-105 shadow-md'
-                : 'bg-white/80 dark:bg-zinc-900/80 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300'
-            }`}>
-              <div className="text-[10px] uppercase font-bold tracking-tight">3 Services</div>
-              <div className="text-base sm:text-lg font-black font-mono mt-0.5">15% OFF</div>
-              <div className="text-[9px] opacity-80 mt-0.5">Popular Tier</div>
-            </div>
-
-            <div className={`p-3 rounded-2xl border text-center transition-all ${
-              discountRate === 20
-                ? 'bg-amber-500 text-zinc-950 border-amber-400 font-bold scale-105 shadow-md'
-                : 'bg-white/80 dark:bg-zinc-900/80 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300'
-            }`}>
-              <div className="text-[10px] uppercase font-bold tracking-tight">4+ Services</div>
-              <div className="text-base sm:text-lg font-black font-mono mt-0.5">20% OFF</div>
-              <div className="text-[9px] opacity-80 mt-0.5">Mega Saver</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Milestone Progress Bar */}
-        <div className="mt-5 pt-4 border-t border-amber-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-            <Zap className="w-4 h-4 text-amber-500 fill-amber-500 shrink-0" />
-            <span>{nextTierInfo.text}</span>
-          </div>
-
-          <div className="text-[11px] font-bold text-amber-700 dark:text-amber-400">
-            {selectedServices.length} Selected • {discountRate}% Discount Active
+          <div className="text-xs font-bold text-amber-700 dark:text-amber-400 shrink-0">
+            {selectedServices.length} Selected
           </div>
         </div>
       </div>
@@ -372,20 +291,17 @@ export const ServiceBundleBuilder: React.FC<ServiceBundleBuilderProps> = ({
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-base font-extrabold text-amber-600 dark:text-amber-400 font-mono">
-                          ₹{discPrice.toLocaleString()}
-                        </span>
-                        <span className="text-xs text-zinc-400 line-through font-mono">
                           ₹{origPrice.toLocaleString()}
                         </span>
                       </div>
-                      <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold font-mono">
-                        Save ₹{(origPrice - discPrice).toLocaleString()} ({preset.discountPercent}% OFF)
+                      <div className="text-[10px] text-zinc-500 font-medium">
+                        {presetServices.length} Services Combined
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-[10px] text-zinc-400 uppercase font-semibold">10% Deposit</div>
+                      <div className="text-[10px] text-zinc-400 uppercase font-semibold">{advancePercentage}% Deposit</div>
                       <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">
-                        ₹{presetAdv.toLocaleString()}
+                        ₹{Math.round((origPrice * advancePercentage) / 100).toLocaleString()}
                       </div>
                     </div>
                   </div>
@@ -400,30 +316,30 @@ export const ServiceBundleBuilder: React.FC<ServiceBundleBuilderProps> = ({
                       }`}
                     >
                       {isFullySelected ? <Check className="w-3.5 h-3.5" /> : <Layers className="w-3.5 h-3.5" />}
-                      <span>{isFullySelected ? 'Loaded in Builder' : 'Load into Builder'}</span>
+                      <span>{isFullySelected ? 'Loaded in Planner' : 'Load into Planner'}</span>
                     </button>
 
                     <button
                       onClick={() => {
                         onApplyPreset(preset.serviceIds);
-                        const namesList = presetServices.map(s => s.name).join(' + ');
+                        const presetPrice = origPrice;
+                        const presetDeposit = Math.round((presetPrice * advancePercentage) / 100);
                         const compositeItem: ServiceItem = {
                           id: `preset-${preset.id}-${Date.now()}`,
-                          name: `${preset.name} (${preset.discountPercent}% OFF)`,
+                          name: preset.name,
                           category: 'Bridal & Pre-Bridal',
                           gender: preset.gender,
                           durationMinutes: presetServices.reduce((sum, s) => sum + s.durationMinutes, 0),
-                          price: discPrice,
-                          priceDisplay: `₹${discPrice.toLocaleString()} (MRP ₹${origPrice.toLocaleString()})`,
-                          advanceDeposit: presetAdv,
+                          price: presetPrice,
+                          priceDisplay: `₹${presetPrice.toLocaleString()}`,
+                          advanceDeposit: presetDeposit,
                           description: preset.description,
                           imageUrl: preset.imageUrl,
                           rating: 5.0,
                           reviewsCount: 150,
                           benefits: [
-                            `Special Combo Package: ${preset.discountPercent}% Discount`,
-                            `10% Online Advance Deposit: ₹${presetAdv.toLocaleString()}`,
-                            `Balance payable at salon: ₹${(discPrice - presetAdv).toLocaleString()}`,
+                            `${advancePercentage}% Online Advance Deposit: ₹${presetDeposit.toLocaleString()}`,
+                            `Balance payable at salon: ₹${(presetPrice - presetDeposit).toLocaleString()}`,
                             ...presetServices.map(s => `Includes: ${s.name}`)
                           ]
                         };
@@ -432,7 +348,7 @@ export const ServiceBundleBuilder: React.FC<ServiceBundleBuilderProps> = ({
                       className="py-2 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
                     >
                       <Calendar className="w-3.5 h-3.5" />
-                      <span>Book Preset</span>
+                      <span>Book Package</span>
                     </button>
                   </div>
                 </div>
@@ -638,43 +554,8 @@ export const ServiceBundleBuilder: React.FC<ServiceBundleBuilderProps> = ({
                   ))}
                 </div>
 
-                {/* Progress bar to next tier */}
-                <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-1.5">
-                  <div className="flex items-center justify-between text-xs font-bold">
-                    <span className="text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                      <span>{discountRate}% Discount Applied</span>
-                    </span>
-                    <span className="text-amber-700 dark:text-amber-400 font-mono">
-                      {selectedServices.length >= 4 ? 'Max Tier' : `${selectedServices.length}/4 Services`}
-                    </span>
-                  </div>
-                  <div className="w-full h-2 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-amber-500 to-amber-400 transition-all duration-500 rounded-full"
-                      style={{ width: `${Math.min(100, (selectedServices.length / 4) * 100)}%` }}
-                    ></div>
-                  </div>
-                  <div className="text-[10px] text-zinc-500 dark:text-zinc-400">
-                    {nextTierInfo.text}
-                  </div>
-                </div>
-
                 {/* Calculation Details */}
                 <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 space-y-2.5 text-xs">
-                  <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400">
-                    <span>Original Price (MRP):</span>
-                    <span className="font-mono font-medium line-through">₹{originalTotalPrice.toLocaleString()}</span>
-                  </div>
-
-                  <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400 font-bold">
-                    <span className="flex items-center gap-1">
-                      <Percent className="w-3.5 h-3.5" />
-                      <span>Bundle Discount ({discountRate}%):</span>
-                    </span>
-                    <span className="font-mono">-₹{discountAmount.toLocaleString()}</span>
-                  </div>
-
                   <div className="flex items-center justify-between text-zinc-600 dark:text-zinc-300">
                     <span className="flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5 text-amber-500" />
@@ -685,7 +566,7 @@ export const ServiceBundleBuilder: React.FC<ServiceBundleBuilderProps> = ({
 
                   <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between text-sm">
                     <span className="font-bold text-zinc-900 dark:text-zinc-100">
-                      Bundled Total Price:
+                      Total Price:
                     </span>
                     <span className="font-black text-base text-amber-600 dark:text-amber-400 font-mono">
                       ₹{finalDiscountedPrice.toLocaleString()}
@@ -695,11 +576,11 @@ export const ServiceBundleBuilder: React.FC<ServiceBundleBuilderProps> = ({
                   {/* Advance Deposit breakdown */}
                   <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-1">
                     <div className="flex items-center justify-between text-xs font-bold text-emerald-700 dark:text-emerald-300">
-                      <span>10% Advance Deposit Due Now:</span>
+                      <span>{advancePercentage}% Advance Deposit Due Now:</span>
                       <span className="font-mono text-sm">₹{advanceDeposit.toLocaleString()}</span>
                     </div>
                     <div className="flex items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400">
-                      <span>90% Balance Payable at Salon:</span>
+                      <span>{100 - advancePercentage}% Balance Payable at Salon:</span>
                       <span className="font-mono font-semibold">₹{balanceAtSalon.toLocaleString()}</span>
                     </div>
                   </div>
@@ -727,7 +608,7 @@ export const ServiceBundleBuilder: React.FC<ServiceBundleBuilderProps> = ({
                   <Calendar className="w-4 h-4" />
                   <span>
                     {selectedServices.length >= 2 
-                      ? `Book Discounted Bundle (₹${advanceDeposit} Adv)` 
+                      ? `Book Selected Services (₹${advanceDeposit} Adv)` 
                       : `Book ${selectedServices.length} Service (₹${advanceDeposit} Adv)`}
                   </span>
                 </button>

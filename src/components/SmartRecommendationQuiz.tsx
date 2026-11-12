@@ -112,8 +112,7 @@ export const SmartRecommendationQuiz: React.FC = () => {
       };
 
       const rawSum = selectedServices.reduce((acc, s) => acc + (priceMap[s] || 1500), 0);
-      const discount = selectedServices.length > 1 ? 0.85 : 1.0;
-      const total = Math.max(750, Math.round((rawSum * discount) / 50) * 50);
+      const total = Math.max(750, Math.round(rawSum / 50) * 50);
 
       const generatedTitle = selectedServices.length > 1
         ? `Complete Multi-Service Synergistic Suite (${selectedServices.length} Selected)`
@@ -463,7 +462,7 @@ export const SmartRecommendationQuiz: React.FC = () => {
                     Consulting AI Beauty Expert...
                   </div>
                   <p className="text-xs text-zinc-600 dark:text-zinc-400 max-w-sm mx-auto">
-                    Analyzing selected preferences and calculating precise {currentAdvPct}% advance deposit bundles.
+                    Analyzing selected preferences and calculating precise {currentAdvPct}% advance deposit packages.
                   </p>
                 </div>
               ) : (

@@ -373,17 +373,17 @@ export const ServicePriceTable: React.FC<ServicePriceTableProps> = ({
                                   ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/40 shadow-sm'
                                   : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-amber-500/10 hover:text-amber-600 border-zinc-200 dark:border-zinc-700'
                               }`}
-                              title={selectedBundleServiceIds.includes(service.id) ? "Remove from bundle" : "Add to custom discount bundle"}
+                              title={selectedBundleServiceIds.includes(service.id) ? "Remove from selection" : "Add to multi-service selection"}
                             >
                               {selectedBundleServiceIds.includes(service.id) ? (
                                 <>
                                   <Check className="w-3.5 h-3.5 text-amber-500" />
-                                  <span>In Bundle</span>
+                                  <span>Selected</span>
                                 </>
                               ) : (
                                 <>
                                   <Plus className="w-3.5 h-3.5" />
-                                  <span>Bundle</span>
+                                  <span>Select</span>
                                 </>
                               )}
                             </button>
@@ -488,12 +488,12 @@ export const ServicePriceTable: React.FC<ServicePriceTableProps> = ({
                       {selectedBundleServiceIds.includes(service.id) ? (
                         <>
                           <Check className="w-3.5 h-3.5 text-amber-500" />
-                          <span>In Bundle</span>
+                          <span>Selected</span>
                         </>
                       ) : (
                         <>
                           <Plus className="w-3.5 h-3.5" />
-                          <span>Bundle</span>
+                          <span>Select</span>
                         </>
                       )}
                     </button>

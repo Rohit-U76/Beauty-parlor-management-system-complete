@@ -14,7 +14,6 @@ import {
   Eye,
   EyeOff,
   Crown,
-  Gift,
   Star,
   Check
 } from 'lucide-react';
@@ -34,8 +33,8 @@ export const AuthModal: React.FC = () => {
     checkEmailVerification,
     resendVerificationEmail,
     resetPassword,
-    settings,
-    updateSettings
+    resetAdminPassword,
+    settings
   } = useSalon();
 
   const [activeTab, setActiveTab] = useState<
@@ -218,8 +217,12 @@ export const AuthModal: React.FC = () => {
 
     setIsLoading(true);
     try {
-      await updateSettings({ adminPassword: adminNewPassword.trim() });
+      const res = await resetAdminPassword(target, cleanPin, adminNewPassword.trim());
       setIsLoading(false);
+      if (!res.success) {
+        setErrorMsg(res.message);
+        return;
+      }
       setSuccessMsg('✅ Admin Master Password updated successfully! It has been saved into Admin Settings. You can now sign in with your new password.');
       setAdminSecret(adminNewPassword.trim());
       setAdminResetPin('');
@@ -386,7 +389,7 @@ export const AuthModal: React.FC = () => {
                   : 'text-zinc-600 dark:text-zinc-400 hover:text-purple-800 dark:hover:text-zinc-200'
               }`}
             >
-              <Gift className="w-3.5 h-3.5" />
+              <Sparkles className="w-3.5 h-3.5" />
               <span>Sign Up</span>
             </button>
 
@@ -737,7 +740,7 @@ export const AuthModal: React.FC = () => {
                   <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.03 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
                   <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
                 </svg>
-                <span>Sign up with Google (+100 Pts)</span>
+                <span>Sign up with Google</span>
               </button>
 
               <div className="text-center pt-1">

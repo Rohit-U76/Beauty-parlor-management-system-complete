@@ -13,10 +13,7 @@ import {
   Award,
   Phone,
   MapPin,
-  Tag,
   Scissors,
-  Gift,
-  Percent,
   Flame,
   Video,
   Play
@@ -280,38 +277,6 @@ export const CustomerHome: React.FC = () => {
               </div>
             </div>
           ))}
-        </div>
-      </section>
-
-      {/* MULTI-SERVICE BUNDLE & SAVE BANNER */}
-      <section id="section-home-bundle" className="px-3 sm:px-6 lg:px-8 max-w-7xl mx-auto text-left">
-        <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-amber-500/15 via-pink-500/10 to-amber-600/15 border border-amber-500/30 shadow-md flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
-          <div className="space-y-2.5 max-w-xl">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 text-xs font-bold border border-amber-500/30">
-              <Gift className="w-3.5 h-3.5" />
-              <span>Multi-Service Discount Engine</span>
-            </div>
-            <h3 className="font-serif text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-zinc-100">
-              Bundle Services &amp; Save Up To 20%
-            </h3>
-            <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed">
-              Combine haircuts, facials, party makeup, and hair treatments into a single pampering session. Lock your customized bundle with only a {settings.advancePercentage || 10}% advance deposit!
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center gap-3 shrink-0 w-full sm:w-auto">
-            <button
-              onClick={() => {
-                setActiveNavTab('services');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition cursor-pointer"
-            >
-              <Gift className="w-4 h-4" />
-              <span>Explore Bundle Packages</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
         </div>
       </section>
 

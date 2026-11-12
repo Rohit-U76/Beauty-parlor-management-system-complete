@@ -55,6 +55,7 @@ import {
 import {
   collection,
   doc,
+  getDoc,
   setDoc,
   updateDoc,
   deleteDoc,
@@ -129,6 +130,7 @@ interface SalonContextType {
   checkEmailVerification: (email?: string, password?: string) => Promise<{ verified: boolean; message: string; user?: User }>;
   resendVerificationEmail: (email?: string, password?: string) => Promise<{ success: boolean; message: string }>;
   resetPassword: (email: string) => Promise<{ success: boolean; message: string }>;
+  resetAdminPassword: (email: string, pin: string, newPassword: string) => Promise<{ success: boolean; message: string }>;
   logout: () => void;
   openAuthModal: (initialTab?: 'customer' | 'admin', mode?: 'login' | 'register') => void;
   closeAuthModal: () => void;
@@ -194,7 +196,7 @@ interface SalonContextType {
   markAllNotificationsRead: () => void;
 
   // Settings & Schedule Blackout
-  updateSettings: (newSettings: Partial<SalonSettings>) => void;
+  updateSettings: (newSettings: Partial<SalonSettings>) => Promise<void>;
   toggleOwnerBreakToday: (forcedState?: boolean) => void;
   addBlockedSlotWindow: (window: Omit<BlockedSlotWindow, 'id' | 'createdAt'>) => void;
   updateBlockedSlotWindow: (id: string, updates: Partial<BlockedSlotWindow>) => void;
@@ -460,16 +462,35 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             const u: User = {
               id: fbUser.uid,
               name: data.name || fbUser.displayName || 'Client',
-              email: fbUser.email || '',
+              username: data.username,
+              email: data.email || fbUser.email || '',
               phone: data.phone || fbUser.phoneNumber || '',
               role: isAdminUser ? 'ADMIN' : (data.role || 'CUSTOMER'),
               memberTier: isAdminUser ? 'Owner Admin' : (data.memberTier || 'New Client'),
-              loyaltyPoints: data.loyaltyPoints ?? 100,
               emailVerified: fbUser.emailVerified,
-              avatarUrl: fbUser.photoURL || data.avatarUrl || undefined,
-              preferredServices: data.preferredServices || []
+              avatarUrl: data.avatarUrl || fbUser.photoURL || undefined,
+              preferredServices: data.preferredServices || [],
+              gender: data.gender,
+              birthDate: data.birthDate,
+              anniversaryDate: data.anniversaryDate,
+              preferredStylist: data.preferredStylist,
+              skinOrHairType: data.skinOrHairType,
+              specialNotes: data.specialNotes,
+              address: data.address,
+              city: data.city,
+              emergencyContact: data.emergencyContact,
+              allergies: data.allergies,
+              preferredSlot: data.preferredSlot,
+              favoriteCategory: data.favoriteCategory,
+              whatsappNotifications: data.whatsappNotifications,
+              emailNotifications: data.emailNotifications,
+              totalVisits: data.totalVisits,
+              memberSince: data.memberSince
             };
-            setCurrentUser(u);
+            setCurrentUser(prev => ({
+              ...u,
+              phone: u.phone || (prev && prev.id === u.id ? prev.phone : '') || ''
+            }));
             setIsGuestMode(false);
           } else {
             const newUserData: User = {
@@ -479,13 +500,15 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               phone: fbUser.phoneNumber || '',
               role: isAdminUser ? 'ADMIN' : 'CUSTOMER',
               memberTier: isAdminUser ? 'Owner Admin' : 'New Client',
-              loyaltyPoints: 100,
               emailVerified: Boolean(fbUser.emailVerified),
               ...(fbUser.photoURL ? { avatarUrl: fbUser.photoURL } : {}),
               preferredServices: []
             };
-            setDoc(userDocRef, cleanFirestoreData(newUserData)).catch((err) => handleFirestoreError(err, OperationType.WRITE, `users/${fbUser.uid}`));
-            setCurrentUser(newUserData);
+            setDoc(userDocRef, cleanFirestoreData(newUserData), { merge: true }).catch((err) => handleFirestoreError(err, OperationType.WRITE, `users/${fbUser.uid}`));
+            setCurrentUser(prev => ({
+              ...newUserData,
+              phone: newUserData.phone || (prev && prev.id === newUserData.id ? prev.phone : '') || ''
+            }));
             setIsGuestMode(false);
           }
         }, (err) => {
@@ -554,11 +577,20 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       console.warn('Real-time offers snapshot notice:', err.message);
     });
 
-    // Real-time Settings
+    // Real-time Settings (preserve newer adminPassword updates)
     const unsubSettings = onSnapshot(doc(db, 'salon_settings', 'main'), (docSnap) => {
       if (docSnap.exists()) {
-        const data = docSnap.data();
-        setSettings((prev) => ({ ...prev, ...(data as any) }));
+        const data = docSnap.data() as any;
+        setSettings((prev) => {
+          const prevTs = Number(prev.adminPasswordUpdatedAt || 0);
+          const nextTs = Number(data.adminPasswordUpdatedAt || 0);
+          const merged = { ...prev, ...data };
+          if (prev.adminPassword && prevTs > nextTs) {
+            merged.adminPassword = prev.adminPassword;
+            merged.adminPasswordUpdatedAt = prevTs;
+          }
+          return merged;
+        });
       }
     }, (err) => {
       console.warn('Real-time settings snapshot notice:', err.message);
@@ -593,7 +625,17 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       .then(res => res.json())
       .then(data => {
         if (data.success && data.settings) {
-          setSettings(prev => ({ ...prev, ...data.settings }));
+          setSettings(prev => {
+            const prevTs = Number(prev.adminPasswordUpdatedAt || 0);
+            const srvTs = Number(data.settings.adminPasswordUpdatedAt || 0);
+            const merged = { ...prev, ...data.settings };
+            if (prev.adminPassword && prevTs > srvTs) {
+              merged.adminPassword = prev.adminPassword;
+              merged.adminPasswordUpdatedAt = prevTs;
+            }
+            localStorage.setItem(`${LOCAL_STORAGE_KEY}_settings`, JSON.stringify(merged));
+            return merged;
+          });
           if (data.settings.advancePercentage) {
             const pct = Number(data.settings.advancePercentage);
             setServices(prev => prev.map(s => ({
@@ -601,6 +643,21 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               advanceDeposit: Math.round((s.price * pct) / 100)
             })));
           }
+        }
+      })
+      .catch(() => {});
+
+    fetch('/api/gallery')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.gallery) && data.gallery.length > 0) {
+          setGallery(prev => {
+            const map = new Map<string, GalleryItem>();
+            [...data.gallery, ...prev].forEach(item => {
+              if (item && item.id && !map.has(item.id)) map.set(item.id, item);
+            });
+            return Array.from(map.values());
+          });
         }
       })
       .catch(() => {});
@@ -642,10 +699,15 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             const fresh = data.users.find((u: any) => 
               u.id === prev.id || 
               (u.phone && prev.phone && u.phone === prev.phone) || 
-              (u.email && prev.email && u.email === prev.email)
+              (u.email && prev.email && u.email.toLowerCase() === prev.email.toLowerCase())
             );
             if (fresh) {
-              const merged = { ...prev, ...fresh };
+              const merged = {
+                ...prev,
+                ...fresh,
+                phone: fresh.phone || prev.phone || '',
+                name: fresh.name || prev.name
+              };
               sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_current_user`, JSON.stringify(merged));
               localStorage.setItem(`${LOCAL_STORAGE_KEY}_current_user`, JSON.stringify(merged));
               return merged;
@@ -723,12 +785,21 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         .then(res => res.json())
         .then(data => {
           if (data.success && data.settings) {
-            setSettings(prev => ({
-              ...prev,
-              ...data.settings,
-              blockedWindows: data.settings.blockedWindows !== undefined ? data.settings.blockedWindows : (prev.blockedWindows || []),
-              isOwnerOnBreakToday: data.settings.isOwnerOnBreakToday !== undefined ? data.settings.isOwnerOnBreakToday : (prev.isOwnerOnBreakToday || false)
-            }));
+            setSettings(prev => {
+              const prevTs = Number(prev.adminPasswordUpdatedAt || 0);
+              const srvTs = Number(data.settings.adminPasswordUpdatedAt || 0);
+              const merged = {
+                ...prev,
+                ...data.settings,
+                blockedWindows: data.settings.blockedWindows !== undefined ? data.settings.blockedWindows : (prev.blockedWindows || []),
+                isOwnerOnBreakToday: data.settings.isOwnerOnBreakToday !== undefined ? data.settings.isOwnerOnBreakToday : (prev.isOwnerOnBreakToday || false)
+              };
+              if (prev.adminPassword && prevTs > srvTs) {
+                merged.adminPassword = prev.adminPassword;
+                merged.adminPasswordUpdatedAt = prevTs;
+              }
+              return merged;
+            });
           }
         })
         .catch(() => {});
@@ -857,21 +928,44 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const checkEmailVerification = async (email?: string, password?: string): Promise<{ verified: boolean; message: string; user?: User }> => {
     try {
+      const loadSavedUserDoc = async (fbUid: string, fbEmail: string, fbName: string, fbPhone: string): Promise<User> => {
+        let docData: any = {};
+        try {
+          const snap = await getDoc(doc(db, 'users', fbUid));
+          if (snap.exists()) docData = snap.data() || {};
+        } catch {}
+        let dbUser: any = {};
+        try {
+          const res = await fetch('/api/auth/users');
+          const d = await res.json();
+          if (d?.success && Array.isArray(d.users)) {
+            dbUser = d.users.find((u: any) => u.id === fbUid || (fbEmail && u.email?.toLowerCase() === fbEmail.toLowerCase())) || {};
+          }
+        } catch {}
+        return {
+          ...dbUser,
+          ...docData,
+          id: fbUid,
+          name: docData.name || dbUser.name || fbName || 'Client',
+          email: fbEmail || docData.email || dbUser.email || '',
+          phone: docData.phone || dbUser.phone || fbPhone || '',
+          role: 'CUSTOMER',
+          emailVerified: true,
+          memberTier: docData.memberTier || dbUser.memberTier || 'New Client'
+        };
+      };
+
       // 1. If active Firebase user session exists, reload and check
       if (auth.currentUser) {
         await reload(auth.currentUser);
         if (auth.currentUser.emailVerified) {
-          const verifiedUser: User = {
-            id: auth.currentUser.uid,
-            name: auth.currentUser.displayName || auth.currentUser.email?.split('@')[0] || 'Client',
-            email: auth.currentUser.email || '',
-            phone: '',
-            role: 'CUSTOMER',
-            emailVerified: true,
-            memberTier: 'New Client',
-            loyaltyPoints: 100
-          };
-          updateDoc(doc(db, 'users', auth.currentUser.uid), { emailVerified: true }).catch(() => {});
+          const verifiedUser = await loadSavedUserDoc(
+            auth.currentUser.uid,
+            auth.currentUser.email || '',
+            auth.currentUser.displayName || auth.currentUser.email?.split('@')[0] || 'Client',
+            auth.currentUser.phoneNumber || ''
+          );
+          setDoc(doc(db, 'users', auth.currentUser.uid), cleanFirestoreData({ emailVerified: true }), { merge: true }).catch(() => {});
           setCurrentUser(verifiedUser);
           setIsGuestMode(false);
           setIsAuthModalOpen(false);
@@ -884,17 +978,13 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         const userCred = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password.trim());
         const fbUser = userCred.user;
         if (fbUser.emailVerified) {
-          const verifiedUser: User = {
-            id: fbUser.uid,
-            name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Client',
-            email: fbUser.email || email,
-            phone: '',
-            role: 'CUSTOMER',
-            emailVerified: true,
-            memberTier: 'New Client',
-            loyaltyPoints: 100
-          };
-          updateDoc(doc(db, 'users', fbUser.uid), { emailVerified: true }).catch(() => {});
+          const verifiedUser = await loadSavedUserDoc(
+            fbUser.uid,
+            fbUser.email || email,
+            fbUser.displayName || fbUser.email?.split('@')[0] || 'Client',
+            fbUser.phoneNumber || ''
+          );
+          setDoc(doc(db, 'users', fbUser.uid), cleanFirestoreData({ emailVerified: true }), { merge: true }).catch(() => {});
           setCurrentUser(verifiedUser);
           setIsGuestMode(false);
           setIsAuthModalOpen(false);
@@ -931,27 +1021,70 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       await sendPasswordResetEmail(auth, cleanEmail);
       return {
         success: true,
-        message: `Password reset link sent to ${cleanEmail}. Please check your inbox (and spam folder) to set your new password.`
+        message: `Password reset link sent to ${cleanEmail}. Please check your inbox (and spam folder) to set your new customer password.`
       };
     } catch (err: any) {
       console.warn('Password reset notice:', err);
-      const isRecognizedAdmin = 
-        cleanEmail === 'dineshghodake941@gmail.com' ||
-        (settings.adminEmails || []).map(e => e.toLowerCase()).includes(cleanEmail);
-
-      if (isRecognizedAdmin) {
-        return {
-          success: true,
-          message: `Owner reset instructions confirmed for ${cleanEmail}. Emergency Salon Owner PIN: ${settings.adminPin || '8104'}. You can log in with this PIN anytime and update your master password in Salon Settings.`
-        };
-      }
-
       if (err.code === 'auth/user-not-found') {
-        return { success: false, message: 'No account found with this email address. Please sign up to create a new account.' };
+        return { success: false, message: 'No customer account found with this email address. Please sign up to create a new account.' };
       }
       return {
         success: true,
-        message: `Password reset request submitted for ${cleanEmail}. If an account is associated with this email, reset instructions have been dispatched to your inbox.`
+        message: `Password reset request submitted for ${cleanEmail}. If a customer account is associated with this email, reset instructions have been dispatched to your inbox.`
+      };
+    }
+  };
+
+  const resetAdminPassword = async (_email: string, pin: string, newPassword: string): Promise<{ success: boolean; message: string }> => {
+    const cleanPin = (pin || '').trim();
+    const cleanNewPass = (newPassword || '').trim();
+
+    if (!cleanNewPass || cleanNewPass.length < 6) {
+      return { success: false, message: 'New Admin password must be at least 6 characters.' };
+    }
+
+    try {
+      const res = await fetch('/api/auth/admin-reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: cleanPin, newPassword: cleanNewPass })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        return { success: false, message: data.message || 'Invalid Owner Master Security PIN.' };
+      }
+
+      const updatedAt = data.settings?.adminPasswordUpdatedAt || Date.now();
+      setSettings(prev => {
+        const merged = {
+          ...prev,
+          ...(data.settings || {}),
+          adminPassword: cleanNewPass,
+          adminPasswordUpdatedAt: updatedAt
+        };
+        localStorage.setItem(`${LOCAL_STORAGE_KEY}_settings`, JSON.stringify(merged));
+        return merged;
+      });
+
+      // Best effort Firestore sync if an admin Firebase session is currently signed in
+      try {
+        if (auth.currentUser) {
+          await setDoc(
+            doc(db, 'salon_settings', 'main'),
+            cleanFirestoreData({ adminPassword: cleanNewPass, adminPasswordUpdatedAt: updatedAt }),
+            { merge: true }
+          );
+        }
+      } catch {}
+
+      return {
+        success: true,
+        message: 'Admin Master Password updated successfully! Saved in Salon Settings and isolated from client accounts.'
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: err?.message || 'Failed to update Admin password.'
       };
     }
   };
@@ -1035,7 +1168,6 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             phone: settings.phone || '8104026257',
             role: 'ADMIN',
             memberTier: 'Owner Admin',
-            loyaltyPoints: 5000,
             emailVerified: true
           };
           setCurrentUser(adminUser);
@@ -1077,18 +1209,50 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
         const userRole: UserRole = (expectedRole === 'ADMIN' || isUserAdmin) && expectedRole !== 'CUSTOMER' ? 'ADMIN' : 'CUSTOMER';
 
+        // Load existing saved profile from Firestore & backend DB so saved phone/details are preserved
+        let existingDocData: any = {};
+        try {
+          const snap = await getDoc(doc(db, 'users', fbUser.uid));
+          if (snap.exists()) existingDocData = snap.data() || {};
+        } catch {}
+
+        let existingDbUser: any = {};
+        try {
+          const res = await fetch('/api/auth/users');
+          const d = await res.json();
+          if (d?.success && Array.isArray(d.users)) {
+            existingDbUser = d.users.find((u: any) =>
+              u.id === fbUser.uid ||
+              (fbUser.email && u.email && u.email.toLowerCase() === fbUser.email.toLowerCase())
+            ) || {};
+          }
+        } catch {}
+
         const user: User = {
+          ...existingDbUser,
+          ...existingDocData,
           id: fbUser.uid,
-          name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Client',
-          email: fbUser.email || '',
-          phone: fbUser.phoneNumber || '',
+          name: existingDocData.name || existingDbUser.name || fbUser.displayName || fbUser.email?.split('@')[0] || 'Client',
+          email: fbUser.email || existingDocData.email || existingDbUser.email || '',
+          phone: existingDocData.phone || existingDbUser.phone || fbUser.phoneNumber || '',
           role: userRole,
           emailVerified: true,
-          memberTier: userRole === 'ADMIN' ? 'Owner Admin' : 'Standard',
-          loyaltyPoints: 200
+          memberTier: userRole === 'ADMIN' ? 'Owner Admin' : (existingDocData.memberTier || existingDbUser.memberTier || 'Standard')
         };
 
         await setDoc(doc(db, 'users', fbUser.uid), cleanFirestoreData(user), { merge: true });
+
+        // Push latest adminPassword from backend settings if admin just signed into Firebase
+        if (userRole === 'ADMIN' && settings.adminPassword) {
+          setDoc(
+            doc(db, 'salon_settings', 'main'),
+            cleanFirestoreData({
+              adminPassword: settings.adminPassword,
+              adminPasswordUpdatedAt: settings.adminPasswordUpdatedAt || Date.now()
+            }),
+            { merge: true }
+          ).catch(() => {});
+        }
 
         setCurrentUser(user);
         setIsGuestMode(false);
@@ -1157,12 +1321,21 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           phone: fbUser.phoneNumber || settings.phone || '8104026257',
           role: 'ADMIN',
           memberTier: 'Owner Admin',
-          loyaltyPoints: 5000,
           emailVerified: true,
           ...(fbUser.photoURL ? { avatarUrl: fbUser.photoURL } : {})
         };
 
         await setDoc(doc(db, 'users', fbUser.uid), cleanFirestoreData(adminProfile), { merge: true });
+        if (settings.adminPassword) {
+          setDoc(
+            doc(db, 'salon_settings', 'main'),
+            cleanFirestoreData({
+              adminPassword: settings.adminPassword,
+              adminPasswordUpdatedAt: settings.adminPasswordUpdatedAt || Date.now()
+            }),
+            { merge: true }
+          ).catch(() => {});
+        }
         setCurrentUser(adminProfile);
         setIsGuestMode(false);
         setIsAdminMode(true);
@@ -1176,17 +1349,36 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         };
       }
 
-      // CUSTOMER GOOGLE SIGN-IN
+      // CUSTOMER GOOGLE SIGN-IN — preserve previously saved phone & profile details
+      let existingDocData: any = {};
+      try {
+        const snap = await getDoc(doc(db, 'users', fbUser.uid));
+        if (snap.exists()) existingDocData = snap.data() || {};
+      } catch {}
+
+      let existingDbUser: any = {};
+      try {
+        const res = await fetch('/api/auth/users');
+        const d = await res.json();
+        if (d?.success && Array.isArray(d.users)) {
+          existingDbUser = d.users.find((u: any) =>
+            u.id === fbUser.uid ||
+            (cleanEmail && u.email && u.email.toLowerCase() === cleanEmail)
+          ) || {};
+        }
+      } catch {}
+
       const clientProfile: User = {
+        ...existingDbUser,
+        ...existingDocData,
         id: fbUser.uid,
-        name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Client',
-        email: fbUser.email || '',
-        phone: fbUser.phoneNumber || '',
+        name: existingDocData.name || existingDbUser.name || fbUser.displayName || fbUser.email?.split('@')[0] || 'Client',
+        email: fbUser.email || existingDocData.email || existingDbUser.email || '',
+        phone: existingDocData.phone || existingDbUser.phone || fbUser.phoneNumber || '',
         role: 'CUSTOMER',
-        memberTier: 'New Client',
-        loyaltyPoints: 100,
+        memberTier: existingDocData.memberTier || existingDbUser.memberTier || 'New Client',
         emailVerified: true,
-        ...(fbUser.photoURL ? { avatarUrl: fbUser.photoURL } : {})
+        ...(existingDocData.avatarUrl || fbUser.photoURL ? { avatarUrl: existingDocData.avatarUrl || fbUser.photoURL } : {})
       };
 
       await setDoc(doc(db, 'users', fbUser.uid), cleanFirestoreData(clientProfile), { merge: true });
@@ -1250,7 +1442,6 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         phone: cleanPhone,
         role: 'CUSTOMER',
         memberTier: 'New Client',
-        loyaltyPoints: 100,
         emailVerified: false,
         memberSince: '2026',
         preferredServices: data.preferredServices || []
@@ -1258,6 +1449,12 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
       // 4. Save to Firestore users collection with emailVerified: false
       await setDoc(doc(db, 'users', fbUser.uid), cleanFirestoreData(newUser));
+      // Also mirror profile in backend database so phone is preserved
+      fetch(`/api/auth/users/${fbUser.uid}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newUser)
+      }).catch(() => {});
 
       // 5. CRITICAL: Immediately sign out newly created unconfirmed account.
       // User is strictly NOT allowed to take the account or sign in until email is confirmed.
@@ -1336,12 +1533,12 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return nextCusts;
     });
 
-    // Persist profile updates to Firestore in real time
+    // Persist profile updates to Firestore in real time (setDoc merge works even if doc wasn't created yet)
     try {
-      updateDoc(doc(db, 'users', updatedUser.id), cleanFirestoreData(updates)).catch(err => {
-        console.warn('Firestore updateCurrentUser note:', err);
-      });
-    } catch {}
+      await setDoc(doc(db, 'users', updatedUser.id), cleanFirestoreData(updatedUser), { merge: true });
+    } catch (err) {
+      console.warn('Firestore updateCurrentUser note:', err);
+    }
 
     // Persist profile updates directly to backend database & MySQL
     try {
@@ -1352,7 +1549,11 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       });
       const data = await res.json();
       if (data && data.success && data.user) {
-        const mergedUser = { ...updatedUser, ...data.user };
+        const mergedUser = {
+          ...updatedUser,
+          ...data.user,
+          phone: updatedUser.phone || data.user.phone || ''
+        };
         setCurrentUser(mergedUser);
         sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_current_user`, JSON.stringify(mergedUser));
         localStorage.setItem(`${LOCAL_STORAGE_KEY}_current_user`, JSON.stringify(mergedUser));
@@ -1894,13 +2095,23 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setDoc(doc(db, 'gallery_items', newItem.id), cleanFirestoreData(newItem)).catch(err => {
       console.warn('Firestore gallery item add error:', err);
     });
+    fetch('/api/gallery', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newItem)
+    }).catch(err => console.warn('Gallery backend save note:', err));
   };
 
   const updateGalleryItem = (id: string, updated: Partial<GalleryItem>) => {
     setGallery(prev => prev.map(item => item.id === id ? { ...item, ...updated } : item));
-    updateDoc(doc(db, 'gallery_items', id), cleanFirestoreData(updated)).catch(err => {
+    setDoc(doc(db, 'gallery_items', id), cleanFirestoreData(updated), { merge: true }).catch(err => {
       console.warn('Firestore gallery item update error:', err);
     });
+    fetch(`/api/gallery/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated)
+    }).catch(err => console.warn('Gallery backend update note:', err));
   };
 
   const deleteGalleryItem = (id: string) => {
@@ -1908,6 +2119,9 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     deleteDoc(doc(db, 'gallery_items', id)).catch(err => {
       console.warn('Firestore gallery item delete error:', err);
     });
+    fetch(`/api/gallery/${id}`, {
+      method: 'DELETE'
+    }).catch(err => console.warn('Gallery backend delete note:', err));
   };
 
   // Offers & Automated WhatsApp Broadcast Management
@@ -2028,8 +2242,13 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const updateReview = (id: string, updated: Partial<Review>) => {
     setReviews(prev => prev.map(r => r.id === id ? { ...r, ...updated } : r));
     try {
-      updateDoc(doc(db, 'reviews', id), updated).catch(err => console.warn(err));
+      setDoc(doc(db, 'reviews', id), cleanFirestoreData(updated), { merge: true }).catch(err => console.warn(err));
     } catch {}
+    fetch(`/api/reviews/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated)
+    }).catch(() => {});
   };
 
   const deleteReview = (id: string) => {
@@ -2108,16 +2327,20 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
 
   // Settings
-  const updateSettings = (newSettings: Partial<SalonSettings>) => {
+  const updateSettings = async (newSettings: Partial<SalonSettings>): Promise<void> => {
+    const enriched = {
+      ...newSettings,
+      ...(newSettings.adminPassword ? { adminPasswordUpdatedAt: Date.now() } : {})
+    };
     setSettings(prev => {
-      const merged = { ...prev, ...newSettings };
+      const merged = { ...prev, ...enriched };
       localStorage.setItem(`${LOCAL_STORAGE_KEY}_settings`, JSON.stringify(merged));
       return merged;
     });
 
     // If advancePercentage changed, recalculate advanceDeposit for all services dynamically
-    if (newSettings.advancePercentage !== undefined) {
-      const newPct = Number(newSettings.advancePercentage);
+    if (enriched.advancePercentage !== undefined) {
+      const newPct = Number(enriched.advancePercentage);
       setServices(prev => prev.map(s => ({
         ...s,
         advanceDeposit: Math.round((s.price * newPct) / 100)
@@ -2125,15 +2348,19 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
 
     // Persist to Firebase Cloud Firestore in real time
-    setDoc(doc(db, 'salon_settings', 'main'), cleanFirestoreData(newSettings), { merge: true })
+    setDoc(doc(db, 'salon_settings', 'main'), cleanFirestoreData(enriched), { merge: true })
       .catch(err => console.warn('Failed to sync settings to Firestore:', err));
 
     // Persist to backend database API
-    fetch('/api/settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newSettings)
-    }).catch(err => console.error('Failed to sync settings to API:', err));
+    try {
+      await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(enriched)
+      });
+    } catch (err) {
+      console.error('Failed to sync settings to API:', err);
+    }
   };
 
   // Schedule Blackout & Owner Break Methods
@@ -2306,6 +2533,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         checkEmailVerification,
         resendVerificationEmail,
         resetPassword,
+        resetAdminPassword,
         openProfileModal,
         closeProfileModal,
         setIsAdminMode,

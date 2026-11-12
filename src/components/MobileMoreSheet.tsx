@@ -125,7 +125,7 @@ export const MobileMoreSheet: React.FC<MobileMoreSheetProps> = ({ isOpen, onClos
                     {currentUser.role === 'ADMIN' && <Crown className="w-3.5 h-3.5 text-amber-500" />}
                   </div>
                   <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                    {currentUser.role === 'ADMIN' ? 'Owner / Admin' : (currentUser.memberTier || 'Client')} • {currentUser.loyaltyPoints ?? 0} pts
+                    {currentUser.role === 'ADMIN' ? 'Owner / Admin' : (currentUser.memberTier || 'Client')}
                   </div>
                 </div>
               </div>

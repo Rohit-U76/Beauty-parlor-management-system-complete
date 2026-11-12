@@ -322,10 +322,10 @@ export const BookingModal: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-xs font-bold text-purple-700 dark:text-amber-400">
                       <Sparkles className="w-4 h-4 text-purple-600 dark:text-amber-500" />
-                      <span>Special Discounted Bundle Selected</span>
+                      <span>Multi-Service Selection</span>
                     </div>
                     <span className="px-2 py-0.5 rounded-full bg-purple-600 dark:bg-amber-500 text-white dark:text-zinc-950 text-[10px] font-extrabold">
-                      Active Bundle
+                      Custom Selection
                     </span>
                   </div>
                   <div className="text-sm font-bold text-zinc-900 dark:text-white">{selectedService.name}</div>
@@ -851,7 +851,7 @@ export const BookingModal: React.FC = () => {
                     </span>
                   ) : (
                     <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30">
-                      15-MIN HOLD • AWAITING OWNER SMS
+                      CONFIRMED • ADVANCE RECORDED
                     </span>
                   )}
                 </div>

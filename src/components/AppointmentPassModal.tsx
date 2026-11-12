@@ -1,25 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   X,
   Calendar,
   Clock,
   User,
-  Phone,
-  Mail,
-  MapPin,
   CheckCircle2,
   ShieldCheck,
   Download,
   Share2,
-  ExternalLink,
   Sparkles,
   Printer,
   Copy,
   Check,
-  Navigation,
-  MessageSquare,
-  Send,
-  Smartphone
+  MessageSquare
 } from 'lucide-react';
 import { Appointment } from '../types';
 import {
@@ -42,29 +35,6 @@ export const AppointmentPassModal: React.FC<AppointmentPassModalProps> = ({
 }) => {
   const { settings } = useSalon();
   const [copied, setCopied] = useState(false);
-  const [isSendingSms, setIsSendingSms] = useState(false);
-  const [smsSentStatus, setSmsSentStatus] = useState<string | null>(null);
-  const [isSendingEmail, setIsSendingEmail] = useState(false);
-  const [emailSentStatus, setEmailSentStatus] = useState<string | null>(null);
-
-  // Dynamic editable contact fields
-  const [recipientPhone, setRecipientPhone] = useState<string>(appointment?.clientPhone || '');
-  const [recipientEmail, setRecipientEmail] = useState<string>(appointment?.clientEmail || '');
-  const [showPhoneEditor, setShowPhoneEditor] = useState<boolean>(false);
-  const [showEmailEditor, setShowEmailEditor] = useState<boolean>(false);
-  const [lastWebSmsUrl, setLastWebSmsUrl] = useState<string | null>(null);
-  const [lastMailtoUrl, setLastMailtoUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (appointment) {
-      setRecipientPhone(appointment.clientPhone || '');
-      setRecipientEmail(appointment.clientEmail || '');
-      setShowPhoneEditor(false);
-      setShowEmailEditor(false);
-      setLastWebSmsUrl(null);
-      setLastMailtoUrl(null);
-    }
-  }, [appointment]);
 
   if (!isOpen || !appointment) return null;
 
@@ -90,92 +60,13 @@ export const AppointmentPassModal: React.FC<AppointmentPassModalProps> = ({
     }
   };
 
-  // Direct SMS Dispatch
-  const handleSendSms = async () => {
-    const phoneToUse = (recipientPhone || appointment.clientPhone || '').replace(/\D/g, '').slice(-10);
-    if (!phoneToUse || phoneToUse.length !== 10) {
-      setShowPhoneEditor(true);
-      return;
-    }
-    setIsSendingSms(true);
-    setSmsSentStatus(null);
-    try {
-      const res = await fetch('/api/notifications/send-sms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phone: phoneToUse,
-          clientName: appointment.clientName,
-          templateType: 'CONFIRMATION',
-          bookingRef: appointment.bookingRef,
-          serviceName: appointment.serviceName,
-          date: appointment.date,
-          timeSlot: appointment.timeSlot,
-          advancePaid: appointment.advancePaid,
-          balanceDue: appointment.balanceDue
-        })
-      });
-      const data = await res.json();
-      setSmsSentStatus(`✅ SMS Pass successfully dispatched to +91 ${phoneToUse}`);
-      if (data.webSmsUrl) {
-        setLastWebSmsUrl(data.webSmsUrl);
-      }
-      if (/Android|iPhone|iPad/i.test(navigator.userAgent) && data.webSmsUrl) {
-        window.location.href = data.webSmsUrl;
-      }
-    } catch (err) {
-      setSmsSentStatus(`✅ SMS notification sent to +91 ${phoneToUse}`);
-    } finally {
-      setIsSendingSms(false);
-      setTimeout(() => setSmsSentStatus(null), 6000);
-    }
-  };
-
   // Direct WhatsApp Dispatch
   const handleSendWhatsApp = () => {
-    const cleanPhone = (recipientPhone || appointment.clientPhone || '').replace(/[^0-9]/g, '');
+    const cleanPhone = (appointment.clientPhone || '').replace(/[^0-9]/g, '');
     const phone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
     const msg = `🌟 *MODERN UNISEX SALON APPOINTMENT CONFIRMED* 🌟\n\n📌 *Booking Ref:* ${appointment.bookingRef}\n👤 *Client:* ${appointment.clientName}\n💇 *Service:* ${appointment.serviceName}\n📅 *Date:* ${appointment.date}\n⏰ *Time Slot:* ${appointment.timeSlot}\n✂️ *Stylist:* ${appointment.stylistName}\n\n💳 *10% Advance Paid:* ₹${appointment.advancePaid} (Confirmed)\n💰 *Remaining at Salon:* ₹${appointment.balanceDue}\n📍 *Address:* ${settings.address || 'B.N. Gund Complex, Near ICICI Bank, Mohol'}\n\nPlease present this booking pass reference upon arrival. Thank you!`;
     const waUrl = `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(msg)}`;
     window.open(waUrl, '_blank');
-  };
-
-  // Direct Email Dispatch
-  const handleSendEmail = async () => {
-    const emailToUse = (recipientEmail || appointment.clientEmail || '').trim();
-    if (!emailToUse || !emailToUse.includes('@')) {
-      setShowEmailEditor(true);
-      return;
-    }
-    setIsSendingEmail(true);
-    setEmailSentStatus(null);
-    try {
-      const res = await fetch('/api/notifications/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: emailToUse,
-          clientName: appointment.clientName,
-          bookingRef: appointment.bookingRef,
-          serviceName: appointment.serviceName,
-          date: appointment.date,
-          timeSlot: appointment.timeSlot,
-          advancePaid: appointment.advancePaid,
-          balanceDue: appointment.balanceDue,
-          totalAmount: appointment.totalAmount
-        })
-      });
-      const data = await res.json();
-      setEmailSentStatus(`✅ Official receipt emailed to ${emailToUse}`);
-      if (data.mailtoUrl) {
-        setLastMailtoUrl(data.mailtoUrl);
-      }
-    } catch (err) {
-      setEmailSentStatus(`✅ Receipt prepared for ${emailToUse}`);
-    } finally {
-      setIsSendingEmail(false);
-      setTimeout(() => setEmailSentStatus(null), 6000);
-    }
   };
 
   return (
@@ -260,14 +151,6 @@ export const AppointmentPassModal: React.FC<AppointmentPassModalProps> = ({
             </div>
           </div>
 
-          {/* Instant SMS & Email Notification Alerts */}
-          {(smsSentStatus || emailSentStatus) && (
-            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span>{smsSentStatus || emailSentStatus}</span>
-            </div>
-          )}
-
           {/* Core Service & Stylist Info */}
           <div className="bg-[#0e0e11] border border-zinc-800 rounded-2xl p-4 sm:p-5 space-y-4">
             <div className="flex items-start justify-between gap-3 border-b border-zinc-800 pb-3">
@@ -333,153 +216,6 @@ export const AppointmentPassModal: React.FC<AppointmentPassModalProps> = ({
                 <div className="font-mono font-bold text-sm text-zinc-100">₹{appointment.balanceDue}</div>
               </div>
             </div>
-          </div>
-
-          {/* Quick Notification Sending Actions: SMS, Email & WhatsApp */}
-          <div className="space-y-2.5 text-xs">
-            {/* Phone editor inline */}
-            {showPhoneEditor && (
-              <div className="p-3 rounded-2xl bg-zinc-900 border border-purple-500/40 space-y-2 animate-in fade-in">
-                <div className="flex items-center justify-between text-[11px] font-bold text-purple-300">
-                  <span>Enter / Edit Mobile for SMS Pass</span>
-                  <button
-                    onClick={() => setShowPhoneEditor(false)}
-                    className="text-zinc-500 hover:text-zinc-300"
-                  >
-                    Cancel
-                  </button>
-                </div>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Smartphone className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-2.5" />
-                    <input
-                      type="tel"
-                      value={recipientPhone}
-                      onChange={e => setRecipientPhone(e.target.value)}
-                      placeholder="10-digit mobile number"
-                      className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-200 text-xs focus:outline-none focus:border-purple-500 font-mono"
-                    />
-                  </div>
-                  <button
-                    onClick={handleSendSms}
-                    disabled={isSendingSms}
-                    className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shrink-0 cursor-pointer"
-                  >
-                    {isSendingSms ? 'Sending...' : 'Send SMS'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Email editor inline */}
-            {showEmailEditor && (
-              <div className="p-3 rounded-2xl bg-zinc-900 border border-indigo-500/40 space-y-2 animate-in fade-in">
-                <div className="flex items-center justify-between text-[11px] font-bold text-indigo-300">
-                  <span>Enter / Edit Email for Official Pass Receipt</span>
-                  <button
-                    onClick={() => setShowEmailEditor(false)}
-                    className="text-zinc-500 hover:text-zinc-300"
-                  >
-                    Cancel
-                  </button>
-                </div>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Mail className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-2.5" />
-                    <input
-                      type="email"
-                      value={recipientEmail}
-                      onChange={e => setRecipientEmail(e.target.value)}
-                      placeholder="e.g. client@example.com"
-                      className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-200 text-xs focus:outline-none focus:border-indigo-500 font-mono"
-                    />
-                  </div>
-                  <button
-                    onClick={handleSendEmail}
-                    disabled={isSendingEmail}
-                    className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shrink-0 cursor-pointer"
-                  >
-                    {isSendingEmail ? 'Sending...' : 'Send Email'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Primary Action Buttons: SMS Pass & Email Receipt */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <button
-                type="button"
-                id="pass-modal-send-sms-btn"
-                onClick={handleSendSms}
-                disabled={isSendingSms}
-                className="p-2.5 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-200 font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95"
-                title={`Send SMS Pass to +91 ${recipientPhone || appointment.clientPhone || 'Mobile'}`}
-              >
-                <Smartphone className="w-4 h-4 text-purple-400" />
-                <span>{isSendingSms ? 'Dispatching SMS...' : 'Send SMS Pass'}</span>
-              </button>
-
-              <button
-                type="button"
-                id="pass-modal-send-email-btn"
-                onClick={handleSendEmail}
-                disabled={isSendingEmail}
-                className="p-2.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-200 font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95"
-                title={`Email Receipt to ${recipientEmail || appointment.clientEmail || 'Email'}`}
-              >
-                <Mail className="w-4 h-4 text-indigo-400" />
-                <span>{isSendingEmail ? 'Dispatching Email...' : 'Send Email Receipt'}</span>
-              </button>
-            </div>
-
-            {/* Secondary Actions: Quick Edit Info & Fallback Links */}
-            <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] text-zinc-400">
-              <div className="flex items-center gap-2">
-                <span>SMS to: <strong className="text-zinc-200 font-mono">{recipientPhone || appointment.clientPhone || 'Not set'}</strong></span>
-                <button
-                  type="button"
-                  onClick={() => setShowPhoneEditor(!showPhoneEditor)}
-                  className="text-purple-400 hover:underline cursor-pointer"
-                >
-                  Edit
-                </button>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span>Email to: <strong className="text-zinc-200 font-mono truncate max-w-[120px] inline-block align-bottom">{recipientEmail || appointment.clientEmail || 'Add email'}</strong></span>
-                <button
-                  type="button"
-                  onClick={() => setShowEmailEditor(!showEmailEditor)}
-                  className="text-indigo-400 hover:underline cursor-pointer"
-                >
-                  {recipientEmail || appointment.clientEmail ? 'Edit' : 'Add'}
-                </button>
-              </div>
-            </div>
-
-            {/* Direct Fallback Links if triggered */}
-            {(lastWebSmsUrl || lastMailtoUrl) && (
-              <div className="flex items-center gap-2 pt-1 animate-in fade-in">
-                {lastWebSmsUrl && (
-                  <a
-                    href={lastWebSmsUrl}
-                    className="flex-1 py-1.5 px-3 rounded-lg bg-zinc-900 border border-purple-500/30 text-purple-300 text-[11px] font-semibold flex items-center justify-center gap-1.5 hover:bg-zinc-800 transition"
-                  >
-                    <ExternalLink className="w-3 h-3 text-purple-400" />
-                    <span>Open in Messages App</span>
-                  </a>
-                )}
-                {lastMailtoUrl && (
-                  <a
-                    href={lastMailtoUrl}
-                    className="flex-1 py-1.5 px-3 rounded-lg bg-zinc-900 border border-indigo-500/30 text-indigo-300 text-[11px] font-semibold flex items-center justify-center gap-1.5 hover:bg-zinc-800 transition"
-                  >
-                    <ExternalLink className="w-3 h-3 text-indigo-400" />
-                    <span>Open in Default Mail App</span>
-                  </a>
-                )}
-              </div>
-            )}
           </div>
 
           {/* Action Buttons: Calendar */}

@@ -70,7 +70,6 @@ import { AdminTermsPolicies } from '../components/AdminTermsPolicies';
 import { ReceiptModal } from '../components/ReceiptModal';
 import { AdminOfferBroadcastModal } from '../components/AdminOfferBroadcastModal';
 import { AdminSlotBlackoutManager } from '../components/AdminSlotBlackoutManager';
-import { AdminBankSmsHub } from '../components/AdminBankSmsHub';
 
 export const AdminSuite: React.FC = () => {
   const {
@@ -343,25 +342,39 @@ export const AdminSuite: React.FC = () => {
             setActionFeedbackToast(`✅ Video "${file.name}" uploaded successfully!`);
             setTimeout(() => setActionFeedbackToast(null), 3500);
 
-            // Auto-extract thumbnail frame from video using canvas
+            // Auto-extract compact thumbnail frame from video using canvas
             try {
               const tempVid = document.createElement('video');
               tempVid.src = data.videoUrl;
               tempVid.muted = true;
+              tempVid.playsInline = true;
+              tempVid.preload = 'metadata';
               tempVid.crossOrigin = 'anonymous';
-              tempVid.currentTime = 0.5;
-              tempVid.onloadeddata = () => {
-                const canvas = document.createElement('canvas');
-                canvas.width = tempVid.videoWidth || 640;
-                canvas.height = tempVid.videoHeight || 360;
-                const ctx = canvas.getContext('2d');
-                if (ctx) {
-                  ctx.drawImage(tempVid, 0, 0, canvas.width, canvas.height);
-                  const thumb = canvas.toDataURL('image/jpeg', 0.7);
-                  if (!isEditing && (!newGalleryImg || newGalleryImg.includes('unsplash'))) {
-                    setNewGalleryImg(thumb);
+              tempVid.onloadedmetadata = () => {
+                const targetTime = tempVid.duration && isFinite(tempVid.duration)
+                  ? Math.min(0.5, tempVid.duration / 2)
+                  : 0.1;
+                tempVid.currentTime = targetTime;
+              };
+              tempVid.onseeked = () => {
+                try {
+                  const vw = tempVid.videoWidth || 640;
+                  const vh = tempVid.videoHeight || 360;
+                  const scale = Math.min(1, 480 / Math.max(vw, vh));
+                  const canvas = document.createElement('canvas');
+                  canvas.width = Math.max(1, Math.round(vw * scale));
+                  canvas.height = Math.max(1, Math.round(vh * scale));
+                  const ctx = canvas.getContext('2d');
+                  if (ctx) {
+                    ctx.drawImage(tempVid, 0, 0, canvas.width, canvas.height);
+                    const thumb = canvas.toDataURL('image/jpeg', 0.65);
+                    if (isEditing) {
+                      setEditingGalleryItem(prev => prev && (!prev.imageUrl || prev.imageUrl.includes('unsplash')) ? { ...prev, imageUrl: thumb } : prev);
+                    } else if (!newGalleryImg || newGalleryImg.includes('unsplash')) {
+                      setNewGalleryImg(thumb);
+                    }
                   }
-                }
+                } catch {}
               };
             } catch {}
           } else {
@@ -891,13 +904,6 @@ export const AdminSuite: React.FC = () => {
                     <span>View Appointments ({confirmedCount})</span>
                   </button>
                   <button
-                    onClick={() => setAdminTab('bank-hub' as any)}
-                    className="px-4 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 text-xs font-bold flex items-center gap-1.5 cursor-pointer border border-emerald-500/30"
-                  >
-                    <Smartphone className="w-3.5 h-3.5" />
-                    <span>Bank SMS Ledger &amp; Simulator</span>
-                  </button>
-                  <button
                     onClick={openAddStaffModal}
                     className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
                   >
@@ -1018,7 +1024,18 @@ export const AdminSuite: React.FC = () => {
                               <MessageSquare className="w-3 h-3" />
                               <span>WhatsApp</span>
                             </a>
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {app.paymentScreenshotUrl && (
+                                <button
+                                  type="button"
+                                  onClick={() => setViewingScreenshotUrl(app.paymentScreenshotUrl!)}
+                                  className="px-2 py-1 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 text-purple-300 font-bold text-[11px] flex items-center gap-1 transition cursor-pointer"
+                                  title="View Payment Receipt Screenshot uploaded by client"
+                                >
+                                  <ImageIcon className="w-3 h-3 text-purple-400" />
+                                  <span>Screenshot</span>
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 onClick={() => setReceiptAppointment(app)}
@@ -2558,11 +2575,11 @@ export const AdminSuite: React.FC = () => {
               </div>
 
 
-              {/* CARD 3: SALON PROFILE & POLICIES */}
+              {/* CARD 2: SALON PROFILE & POLICIES */}
               <div className="p-6 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4 shadow-sm text-xs">
                 <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2 border-b border-zinc-800 pb-3">
                   <Scissors className="w-4 h-4 text-amber-400" />
-                  <span>3. Salon Identity &amp; Contact Details</span>
+                  <span>2. Salon Identity &amp; Contact Details</span>
                 </h3>
 
                 <div>
@@ -2647,12 +2664,12 @@ export const AdminSuite: React.FC = () => {
                 </div>
               </div>
 
-              {/* CARD 4: ADMIN MASTER SECURITY & PASSWORD */}
+              {/* CARD 3: ADMIN MASTER SECURITY & PASSWORD */}
               <div className="p-6 rounded-2xl bg-zinc-900 border border-amber-500/40 space-y-4 shadow-sm text-xs">
                 <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
                   <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
                     <ShieldCheck className="w-4 h-4 text-amber-400" />
-                    <span>4. Unique Admin Password &amp; Master Security Credentials</span>
+                    <span>3. Unique Admin Password &amp; Master Security Credentials</span>
                   </h3>
                   <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
                     Firestore Real-time
@@ -3165,8 +3182,11 @@ export const AdminSuite: React.FC = () => {
                         <label className="text-zinc-400 block mb-1">Video Player Preview:</label>
                         <div className="rounded-xl overflow-hidden border border-zinc-800 bg-black aspect-video flex items-center justify-center">
                           <video
+                            key={newGalleryVideoUrl}
                             src={newGalleryVideoUrl}
                             controls
+                            playsInline
+                            preload="auto"
                             className="w-full h-full object-contain"
                           />
                         </div>
@@ -3184,7 +3204,7 @@ export const AdminSuite: React.FC = () => {
                 <div className="space-y-2">
                   <div className="flex gap-2">
                     <input
-                      type="url"
+                      type="text"
                       required
                       placeholder="https://images.unsplash.com/..."
                       value={newGalleryImg}
@@ -3381,7 +3401,7 @@ export const AdminSuite: React.FC = () => {
                 <div className="space-y-2">
                   <div className="flex gap-2">
                     <input
-                      type="url"
+                      type="text"
                       required
                       value={editingGalleryItem.imageUrl}
                       onChange={(e) => setEditingGalleryItem({ ...editingGalleryItem, imageUrl: e.target.value })}
@@ -3448,13 +3468,49 @@ export const AdminSuite: React.FC = () => {
             </div>
 
             <div className="rounded-2xl overflow-hidden bg-black aspect-video flex items-center justify-center border border-zinc-800">
-              <video
-                src={adminActiveVideoPreview.videoUrl}
-                controls
-                autoPlay
-                playsInline
-                className="w-full h-full object-contain"
-              />
+              {(() => {
+                const url = (adminActiveVideoPreview.videoUrl || '').trim();
+                const ytMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+                const vimeoMatch = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+                if (ytMatch) {
+                  return (
+                    <iframe
+                      key={adminActiveVideoPreview.id}
+                      src={`https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&rel=0`}
+                      title={adminActiveVideoPreview.title}
+                      className="w-full h-full border-0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  );
+                }
+                if (vimeoMatch) {
+                  return (
+                    <iframe
+                      key={adminActiveVideoPreview.id}
+                      src={`https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1`}
+                      title={adminActiveVideoPreview.title}
+                      className="w-full h-full border-0"
+                      allow="autoplay; fullscreen; picture-in-picture"
+                      allowFullScreen
+                    />
+                  );
+                }
+                return (
+                  <video
+                    key={`${adminActiveVideoPreview.id}-${url}`}
+                    src={url}
+                    poster={adminActiveVideoPreview.imageUrl}
+                    controls
+                    autoPlay
+                    playsInline
+                    preload="auto"
+                    className="w-full h-full object-contain"
+                  >
+                    Your browser does not support playing this video format.
+                  </video>
+                );
+              })()}
             </div>
 
             <div className="flex items-center justify-between text-xs text-zinc-400 pt-1">

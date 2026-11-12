@@ -151,22 +151,17 @@ export const CustomerReviews: React.FC<CustomerReviewsProps> = ({
     if (!rev) return;
 
     const isLiked = !!userLikedReviews[id];
-    if (isLiked) {
-      showToast('You already marked this review as helpful!');
-      return;
-    }
-
     const currentCount = typeof rev.helpfulCount === 'number' ? rev.helpfulCount : 0;
-    const newCount = currentCount + 1;
+    const newCount = isLiked ? Math.max(0, currentCount - 1) : currentCount + 1;
 
-    const nextLiked = { ...userLikedReviews, [id]: true };
+    const nextLiked = { ...userLikedReviews, [id]: !isLiked };
     setUserLikedReviews(nextLiked);
     try {
       localStorage.setItem('modern_salon_user_liked_reviews', JSON.stringify(nextLiked));
     } catch {}
 
     updateReview(id, { helpfulCount: newCount });
-    showToast('Marked review as helpful (+1)');
+    showToast(isLiked ? 'Removed helpful vote' : 'Marked review as helpful (+1)');
   };
 
   const handleTogglePin = (id: string, e?: React.MouseEvent) => {

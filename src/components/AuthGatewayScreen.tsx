@@ -13,7 +13,6 @@ import {
   Eye,
   EyeOff,
   Crown,
-  Gift,
   Star,
   Check,
   Compass,
@@ -37,9 +36,9 @@ export const AuthGatewayScreen: React.FC<AuthGatewayScreenProps> = ({ initialTab
     checkEmailVerification,
     resendVerificationEmail,
     resetPassword,
+    resetAdminPassword,
     setIsGuestMode,
     settings,
-    updateSettings,
     currentUser
   } = useSalon();
 
@@ -200,8 +199,12 @@ export const AuthGatewayScreen: React.FC<AuthGatewayScreenProps> = ({ initialTab
 
     setIsLoading(true);
     try {
-      await updateSettings({ adminPassword: adminNewPassword.trim() });
+      const res = await resetAdminPassword(target, cleanPin, adminNewPassword.trim());
       setIsLoading(false);
+      if (!res.success) {
+        setErrorMsg(res.message);
+        return;
+      }
       setSuccessMsg('✅ Admin Master Password updated successfully! It has been saved into Admin Settings. You can now sign in with your new password.');
       setAdminSecret(adminNewPassword.trim());
       setAdminResetPin('');
@@ -341,11 +344,12 @@ export const AuthGatewayScreen: React.FC<AuthGatewayScreenProps> = ({ initialTab
                 {activeTab === 'customer_register' && 'Create Your Salon Account'}
                 {activeTab === 'admin_login' && 'Salon Owner & Staff Login'}
               </h2>
-              <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400">
-                {activeTab === 'customer_login' && 'Manage your appointment passes, booking history, and fast check-in'}
-                {activeTab === 'customer_register' && 'Register your client profile for quick and seamless appointments'}
-                {activeTab === 'admin_login' && 'Master Stylist Dashboard & Business Operations'}
-              </p>
+              {activeTab !== 'customer_login' && (
+                <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400">
+                  {activeTab === 'customer_register' && 'Register your client profile for quick and seamless appointments'}
+                  {activeTab === 'admin_login' && 'Master Stylist Dashboard & Business Operations'}
+                </p>
+              )}
             </div>
 
             {/* 3 Clear Segmented Tabs */}
@@ -382,11 +386,8 @@ export const AuthGatewayScreen: React.FC<AuthGatewayScreenProps> = ({ initialTab
                     : 'text-zinc-600 dark:text-zinc-400 hover:text-purple-700 dark:hover:text-zinc-200'
                 }`}
               >
-                <Gift className="w-3.5 h-3.5" />
+                <Sparkles className="w-3.5 h-3.5" />
                 <span className="truncate">Sign Up</span>
-                <span className="hidden sm:inline text-[9px] font-black px-1.5 py-0.2 bg-purple-100 text-purple-900 dark:bg-amber-400 dark:text-zinc-950 rounded-full ml-0.5">
-                  +100pt
-                </span>
               </button>
 
               <button
@@ -707,7 +708,7 @@ export const AuthGatewayScreen: React.FC<AuthGatewayScreenProps> = ({ initialTab
                     <div className="w-5 h-5 border-2 border-white dark:border-zinc-950 border-t-transparent rounded-full animate-spin" />
                   ) : (
                     <>
-                      <span>Complete Registration &amp; Collect 100 Pts</span>
+                      <span>Complete Registration</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
@@ -735,7 +736,7 @@ export const AuthGatewayScreen: React.FC<AuthGatewayScreenProps> = ({ initialTab
                     <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.03 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
                     <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
                   </svg>
-                  <span>Sign up with Google (+100 Pts)</span>
+                  <span>Sign up with Google</span>
                 </button>
 
                 <div className="text-center pt-1">

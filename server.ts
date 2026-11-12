@@ -214,9 +214,6 @@ function syncCustomerStats(db: any) {
     if (matchingUser) {
       matchingUser.totalVisits = cust.totalVisits;
       matchingUser.memberTier = cust.tier;
-      if (matchingUser.loyaltyPoints === undefined || matchingUser.loyaltyPoints === null || matchingUser.loyaltyPoints < 100) {
-        matchingUser.loyaltyPoints = 100 + (cust.totalVisits * 50);
-      }
     }
   }
 }
@@ -233,6 +230,7 @@ function readDb() {
     if (!db.notifications) db.notifications = [];
     if (!db.reviews) db.reviews = [];
     if (!db.customers) db.customers = [];
+    if (!db.gallery) db.gallery = [];
     if (!db.broadcastLogs) db.broadcastLogs = [];
     if (!db.verifiedDeposits) db.verifiedDeposits = [];
     if (!db.offers || db.offers.length === 0) {
@@ -520,7 +518,16 @@ async function startServer() {
   if (!fs.existsSync(VIDEO_UPLOAD_DIR)) {
     fs.mkdirSync(VIDEO_UPLOAD_DIR, { recursive: true });
   }
-  app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads')));
+  app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads'), {
+    setHeaders: (res, filePath) => {
+      res.setHeader('Accept-Ranges', 'bytes');
+      const ext = path.extname(filePath).toLowerCase();
+      if (ext === '.mp4' || ext === '.m4v') res.setHeader('Content-Type', 'video/mp4');
+      else if (ext === '.webm') res.setHeader('Content-Type', 'video/webm');
+      else if (ext === '.mov') res.setHeader('Content-Type', 'video/quicktime');
+      else if (ext === '.ogg' || ext === '.ogv') res.setHeader('Content-Type', 'video/ogg');
+    }
+  }));
 
   // Dedicated Video Upload Endpoint for Salon Gallery Reels
   app.post('/api/gallery/upload-video', (req, res) => {
@@ -531,15 +538,21 @@ async function startServer() {
       }
 
       // Extract base64 payload
-      const matches = videoBase64.match(/^data:([A-Za-z0-9-+\/]+);base64,(.+)$/);
+      const matches = videoBase64.match(/^data:([^;]+);base64,(.+)$/);
       let buffer: Buffer;
       let ext = 'mp4';
 
+      const fileExtMatch = String(fileName || '').toLowerCase().match(/\.(mp4|webm|ogg|ogv|mov|m4v)$/);
+      if (fileExtMatch) {
+        ext = fileExtMatch[1] === 'ogv' ? 'ogg' : (fileExtMatch[1] === 'm4v' ? 'mp4' : fileExtMatch[1]);
+      }
+
       if (matches && matches.length === 3) {
-        const mime = matches[1];
+        const mime = matches[1].toLowerCase();
         if (mime.includes('webm')) ext = 'webm';
         else if (mime.includes('ogg')) ext = 'ogg';
         else if (mime.includes('quicktime')) ext = 'mov';
+        else if (mime.includes('mp4')) ext = 'mp4';
         buffer = Buffer.from(matches[2], 'base64');
       } else {
         buffer = Buffer.from(videoBase64, 'base64');
@@ -547,6 +560,7 @@ async function startServer() {
 
       const timestamp = Date.now();
       const sanitizedName = (fileName || 'salon_reel')
+        .replace(/\.[^.]+$/, '')
         .replace(/[^a-zA-Z0-9_-]/g, '_')
         .slice(0, 30);
       const generatedFilename = `video_${timestamp}_${sanitizedName}.${ext}`;
@@ -569,6 +583,62 @@ async function startServer() {
         success: false,
         message: 'Failed to process and store video file: ' + err.message
       });
+    }
+  });
+
+  // --- GALLERY ITEMS CRUD API (DATABASE BACKED) ---
+  app.get('/api/gallery', (req, res) => {
+    try {
+      const db = readDb();
+      res.json({ success: true, gallery: db.gallery || [] });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/gallery', (req, res) => {
+    try {
+      const db = readDb();
+      if (!db.gallery) db.gallery = [];
+      const item = {
+        ...req.body,
+        id: req.body.id || `gal-${Date.now()}`
+      };
+      db.gallery = [item, ...db.gallery.filter((g: any) => g.id !== item.id)];
+      writeDb(db);
+      res.json({ success: true, item, gallery: db.gallery });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.put('/api/gallery/:id', (req, res) => {
+    try {
+      const { id } = req.params;
+      const db = readDb();
+      if (!db.gallery) db.gallery = [];
+      const idx = db.gallery.findIndex((g: any) => g.id === id);
+      if (idx >= 0) {
+        db.gallery[idx] = { ...db.gallery[idx], ...req.body, id };
+      } else {
+        db.gallery.unshift({ ...req.body, id });
+      }
+      writeDb(db);
+      res.json({ success: true, item: db.gallery.find((g: any) => g.id === id), gallery: db.gallery });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.delete('/api/gallery/:id', (req, res) => {
+    try {
+      const { id } = req.params;
+      const db = readDb();
+      db.gallery = (db.gallery || []).filter((g: any) => g.id !== id);
+      writeDb(db);
+      res.json({ success: true, gallery: db.gallery });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
     }
   });
 
@@ -675,7 +745,6 @@ async function startServer() {
         password: password,
         role: 'CUSTOMER',
         memberTier: 'Silver VIP',
-        loyaltyPoints: 100, // 100 reward points bonus on registration
         totalVisits: 0,
         memberSince: new Date().getFullYear().toString(),
         preferredServices: preferredServices || []
@@ -688,7 +757,7 @@ async function startServer() {
       res.json({
         success: true,
         user: newUser,
-        message: 'Account successfully registered! 100 welcome reward points credited to your wallet.'
+        message: 'Account successfully registered!'
       });
     } catch (err: any) {
       console.error('Error during registration:', err);
@@ -707,33 +776,39 @@ async function startServer() {
       const cleanIdent = identifier.toLowerCase().trim();
       const cleanNum = identifier.replace(/[^0-9]/g, '');
 
-      // Admin Master Password / PIN check against settings
-      const adminPass = (db.settings && db.settings.adminPassword) || 'Salon@Owner#2026';
-      const adminPin = (db.settings && db.settings.adminPin) || '8104';
-      const isMasterPassMatch = password === adminPass || (adminPin && password === adminPin);
-      const isRecognizedAdminIdent = cleanIdent === 'admin' || cleanIdent === 'owner' || cleanIdent === 'rohitumdale@gmail.com' || cleanNum === '8104026257';
+      // Admin Master Password / PIN check against settings (strictly only when role === 'ADMIN')
+      if (role === 'ADMIN') {
+        const adminPass = (db.settings && db.settings.adminPassword) || 'Salon@Owner#2026';
+        const adminPin = (db.settings && db.settings.adminPin) || '8104';
+        const isMasterPassMatch = password === adminPass || (adminPin && password === adminPin);
+        const isRecognizedAdminIdent = cleanIdent === 'admin' || cleanIdent === 'owner' || cleanIdent === 'rohitumdale@gmail.com' || cleanIdent === 'dineshghodake941@gmail.com' || cleanNum === '8104026257';
 
-      if (role === 'ADMIN' && isMasterPassMatch && isRecognizedAdminIdent) {
-        const adminUser = db.users.find((u: any) => u.role === 'ADMIN') || {
-          id: 'usr-admin-owner',
-          name: 'Salon Owner (Rohit Umdale)',
-          username: 'admin',
-          email: 'rohitumdale@gmail.com',
-          phone: '8104026257',
-          role: 'ADMIN',
-          memberTier: 'Owner Admin',
-          loyaltyPoints: 5000,
-          memberSince: '2022'
-        };
-        return res.json({
-          success: true,
-          user: adminUser,
-          message: 'Welcome back, Salon Owner! Admin suite unlocked.'
+        if (isMasterPassMatch && isRecognizedAdminIdent) {
+          const adminUser = db.users.find((u: any) => u.role === 'ADMIN') || {
+            id: 'usr-admin-owner',
+            name: 'Salon Owner',
+            username: 'admin',
+            email: 'rohitumdale@gmail.com',
+            phone: '8104026257',
+            role: 'ADMIN',
+            memberTier: 'Owner Admin',
+            memberSince: '2022'
+          };
+          return res.json({
+            success: true,
+            user: adminUser,
+            message: 'Welcome back, Salon Owner! Admin suite unlocked.'
+          });
+        }
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid admin credentials. Please check your admin email/username and password or PIN.'
         });
       }
 
-      // Check client accounts
+      // Check client accounts only (strictly isolated from ADMIN accounts & adminPassword)
       const user = db.users.find((u: any) => {
+        if (u.role === 'ADMIN') return false;
         const uEmail = (u.email || '').toLowerCase();
         const uUsername = (u.username || '').toLowerCase();
         const uPhone = (u.phone || '').replace(/[^0-9]/g, '');
@@ -756,6 +831,53 @@ async function startServer() {
     } catch (err: any) {
       console.error('Error during login:', err);
       res.status(500).json({ success: false, message: 'Login failed due to server error' });
+    }
+  });
+
+  // --- ISOLATED ADMIN PASSWORD RESET API ---
+  app.post('/api/auth/admin-reset-password', async (req, res) => {
+    try {
+      const { pin, newPassword } = req.body;
+      const db = readDb();
+      const validPin = String((db.settings && db.settings.adminPin) || '8104').trim();
+
+      if (!pin || String(pin).trim() !== validPin) {
+        return res.status(403).json({
+          success: false,
+          message: 'Invalid Owner Master Security PIN.'
+        });
+      }
+
+      if (!newPassword || String(newPassword).trim().length < 6) {
+        return res.status(400).json({
+          success: false,
+          message: 'New Admin password must be at least 6 characters.'
+        });
+      }
+
+      const updatedPassword = String(newPassword).trim();
+      const updatedAt = Date.now();
+      db.settings = {
+        ...(db.settings || {}),
+        adminPassword: updatedPassword,
+        adminPasswordUpdatedAt: updatedAt
+      };
+      // Strictly isolated: never modify client records in db.users when resetting Admin password
+      writeDb(db);
+
+      if (isMySQLConnected()) {
+        await saveSettingsToMySQL(db.settings);
+      }
+
+      console.log(`[Admin Security Reset]: Admin Master Password updated in settings (isolated from client accounts).`);
+      return res.json({
+        success: true,
+        settings: db.settings,
+        message: 'Admin Master Password updated successfully!'
+      });
+    } catch (err: any) {
+      console.error('Error resetting admin password:', err);
+      return res.status(500).json({ success: false, message: 'Failed to update admin password.' });
     }
   });
 
@@ -801,7 +923,6 @@ async function startServer() {
 
       let isNewUser = false;
       if (!user) {
-        // Create new customer account with bonus loyalty points
         const cleanUsername = email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_');
         user = {
           id: `usr-google-${Date.now()}`,
@@ -811,7 +932,6 @@ async function startServer() {
           phone: '',
           role: 'CUSTOMER',
           memberTier: 'Silver VIP',
-          loyaltyPoints: 100, // 100 reward points bonus on registration
           totalVisits: 0,
           memberSince: new Date().getFullYear().toString(),
           preferredServices: [],
@@ -838,7 +958,7 @@ async function startServer() {
         user,
         isNewUser,
         message: isNewUser
-          ? `Welcome to Modern Unisex Salon, ${user.name}! 100 reward points credited to your account.`
+          ? `Welcome to Modern Unisex Salon, ${user.name}!`
           : `Welcome back, ${user.name}! Signed in with Google.`
       });
     } catch (err: any) {
@@ -856,37 +976,54 @@ async function startServer() {
     }
   });
 
-  // --- USER PROFILE UPDATE API (DATABASE & MYSQL BACKED) ---
+  // --- USER PROFILE UPDATE API (DATABASE & MYSQL BACKED WITH UPSERT) ---
   app.put('/api/auth/users/:id', async (req, res) => {
     try {
       const { id } = req.params;
-      const updates = req.body;
+      const updates = req.body || {};
       const db = readDb();
       let userIndex = db.users.findIndex((u: any) => u.id === id);
-      
-      // Resilient Fallback: If ID differs (e.g. session vs custom id), match by phone or email
+
+      // Resilient Fallback: Match by email or phone if ID differs
       if (userIndex === -1 && updates) {
         const cleanPhone = (updates.phone || '').replace(/[^0-9]/g, '');
         const cleanEmail = (updates.email || '').toLowerCase().trim();
         userIndex = db.users.findIndex((u: any) => {
+          if (u.role === 'ADMIN') return false;
           const uPhone = (u.phone || '').replace(/[^0-9]/g, '');
           const uEmail = (u.email || '').toLowerCase().trim();
-          return (cleanPhone && uPhone && cleanPhone === uPhone) ||
-                 (cleanEmail && uEmail && cleanEmail === uEmail);
+          return (cleanEmail && uEmail && cleanEmail === uEmail) ||
+                 (cleanPhone && uPhone && cleanPhone === uPhone);
         });
       }
 
-      if (userIndex === -1) {
-        return res.status(404).json({ success: false, message: 'User not found in database' });
-      }
-
-      // Safe update - do not inadvertently overwrite critical security fields
+      // Safe update - do not inadvertently overwrite critical security fields or wipe non-empty phone
       const safeUpdates = { ...updates };
       delete safeUpdates.role;
       delete safeUpdates.pin;
 
-      const updatedUser = { ...db.users[userIndex], ...safeUpdates };
-      db.users[userIndex] = updatedUser;
+      let updatedUser: any;
+      if (userIndex === -1) {
+        // Upsert new user record (common for Firebase Auth UID users)
+        updatedUser = {
+          id,
+          role: 'CUSTOMER',
+          memberTier: 'Silver VIP',
+          totalVisits: 0,
+          memberSince: new Date().getFullYear().toString(),
+          preferredServices: [],
+          ...safeUpdates
+        };
+        db.users.push(updatedUser);
+      } else {
+        const existing = db.users[userIndex];
+        // Never overwrite an existing non-empty phone with empty string unless explicitly requested
+        if ((safeUpdates.phone === undefined || safeUpdates.phone === '') && existing.phone) {
+          safeUpdates.phone = existing.phone;
+        }
+        updatedUser = { ...existing, ...safeUpdates };
+        db.users[userIndex] = updatedUser;
+      }
 
       // Also sync customer in CRM list
       const cleanPhone = (updatedUser.phone || '').replace(/[^0-9]/g, '');
@@ -1238,12 +1375,19 @@ async function startServer() {
     }
   });
 
-  app.put('/api/settings', (req, res) => {
+  app.put('/api/settings', async (req, res) => {
     try {
       const db = readDb();
-      db.settings = { ...db.settings, ...req.body };
+      const updates = { ...(req.body || {}) };
+      if (updates.adminPassword && updates.adminPassword !== db.settings?.adminPassword) {
+        updates.adminPasswordUpdatedAt = Date.now();
+      }
+      db.settings = { ...db.settings, ...updates };
       writeDb(db);
-      console.log('[Settings Updated in DB]:', req.body);
+      if (isMySQLConnected()) {
+        await saveSettingsToMySQL(db.settings);
+      }
+      console.log('[Settings Updated in DB]:', updates);
       res.json({ success: true, settings: db.settings, message: 'Settings updated successfully' });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
@@ -2231,6 +2375,7 @@ async function startServer() {
         upiTransactionId: utr,
         paymentMethod: payload.paymentMethod || 'Direct Bank UPI / Scanner',
         scannerUsed,
+        paymentScreenshotUrl: payload.paymentScreenshotUrl || '',
         razorpayPaymentId: utr,
         razorpayOrderId: payload.razorpayOrderId || `upi_${Date.now()}`,
         createdAt: new Date().toISOString(),
@@ -2348,6 +2493,24 @@ async function startServer() {
       db.reviews.unshift(newReview);
       writeDb(db);
       res.status(201).json({ success: true, review: newReview });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.put('/api/reviews/:id', (req, res) => {
+    try {
+      const { id } = req.params;
+      const db = readDb();
+      if (!db.reviews) db.reviews = [];
+      const idx = db.reviews.findIndex((r: any) => r.id === id);
+      if (idx >= 0) {
+        db.reviews[idx] = { ...db.reviews[idx], ...req.body, id };
+      } else {
+        db.reviews.unshift({ ...req.body, id });
+      }
+      writeDb(db);
+      res.json({ success: true, review: db.reviews.find((r: any) => r.id === id) });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
     }
@@ -2544,8 +2707,7 @@ MANDATORY RULES:
       // DETERMINISTIC MULTI-OPTION SYNERGISTIC BUNDLER
       // Accurately calculates pricing and pairs all selected services
       const rawSum = servicesList.reduce((sum, s) => sum + getPrice(s), 0);
-      const comboDiscount = servicesList.length > 1 ? 0.85 : 1; // 15% discount for multi-service bundle
-      const allInTotal = Math.max(800, Math.round((rawSum * comboDiscount) / 50) * 50);
+      const allInTotal = Math.max(800, Math.round(rawSum / 50) * 50);
       const allInDeposit = Math.round((allInTotal * advPct) / 100);
 
       // Construct Title based on multiple choices
@@ -2575,7 +2737,7 @@ MANDATORY RULES:
           recommendedServices: servicesList,
           estimatedTotal: allInTotal,
           advanceDeposit: allInDeposit,
-          expertReason: `Curated specifically combining all ${servicesList.length} of your chosen services (${servicesList.join(' + ')}) with a 15% multi-service combo discount. Formulated to resolve ${concernsText} in time for your ${occ}.`,
+          expertReason: `Curated specifically combining all ${servicesList.length} of your chosen services (${servicesList.join(' + ')}). Formulated to resolve ${concernsText} in time for your ${occ}.`,
           routineTip: routineTips[0]
         }
       ];

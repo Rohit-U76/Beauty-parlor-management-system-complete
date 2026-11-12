@@ -266,6 +266,7 @@ export interface SalonSettings {
   gstNumber?: string;
   staffType?: string;
   adminPassword?: string;
+  adminPasswordUpdatedAt?: number;
   adminPin?: string;
   adminEmails?: string[];
   blockedWindows?: BlockedSlotWindow[];

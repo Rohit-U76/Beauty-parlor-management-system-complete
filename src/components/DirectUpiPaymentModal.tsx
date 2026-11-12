@@ -3,7 +3,6 @@ import {
   X,
   ShieldCheck,
   CheckCircle2,
-  Lock,
   Smartphone,
   Building2,
   QrCode,
@@ -12,7 +11,6 @@ import {
   ExternalLink,
   Zap,
   AlertCircle,
-  HelpCircle,
   Upload,
   ArrowRight,
   Info
@@ -112,19 +110,43 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
   const [showSuccessScreen, setShowSuccessScreen] = useState<boolean>(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  // Real Bank SMS Webhook Polling & Verification States
-  const [isPollingBankSms, setIsPollingBankSms] = useState<boolean>(false);
-  const [pollAttempt, setPollAttempt] = useState<number>(1);
-  const [verifiedBankName, setVerifiedBankName] = useState<string>('');
-  const [verifiedAmount, setVerifiedAmount] = useState<number>(0);
-  const [showManualAdminFallback, setShowManualAdminFallback] = useState<boolean>(false);
-  const [isSubmittingManualHold, setIsSubmittingManualHold] = useState<boolean>(false);
-
   const [showDesktopScanNotice, setShowDesktopScanNotice] = useState<boolean>(false);
   const [hasLaunchedUpiApp, setHasLaunchedUpiApp] = useState<boolean>(false);
   const [showReturnedFromAppBanner, setShowReturnedFromAppBanner] = useState<boolean>(false);
 
-  // Handler to upload PhonePe payment receipt screenshot
+  // Compress image via canvas so Firestore fallback never exceeds 1MB doc limit
+  const compressImageDataUrl = (dataUrl: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 900;
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(dataUrl);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.72));
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+  };
+
+  // Handler to upload PhonePe payment receipt screenshot (Optional)
   const handleScreenshotFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -146,26 +168,30 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
     try {
       const reader = new FileReader();
       reader.onload = async () => {
-        const base64Data = reader.result as string;
+        const rawBase64 = reader.result as string;
+        const compressedBase64 = await compressImageDataUrl(rawBase64);
         try {
           const res = await fetch('/api/appointments/upload-screenshot', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              imageBase64: base64Data,
+              imageBase64: rawBase64,
               fileName: file.name,
               bookingRef: sessionRefCode
             })
           });
-          const resData = await res.json();
-          if (resData.success && resData.screenshotUrl) {
-            setUploadedScreenshotUrl(resData.screenshotUrl);
-          } else {
-            // Fallback to direct data URL so screenshot is never lost
-            setUploadedScreenshotUrl(base64Data);
+          if (res.ok) {
+            const resData = await res.json();
+            if (resData.success && resData.screenshotUrl) {
+              setUploadedScreenshotUrl(resData.screenshotUrl);
+              setIsUploadingScreenshot(false);
+              return;
+            }
           }
+          // Compressed fallback so screenshot persists cleanly across Firestore & backend
+          setUploadedScreenshotUrl(compressedBase64);
         } catch {
-          setUploadedScreenshotUrl(base64Data);
+          setUploadedScreenshotUrl(compressedBase64);
         } finally {
           setIsUploadingScreenshot(false);
         }
@@ -302,10 +328,9 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
     }
   };
 
-  // Submit and verify payment via UTR reference
-  const handleVerifyPayment = async () => {
+  // Submit UTR & optional payment screenshot directly to confirm booking
+  const handleVerifyPayment = () => {
     setVerificationError('');
-    setShowManualAdminFallback(false);
     const cleanUtr = utrNumber.trim();
 
     if (!cleanUtr) {
@@ -319,123 +344,32 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
     }
 
     setIsVerifying(true);
-
-    try {
-      const response = await fetch('/api/payment/verify-upi', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          utr: cleanUtr,
-          advanceAmount: effectiveAdvance,
-          totalAmount: effectiveTotal,
-          scannerUsed: selectedOption === 'bank' ? 'HDFC Bank Account' : currentUpiTarget.name,
-          customerName: effectiveName,
-          serviceName: effectiveService
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        setIsVerifying(false);
-        setVerificationError(data.error || 'Payment verification failed. Please check the UTR and try again.');
-        return;
-      }
-
-      // Case 1: Authentic Bank SMS already arrived and matched in database!
-      if (data.verified) {
-        setIsVerifying(false);
-        setVerifiedBankName(data.bankName || 'HDFC Bank');
-        setVerifiedAmount(data.depositAmount || effectiveAdvance);
-        setPaymentVerified(true);
-        setShowSuccessScreen(true);
-        triggerCelebration();
-
-        const scannerLabel = selectedOption === 'bank' 
-          ? 'HDFC Bank Direct Transfer' 
-          : `UPI Scanner: ${currentUpiTarget.name}`;
-
-        setTimeout(() => {
-          effectiveSuccess(`upi_${cleanUtr}`, cleanUtr, scannerLabel, true, 'SMS_WEBHOOK', data.bankName, uploadedScreenshotUrl);
-        }, 1800);
-        return;
-      }
-
-      // Case 2: Awaiting Bank SMS from owner SIM (8104026257) -> start real-time polling listener
-      setIsVerifying(false);
-      setIsPollingBankSms(true);
-      setPollAttempt(1);
-
-      let attempts = 0;
-      const maxAttempts = 8; // 8 attempts x 3 seconds = 24 seconds total listen window
-      const pollTimer = setInterval(async () => {
-        attempts++;
-        setPollAttempt(attempts);
-
-        try {
-          const pollRes = await fetch(`/api/payment/check-status/${cleanUtr}`);
-          const pollData = await pollRes.json();
-
-          if (pollData.success && pollData.isVerified) {
-            clearInterval(pollTimer);
-            setIsPollingBankSms(false);
-            setVerifiedBankName(pollData.deposit?.bankName || 'HDFC Bank');
-            setVerifiedAmount(pollData.deposit?.amount || effectiveAdvance);
-            setPaymentVerified(true);
-            setShowSuccessScreen(true);
-            triggerCelebration();
-
-            const scannerLabel = selectedOption === 'bank' 
-              ? 'HDFC Bank Direct Transfer' 
-              : `UPI Scanner: ${currentUpiTarget.name}`;
-
-            setTimeout(() => {
-              effectiveSuccess(`upi_${cleanUtr}`, cleanUtr, scannerLabel, true, 'SMS_WEBHOOK', pollData.deposit?.bankName, uploadedScreenshotUrl);
-            }, 1800);
-            return;
-          }
-        } catch (e) {
-          console.warn('Poll error checking UTR status:', e);
-        }
-
-        if (attempts >= maxAttempts) {
-          clearInterval(pollTimer);
-          setIsPollingBankSms(false);
-          setShowManualAdminFallback(true);
-        }
-      }, 3000);
-
-    } catch (err: any) {
-      console.error('UPI verification network error:', err);
-      setIsVerifying(false);
-      setIsPollingBankSms(false);
-      setVerificationError('Unable to verify UPI payment right now. Please check your network connection and try again.');
-    }
-  };
-
-  // Fallback: Submit booking with a 15-minute chair hold for Owner manual confirmation
-  const handleSubmitManualHold = () => {
-    setIsSubmittingManualHold(true);
-    const cleanUtr = utrNumber.trim();
-    const scannerLabel = selectedOption === 'bank' 
-      ? 'HDFC Bank Direct Transfer' 
+    const scannerLabel = selectedOption === 'bank'
+      ? 'HDFC Bank Direct Transfer'
       : `UPI Scanner: ${currentUpiTarget.name}`;
+    const bankLabel = selectedOption === 'bank'
+      ? (selectedBankSubTab === 'boi' ? 'Bank of India' : 'HDFC Bank')
+      : currentUpiTarget.name;
 
+    setIsVerifying(false);
+    setPaymentVerified(true);
     setShowSuccessScreen(true);
     triggerCelebration();
 
     setTimeout(() => {
-      setIsSubmittingManualHold(false);
-      effectiveSuccess(`upi_${cleanUtr}`, cleanUtr, scannerLabel, false, 'NONE', undefined, uploadedScreenshotUrl);
+      effectiveSuccess(`upi_${cleanUtr}`, cleanUtr, scannerLabel, true, 'ADMIN_MANUAL', bankLabel, uploadedScreenshotUrl);
     }, 1800);
   };
 
   const handleFinishSuccess = () => {
     const cleanUtr = utrNumber.trim();
-    const scannerLabel = selectedOption === 'bank' 
-      ? 'HDFC Bank Direct Transfer' 
+    const scannerLabel = selectedOption === 'bank'
+      ? 'HDFC Bank Direct Transfer'
       : `UPI Scanner: ${currentUpiTarget.name}`;
-    effectiveSuccess(`upi_${cleanUtr}`, cleanUtr, scannerLabel, paymentVerified, paymentVerified ? 'SMS_WEBHOOK' : 'NONE', verifiedBankName, uploadedScreenshotUrl);
+    const bankLabel = selectedOption === 'bank'
+      ? (selectedBankSubTab === 'boi' ? 'Bank of India' : 'HDFC Bank')
+      : currentUpiTarget.name;
+    effectiveSuccess(`upi_${cleanUtr}`, cleanUtr, scannerLabel, true, 'ADMIN_MANUAL', bankLabel, uploadedScreenshotUrl);
   };
 
   return (
@@ -830,18 +764,18 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
               </div>
             )}
 
-            {/* USER REQUESTED PROMINENT VERIFICATION NOTICE */}
+            {/* PROMINENT PAYMENT SUBMISSION NOTICE */}
             <div className="p-3 rounded-2xl bg-gradient-to-r from-amber-500/20 via-purple-500/15 to-amber-500/20 border-2 border-amber-500/40 text-amber-950 dark:text-amber-200 text-xs font-bold flex items-start gap-2.5 shadow-sm">
               <Zap className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
               <div className="leading-snug">
-                <span>Send the screenshot or write the UTR number to verify and get confirmed with your seat.</span>
+                <span>Enter your 12-digit UTR number after completing payment (screenshot upload is optional) and submit to confirm your booking.</span>
               </div>
             </div>
 
             <div className="flex items-center justify-between">
               <label className="font-bold text-xs text-amber-900 dark:text-amber-300 flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                <span>Verification: Enter 12-Digit UPI Transaction ID / UTR *</span>
+                <span>Enter 12-Digit UPI Transaction ID / UTR *</span>
               </label>
               <span className="text-[10px] text-zinc-500 font-mono">12 Digits Only</span>
             </div>
@@ -869,16 +803,16 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
             <p className="text-[10px] text-zinc-600 dark:text-zinc-400 flex items-start gap-1 leading-relaxed">
               <Info className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
               <span>
-                After paying in PhonePe/Google Pay, look for <strong>"UTR"</strong> or <strong>"UPI Ref No"</strong> on the payment successful screen. Every booking strictly requires this authentic 12-digit reference to generate your pass.
+                After paying in PhonePe/Google Pay, copy the <strong>"UTR"</strong> or <strong>"UPI Ref No"</strong> from your payment successful screen and submit below.
               </span>
             </p>
 
-            {/* UPLOAD PAYMENT SCREENSHOT SECTION */}
+            {/* UPLOAD PAYMENT SCREENSHOT SECTION (OPTIONAL) */}
             <div className="pt-2 border-t border-amber-500/20 space-y-2">
               <div className="flex items-center justify-between">
                 <label className="font-bold text-xs text-amber-900 dark:text-amber-300 flex items-center gap-1.5">
                   <Upload className="w-4 h-4 text-purple-600 dark:text-amber-400" />
-                  <span>Upload PhonePe / UPI Payment Screenshot</span>
+                  <span>Upload Payment Screenshot (Optional)</span>
                 </label>
                 {uploadedScreenshotUrl && (
                   <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
@@ -936,10 +870,10 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                         <Upload className="w-4 h-4" />
                       </div>
                       <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
-                        Click to select PhonePe payment screenshot
+                        Click to upload payment screenshot (Optional)
                       </span>
                       <span className="text-[10px] text-zinc-500">
-                        PNG, JPG, WEBP (Max 8MB)
+                        PNG, JPG, WEBP (Max 8MB • Optional)
                       </span>
                     </>
                   )}
@@ -953,56 +887,6 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                 </div>
               )}
             </div>
-
-            {/* Live Bank SMS Webhook Polling Card */}
-            {isPollingBankSms && (
-              <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-900 dark:text-amber-200 space-y-2 animate-pulse">
-                <div className="flex items-center gap-2 font-bold">
-                  <div className="w-3.5 h-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-                  <span>Checking Real-Time Bank SMS on Salon SIM (+91 81040 26257)...</span>
-                </div>
-                <div className="text-[11px] text-zinc-600 dark:text-zinc-400 flex items-center justify-between">
-                  <span>Listening for UTR: <strong className="font-mono text-amber-500">{utrNumber}</strong></span>
-                  <span className="font-mono text-[10px] bg-amber-500/20 px-2 py-0.5 rounded-full font-bold">Attempt {pollAttempt}/8</span>
-                </div>
-                <p className="text-[10px] text-zinc-500">
-                  When you pay in PhonePe, the bank SMS typically reaches the salon SIM within 5–15 seconds. Please keep this modal open.
-                </p>
-              </div>
-            )}
-
-            {/* Manual Admin Review Fallback (If SMS delayed by telecom) */}
-            {showManualAdminFallback && !paymentVerified && (
-              <div className="p-3 rounded-2xl bg-purple-500/10 border border-purple-500/30 text-xs space-y-2">
-                <div className="flex items-center gap-2 font-bold text-purple-900 dark:text-purple-200">
-                  <AlertCircle className="w-4 h-4 text-purple-500 shrink-0" />
-                  <span>SMS Not Yet Received on Salon Terminal</span>
-                </div>
-                <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                  Telecom networks sometimes delay SMS by 1–2 minutes. If you have genuinely completed the transfer of <strong>₹{effectiveAdvance}</strong>, you can submit your UTR for the owner's immediate review. Your chair will be held for 15 minutes.
-                </p>
-                <div className="pt-1 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={handleSubmitManualHold}
-                    disabled={isSubmittingManualHold}
-                    className="flex-1 py-2 px-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm"
-                  >
-                    {isSubmittingManualHold ? 'Submitting...' : 'Hold Chair & Submit for Owner Confirmation'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowManualAdminFallback(false);
-                      handleVerifyPayment();
-                    }}
-                    className="py-2 px-3 rounded-xl border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-semibold cursor-pointer"
-                  >
-                    Retry SMS Check
-                  </button>
-                </div>
-              </div>
-            )}
 
             {/* Error Message */}
             {verificationError && (
@@ -1018,10 +902,10 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                 <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
                 <div>
                   <div className="text-emerald-950 dark:text-emerald-200">
-                    Official Bank SMS Verified! ₹{verifiedAmount || effectiveAdvance} Confirmed
+                    Payment is Successful! ₹{effectiveAdvance} Confirmed
                   </div>
                   <div className="text-[10px] font-normal text-emerald-800 dark:text-emerald-400">
-                    Credit received at {verifiedBankName || 'HDFC Bank'}. Generating your appointment pass...
+                    UTR {utrNumber} recorded. Generating your appointment pass...
                   </div>
                 </div>
               </div>
@@ -1042,27 +926,22 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
           <button
             type="button"
             onClick={handleVerifyPayment}
-            disabled={isVerifying || isPollingBankSms || paymentVerified || utrNumber.length !== 12}
+            disabled={isVerifying || paymentVerified || utrNumber.length !== 12}
             className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 dark:bg-amber-500 dark:hover:bg-amber-400 text-white dark:text-zinc-950 font-bold text-xs flex items-center gap-2 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-md"
           >
             {isVerifying ? (
               <>
                 <div className="w-3.5 h-3.5 border-2 border-white dark:border-zinc-950 border-t-transparent rounded-full animate-spin" />
-                <span>Verifying UTR...</span>
-              </>
-            ) : isPollingBankSms ? (
-              <>
-                <div className="w-3.5 h-3.5 border-2 border-white dark:border-zinc-950 border-t-transparent rounded-full animate-spin" />
-                <span>Listening for SMS...</span>
+                <span>Submitting...</span>
               </>
             ) : paymentVerified ? (
               <>
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span>Bank Verified</span>
+                <span>Payment Successful</span>
               </>
             ) : (
               <>
-                <span>I Have Paid ₹{effectiveAdvance} — Verify &amp; Confirm</span>
+                <span>Payment Successful — Submit UTR &amp; Confirm</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </>
             )}
@@ -1081,7 +960,7 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
             </span>
 
             <h3 className="text-xl sm:text-2xl font-black text-zinc-900 dark:text-zinc-100">
-              ₹{verifiedAmount || effectiveAdvance} Advance Confirmed!
+              ₹{effectiveAdvance} Advance Confirmed!
             </h3>
 
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 max-w-sm">
@@ -1115,9 +994,8 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
               )}
             </div>
 
-            {/* Prominent confirmation note */}
-            <div className="mt-3.5 max-w-md p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-950 dark:text-amber-200 text-xs font-semibold">
-              Send the screenshot or write the UTR number to verify and get confirmed with your seat.
+            <div className="mt-3.5 max-w-md p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-950 dark:text-emerald-200 text-xs font-semibold">
+              UTR &amp; payment details submitted. Generating your digital appointment pass...
             </div>
 
             <button

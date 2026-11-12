@@ -224,17 +224,52 @@ export const CustomerGallery: React.FC = () => {
               <X className="w-5 h-5" />
             </button>
 
-            {/* If video: render HTML5 video player */}
+            {/* If video: render YouTube/Vimeo iframe or HTML5 video player */}
             {activeLightboxItem.mediaType === 'video' || activeLightboxItem.videoUrl ? (
               <div className="relative w-full aspect-video bg-black flex items-center justify-center">
-                <video
-                  src={activeLightboxItem.videoUrl}
-                  poster={activeLightboxItem.imageUrl}
-                  controls
-                  autoPlay
-                  playsInline
-                  className="w-full h-full object-contain"
-                />
+                {(() => {
+                  const url = (activeLightboxItem.videoUrl || '').trim();
+                  const ytMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+                  const vimeoMatch = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+                  if (ytMatch) {
+                    return (
+                      <iframe
+                        key={activeLightboxItem.id}
+                        src={`https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&rel=0`}
+                        title={activeLightboxItem.title}
+                        className="w-full h-full border-0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    );
+                  }
+                  if (vimeoMatch) {
+                    return (
+                      <iframe
+                        key={activeLightboxItem.id}
+                        src={`https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1`}
+                        title={activeLightboxItem.title}
+                        className="w-full h-full border-0"
+                        allow="autoplay; fullscreen; picture-in-picture"
+                        allowFullScreen
+                      />
+                    );
+                  }
+                  return (
+                    <video
+                      key={`${activeLightboxItem.id}-${url}`}
+                      src={url}
+                      poster={activeLightboxItem.imageUrl}
+                      controls
+                      autoPlay
+                      playsInline
+                      preload="auto"
+                      className="w-full h-full object-contain"
+                    >
+                      Your browser does not support playing this video format.
+                    </video>
+                  );
+                })()}
               </div>
             ) : (
               <img

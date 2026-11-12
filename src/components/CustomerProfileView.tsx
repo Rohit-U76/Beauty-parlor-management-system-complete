@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   User as UserIcon,
   Crown,
-  Gift,
   Phone,
   Mail,
   Calendar,
@@ -145,7 +144,7 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
         });
         setIsSaving(false);
         if (res.success) {
-          setGuestSuccessMsg('Profile created successfully! You are now signed in with 100 Welcome Points.');
+          setGuestSuccessMsg('Profile created successfully!');
           setProfileSaved(true);
           setTimeout(() => setProfileSaved(false), 4000);
         }
@@ -156,7 +155,6 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
     }
   };
 
-  const loyaltyPoints = currentUser?.loyaltyPoints ?? 100;
   const tier = currentUser?.memberTier || 'Standard Client';
 
   return (
@@ -206,18 +204,8 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
             </div>
           </div>
 
-          {/* Points & Sign-in / Sign-out Controls */}
+          {/* Sign-in / Sign-out Controls */}
           <div className="flex items-center gap-3 flex-wrap">
-            <div className="p-3 rounded-2xl bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/60 flex items-center gap-3">
-              <Gift className="w-5 h-5 text-amber-500" />
-              <div>
-                <div className="text-[10px] uppercase font-bold text-zinc-500 dark:text-zinc-400">Loyalty Balance</div>
-                <div className="text-sm font-extrabold text-purple-700 dark:text-purple-300 font-mono">
-                  {loyaltyPoints} Points
-                </div>
-              </div>
-            </div>
-
             {currentUser ? (
               <button
                 type="button"
@@ -348,7 +336,7 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
 
               <div>
                 <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
-                  Birth Date (Special Birthday Gift Voucher)
+                  Date of Birth
                 </label>
                 <input
                   type="date"
@@ -460,7 +448,7 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
               className="px-6 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold flex items-center gap-2 shadow-md shadow-purple-600/25 transition cursor-pointer"
             >
               <Save className="w-4 h-4" />
-              <span>{currentUser ? 'Save Profile Details' : 'Create Profile (+100 Pts)'}</span>
+              <span>{currentUser ? 'Save Profile Details' : 'Create Profile'}</span>
             </button>
           </div>
         </form>
