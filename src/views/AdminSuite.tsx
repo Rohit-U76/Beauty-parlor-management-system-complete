@@ -73,6 +73,7 @@ import { AdminOfferBroadcastModal } from '../components/AdminOfferBroadcastModal
 import { AdminSlotBlackoutManager } from '../components/AdminSlotBlackoutManager';
 import jsQR from 'jsqr';
 import { ThemeToggle } from '../components/ThemeToggle';
+import { auth } from '../firebase';
 
 export const AdminSuite: React.FC = () => {
   const {
@@ -114,7 +115,8 @@ export const AdminSuite: React.FC = () => {
     addStaffMember,
     updateStaffMember,
     deleteStaffMember,
-    fetchBroadcastLogs
+    fetchBroadcastLogs,
+    loginWithGoogle
   } = useSalon();
 
   // Search & Filter
@@ -144,12 +146,12 @@ export const AdminSuite: React.FC = () => {
   const [scannerDraft, setScannerDraft] = useState({
     accountHolder: settings.accountHolder || 'MODERN JENTS PARLOUR',
     merchantUpiId: settings.merchantUpiId || settings.upiId || 'ghodakedinesh@ybl',
-    upiQrCodeUrl: settings.upiQrCodeUrl || '/assets/aistudio/image_2ca5cc29.png',
+    upiQrCodeUrl: settings.upiQrCodeUrl || '/assets/aistudio/image_d8a337a6.png',
     primaryQrCustomOnly: !!settings.primaryQrCustomOnly,
     primaryUpiExtraParams: settings.primaryUpiExtraParams || '',
     secondaryAccountHolder: settings.secondaryAccountHolder || 'DINESH VITTHAL GHODAKE',
     secondaryUpiId: settings.secondaryUpiId || '8104026257@axl',
-    secondaryUpiQrCodeUrl: settings.secondaryUpiQrCodeUrl || '/assets/aistudio/image_fce20bf8.png',
+    secondaryUpiQrCodeUrl: settings.secondaryUpiQrCodeUrl || '/assets/aistudio/image_0e674b10.png',
     secondaryQrCustomOnly: !!settings.secondaryQrCustomOnly,
     secondaryUpiExtraParams: settings.secondaryUpiExtraParams || '',
     bankName: settings.bankName || 'HDFC Bank',
@@ -170,12 +172,12 @@ export const AdminSuite: React.FC = () => {
     setScannerDraft({
       accountHolder: settings.accountHolder ?? 'MODERN JENTS PARLOUR',
       merchantUpiId: settings.merchantUpiId ?? settings.upiId ?? 'ghodakedinesh@ybl',
-      upiQrCodeUrl: settings.upiQrCodeUrl || '/assets/aistudio/image_2ca5cc29.png',
+      upiQrCodeUrl: settings.upiQrCodeUrl || '/assets/aistudio/image_d8a337a6.png',
       primaryQrCustomOnly: !!settings.primaryQrCustomOnly,
       primaryUpiExtraParams: settings.primaryUpiExtraParams || '',
       secondaryAccountHolder: settings.secondaryAccountHolder ?? 'DINESH VITTHAL GHODAKE',
       secondaryUpiId: settings.secondaryUpiId ?? '8104026257@axl',
-      secondaryUpiQrCodeUrl: settings.secondaryUpiQrCodeUrl || '/assets/aistudio/image_fce20bf8.png',
+      secondaryUpiQrCodeUrl: settings.secondaryUpiQrCodeUrl || '/assets/aistudio/image_0e674b10.png',
       secondaryQrCustomOnly: !!settings.secondaryQrCustomOnly,
       secondaryUpiExtraParams: settings.secondaryUpiExtraParams || '',
       bankName: settings.bankName ?? 'HDFC Bank',
@@ -261,6 +263,117 @@ export const AdminSuite: React.FC = () => {
     }, 600);
     return () => clearTimeout(timer);
   }, [hasUnsavedScannerChanges, scannerDraft]);
+
+  // Card 3: 4 Admin Emails & Shared Admin Master Password Draft State (preserves all 4 slots cleanly)
+  const normalizeFourEmailSlots = (emails?: string[]): [string, string, string, string] => {
+    if (!Array.isArray(emails)) {
+      return ['dineshghodake941@gmail.com', '', 'modernsalon02@gmail.com', 'admin@modernsalon.com'];
+    }
+    return [
+      emails[0] ?? '',
+      emails[1] ?? '',
+      emails[2] ?? '',
+      emails[3] ?? ''
+    ];
+  };
+
+  const [adminAccessDraft, setAdminAccessDraft] = useState<{
+    adminEmails: [string, string, string, string];
+    adminPassword: string;
+    adminPin: string;
+  }>(() => ({
+    adminEmails: normalizeFourEmailSlots(settings.adminEmails),
+    adminPassword: settings.adminPassword || 'Salon@Owner#2026',
+    adminPin: settings.adminPin || '8104'
+  }));
+  const [hasUnsavedAdminAccessChanges, setHasUnsavedAdminAccessChanges] = useState(false);
+  const [isSavingAdminAccess, setIsSavingAdminAccess] = useState(false);
+  const [adminAccessSaveNotice, setAdminAccessSaveNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isLinkingGoogleSync, setIsLinkingGoogleSync] = useState(false);
+  const [googleSyncMessage, setGoogleSyncMessage] = useState<string | null>(null);
+  const adminAccessDraftRef = useRef(adminAccessDraft);
+  adminAccessDraftRef.current = adminAccessDraft;
+  const adminAccessVersionRef = useRef(0);
+
+  useEffect(() => {
+    if (hasUnsavedAdminAccessChanges) return;
+    setAdminAccessDraft({
+      adminEmails: normalizeFourEmailSlots(settings.adminEmails),
+      adminPassword: settings.adminPassword || 'Salon@Owner#2026',
+      adminPin: settings.adminPin || '8104'
+    });
+  }, [
+    hasUnsavedAdminAccessChanges,
+    settings.adminEmails,
+    settings.adminPassword,
+    settings.adminPin,
+    settings.settingsUpdatedAt
+  ]);
+
+  const persistAdminAccessDraft = async (draftToSave: typeof adminAccessDraft, isAutoSave = false) => {
+    const versionAtStart = adminAccessVersionRef.current;
+    const cleanedSlots: [string, string, string, string] = [
+      (draftToSave.adminEmails[0] || '').trim().toLowerCase(),
+      (draftToSave.adminEmails[1] || '').trim().toLowerCase(),
+      (draftToSave.adminEmails[2] || '').trim().toLowerCase(),
+      (draftToSave.adminEmails[3] || '').trim().toLowerCase()
+    ];
+
+    if (!isAutoSave) {
+      const invalidSlot = cleanedSlots.findIndex((email) => email !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
+      if (invalidSlot !== -1) {
+        setAdminAccessSaveNotice({
+          type: 'error',
+          text: `Admin Email ${invalidSlot + 1} is not a valid email address.`
+        });
+        return;
+      }
+    }
+
+    if (cleanedSlots.every((v) => !v)) {
+      cleanedSlots[0] = 'dineshghodake941@gmail.com';
+    }
+
+    setIsSavingAdminAccess(true);
+    if (!isAutoSave) setAdminAccessSaveNotice(null);
+
+    try {
+      await updateSettings({
+        adminEmails: cleanedSlots,
+        adminPassword: draftToSave.adminPassword.trim() || 'Salon@Owner#2026',
+        adminPin: draftToSave.adminPin.trim() || '8104'
+      });
+      if (adminAccessVersionRef.current === versionAtStart) {
+        setHasUnsavedAdminAccessChanges(false);
+        const activeCount = cleanedSlots.filter(Boolean).length;
+        setAdminAccessSaveNotice({
+          type: 'success',
+          text: `Saved ${activeCount} authorized Admin Email${activeCount === 1 ? '' : 's'} & Master Password.`
+        });
+      }
+    } catch (err: any) {
+      if (!isAutoSave) {
+        setAdminAccessSaveNotice({
+          type: 'error',
+          text: err?.message || 'Failed to save Admin Emails & Password.'
+        });
+      }
+    } finally {
+      setIsSavingAdminAccess(false);
+    }
+  };
+
+  const handleSaveAdminAccessSettings = async () => {
+    await persistAdminAccessDraft(adminAccessDraftRef.current, false);
+  };
+
+  useEffect(() => {
+    if (!hasUnsavedAdminAccessChanges) return;
+    const timer = setTimeout(() => {
+      persistAdminAccessDraft(adminAccessDraftRef.current, true);
+    }, 650);
+    return () => clearTimeout(timer);
+  }, [hasUnsavedAdminAccessChanges, adminAccessDraft]);
 
   const decodeUpiPayloadFromImage = (img: HTMLImageElement): { vpa: string; payee: string; extraParams: string } => {
     const tryDecodeCanvas = (
@@ -399,42 +512,40 @@ export const AdminSuite: React.FC = () => {
           // 1. Multi-pass QR decode before compression
           const { vpa: extractedVpa, payee: extractedPayee, extraParams: extractedExtra } = decodeUpiPayloadFromImage(img);
 
-          // 2. Compress image so it fits reliably under Firestore 1MB limit & db.json
-          const saveMax = 640;
-          let sw = img.width;
-          let sh = img.height;
-          if (sw > saveMax || sh > saveMax) {
-            if (sw > sh) {
-              sh = Math.round((sh * saveMax) / sw);
-              sw = saveMax;
-            } else {
-              sw = Math.round((sw * saveMax) / sh);
-              sh = saveMax;
+          // 2. Compress image into a portable data URI (~40-110 KB) so it syncs reliably across Cloud Firestore, mobile, & Shared URL without 404s
+          const compressToPortableDataUrl = (maxDim: number, quality: number): string => {
+            let sw = img.width;
+            let sh = img.height;
+            if (sw > maxDim || sh > maxDim) {
+              if (sw > sh) {
+                sh = Math.round((sh * maxDim) / sw);
+                sw = maxDim;
+              } else {
+                sw = Math.round((sw * maxDim) / sh);
+                sh = maxDim;
+              }
             }
-          }
-          const saveCanvas = document.createElement('canvas');
-          saveCanvas.width = sw;
-          saveCanvas.height = sh;
-          const saveCtx = saveCanvas.getContext('2d');
-          const compressedDataUrl = saveCtx
-            ? (saveCtx.drawImage(img, 0, 0, sw, sh), saveCanvas.toDataURL('image/jpeg', 0.84))
-            : rawDataUrl;
+            const saveCanvas = document.createElement('canvas');
+            saveCanvas.width = sw;
+            saveCanvas.height = sh;
+            const saveCtx = saveCanvas.getContext('2d');
+            if (!saveCtx) return rawDataUrl;
+            saveCtx.fillStyle = '#ffffff';
+            saveCtx.fillRect(0, 0, sw, sh);
+            saveCtx.drawImage(img, 0, 0, sw, sh);
+            return saveCanvas.toDataURL('image/jpeg', quality);
+          };
 
-          // 3. Persist QR photo to server (/public/uploads/qr) so URL stays small & universally viewable
-          let finalQrUrl = compressedDataUrl;
-          try {
-            const upRes = await fetch('/api/settings/upload-qr', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ imageBase64: compressedDataUrl, slot: targetSlot })
-            });
-            if (upRes.ok) {
-              const upData = await upRes.json();
-              if (upData?.qrUrl || upData?.url) finalQrUrl = upData.qrUrl || upData.url;
-            }
-          } catch {
-            // Keep compressedDataUrl fallback if offline
+          let compressedDataUrl = compressToPortableDataUrl(640, 0.82);
+          if (compressedDataUrl.length > 140_000) {
+            compressedDataUrl = compressToPortableDataUrl(520, 0.7);
           }
+          if (compressedDataUrl.length > 140_000) {
+            compressedDataUrl = compressToPortableDataUrl(420, 0.58);
+          }
+
+          // Store portable compressed data URL directly so every device & Cloud Run instance renders the exact uploaded QR
+          const finalQrUrl = compressedDataUrl;
 
           draftEditVersionRef.current += 1;
           const versionAtUpload = draftEditVersionRef.current;
@@ -2841,6 +2952,41 @@ export const AdminSuite: React.FC = () => {
                 </div>
               </div>
 
+              {!auth.currentUser && (
+                <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <div className="space-y-0.5">
+                      <div className="font-bold text-amber-900 dark:text-amber-200">
+                        Connect Google Account for Cross-Device Cloud Sync
+                      </div>
+                      <p className="text-[11px] text-amber-800 dark:text-amber-300/90 leading-relaxed">
+                        You unlocked Admin using Password/PIN. Connect an authorized Admin Google account once so your updated QR scanners and 4 Admin Emails sync live across phones and shared URLs via Cloud Firestore.
+                      </p>
+                      {googleSyncMessage && (
+                        <p className="text-[11px] font-semibold text-purple-700 dark:text-amber-200 pt-1">
+                          {googleSyncMessage}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isLinkingGoogleSync}
+                    onClick={async () => {
+                      setIsLinkingGoogleSync(true);
+                      setGoogleSyncMessage(null);
+                      const res = await loginWithGoogle({ forRole: 'ADMIN' });
+                      setIsLinkingGoogleSync(false);
+                      setGoogleSyncMessage(res.message);
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs shrink-0 cursor-pointer disabled:opacity-50 transition shadow-sm"
+                  >
+                    {isLinkingGoogleSync ? 'Connecting...' : 'Connect Google Sync'}
+                  </button>
+                </div>
+              )}
+
               {/* CARD 1: DIRECT BANK UPI & QR SCANNERS SETTINGS */}
               <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 space-y-5 text-xs shadow-sm">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-purple-100 dark:border-zinc-800 pb-3">
@@ -2967,12 +3113,12 @@ export const AdminSuite: React.FC = () => {
                       <div className="flex items-center gap-3">
                         <button
                           type="button"
-                          onClick={() => setViewingScreenshotUrl(scannerDraft.upiQrCodeUrl || '/assets/aistudio/image_2ca5cc29.png')}
+                          onClick={() => setViewingScreenshotUrl(scannerDraft.upiQrCodeUrl || '/assets/aistudio/image_d8a337a6.png')}
                           className="w-16 h-16 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 overflow-hidden flex items-center justify-center shrink-0 p-1 cursor-pointer hover:ring-2 hover:ring-purple-400 transition"
                           title="Click to preview full Scanner 1 QR"
                         >
                           <img
-                            src={scannerDraft.upiQrCodeUrl || '/assets/aistudio/image_2ca5cc29.png'}
+                            src={scannerDraft.upiQrCodeUrl || '/assets/aistudio/image_d8a337a6.png'}
                             alt="Primary QR Standee"
                             className="w-full h-full object-contain"
                           />
@@ -2995,7 +3141,7 @@ export const AdminSuite: React.FC = () => {
                             </label>
                             <button
                               type="button"
-                              onClick={() => setViewingScreenshotUrl(scannerDraft.upiQrCodeUrl || '/assets/aistudio/image_2ca5cc29.png')}
+                              onClick={() => setViewingScreenshotUrl(scannerDraft.upiQrCodeUrl || '/assets/aistudio/image_d8a337a6.png')}
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 text-purple-700 dark:text-amber-300 text-[10px] font-bold cursor-pointer hover:bg-purple-50 transition"
                             >
                               <Eye className="w-3 h-3" />
@@ -3008,7 +3154,7 @@ export const AdminSuite: React.FC = () => {
                               draftEditVersionRef.current += 1;
                               const resetData = {
                                 accountHolder: 'MODERN JENTS PARLOUR',
-                                upiQrCodeUrl: '/assets/aistudio/image_2ca5cc29.png',
+                                upiQrCodeUrl: '/assets/aistudio/image_d8a337a6.png',
                                 merchantUpiId: 'ghodakedinesh@ybl',
                                 upiId: 'ghodakedinesh@ybl',
                                 primaryQrCustomOnly: false,
@@ -3084,12 +3230,12 @@ export const AdminSuite: React.FC = () => {
                       <div className="flex items-center gap-3">
                         <button
                           type="button"
-                          onClick={() => setViewingScreenshotUrl(scannerDraft.secondaryUpiQrCodeUrl || '/assets/aistudio/image_fce20bf8.png')}
+                          onClick={() => setViewingScreenshotUrl(scannerDraft.secondaryUpiQrCodeUrl || '/assets/aistudio/image_0e674b10.png')}
                           className="w-16 h-16 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 overflow-hidden flex items-center justify-center shrink-0 p-1 cursor-pointer hover:ring-2 hover:ring-purple-400 transition"
                           title="Click to preview full Scanner 2 QR"
                         >
                           <img
-                            src={scannerDraft.secondaryUpiQrCodeUrl || '/assets/aistudio/image_fce20bf8.png'}
+                            src={scannerDraft.secondaryUpiQrCodeUrl || '/assets/aistudio/image_0e674b10.png'}
                             alt="Secondary QR Standee"
                             className="w-full h-full object-contain"
                           />
@@ -3112,7 +3258,7 @@ export const AdminSuite: React.FC = () => {
                             </label>
                             <button
                               type="button"
-                              onClick={() => setViewingScreenshotUrl(scannerDraft.secondaryUpiQrCodeUrl || '/assets/aistudio/image_fce20bf8.png')}
+                              onClick={() => setViewingScreenshotUrl(scannerDraft.secondaryUpiQrCodeUrl || '/assets/aistudio/image_0e674b10.png')}
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 text-purple-700 dark:text-purple-300 text-[10px] font-bold cursor-pointer hover:bg-purple-50 transition"
                             >
                               <Eye className="w-3 h-3" />
@@ -3125,7 +3271,7 @@ export const AdminSuite: React.FC = () => {
                               draftEditVersionRef.current += 1;
                               const resetData = {
                                 secondaryAccountHolder: 'DINESH VITTHAL GHODAKE',
-                                secondaryUpiQrCodeUrl: '/assets/aistudio/image_fce20bf8.png',
+                                secondaryUpiQrCodeUrl: '/assets/aistudio/image_0e674b10.png',
                                 secondaryUpiId: '8104026257@axl',
                                 secondaryQrCustomOnly: false,
                                 secondaryUpiExtraParams: ''
@@ -3428,31 +3574,67 @@ export const AdminSuite: React.FC = () => {
 
               {/* CARD 3: ADMIN MASTER SECURITY & PASSWORD */}
               <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-amber-500/40 space-y-4 shadow-sm text-xs">
-                <div className="flex items-center justify-between border-b border-purple-100 dark:border-zinc-800 pb-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-purple-100 dark:border-zinc-800 pb-3">
                   <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
                     <ShieldCheck className="w-4 h-4 text-purple-600 dark:text-amber-400" />
                     <span>3. Four Admin Emails &amp; Shared Admin Master Password</span>
                   </h3>
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-purple-100 dark:bg-amber-500/10 text-purple-700 dark:text-amber-400 border border-purple-200 dark:border-amber-500/20">
-                    Firestore Real-time
-                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {hasUnsavedAdminAccessChanges && (
+                      <span className="px-2 py-0.5 rounded-lg bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 text-[10px] font-bold">
+                        Unsaved
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleSaveAdminAccessSettings}
+                      disabled={isSavingAdminAccess}
+                      className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 dark:bg-amber-500 dark:hover:bg-amber-400 text-white dark:text-zinc-950 font-bold text-[11px] flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-50"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>{isSavingAdminAccess ? 'Saving...' : 'Save 4 Admin Emails'}</span>
+                    </button>
+                  </div>
                 </div>
 
+                {adminAccessSaveNotice && (
+                  <div
+                    className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-between gap-2 ${
+                      adminAccessSaveNotice.type === 'success'
+                        ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-600/40 text-emerald-800 dark:text-emerald-300'
+                        : 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-600/40 text-rose-800 dark:text-rose-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      {adminAccessSaveNotice.type === 'success' ? (
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                      )}
+                      <span>{adminAccessSaveNotice.text}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAdminAccessSaveNotice(null)}
+                      className="text-xs font-bold opacity-70 hover:opacity-100 cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+
                 <p className="text-zinc-600 dark:text-zinc-400 text-[11px] leading-relaxed">
-                  Configure up to <strong>4 authorized Admin Email addresses</strong> that all share <strong>one Admin Master Password</strong>. If any email account gets frozen or locked, any of the remaining backup admin emails can immediately sign in with the same shared password or Google Sign-In.
+                  Configure up to <strong>4 authorized Admin Email addresses</strong> that all share <strong>one Admin Master Password</strong>. Edit any slot and click Save (or wait 1 second for auto-save).
                 </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {[
-                    { idx: 0, label: 'Admin Email 1 (Primary Owner) *', placeholder: 'dineshghodake941@gmail.com', defaultVal: 'dineshghodake941@gmail.com' },
-                    { idx: 1, label: 'Admin Email 2 (Backup Admin)', placeholder: 'owner.backup@modernsalon.com', defaultVal: '' },
-                    { idx: 2, label: 'Admin Email 3 (Backup Admin)', placeholder: 'modernsalon02@gmail.com', defaultVal: 'modernsalon02@gmail.com' },
-                    { idx: 3, label: 'Admin Email 4 (Emergency Backup)', placeholder: 'admin@modernsalon.com', defaultVal: 'admin@modernsalon.com' }
+                    { idx: 0 as const, label: 'Admin Email 1 (Primary Owner) *', placeholder: 'dineshghodake941@gmail.com' },
+                    { idx: 1 as const, label: 'Admin Email 2 (Backup Admin)', placeholder: 'owner.backup@modernsalon.com' },
+                    { idx: 2 as const, label: 'Admin Email 3 (Backup Admin)', placeholder: 'modernsalon02@gmail.com' },
+                    { idx: 3 as const, label: 'Admin Email 4 (Emergency Backup)', placeholder: 'admin@modernsalon.com' }
                   ].map((slot) => {
-                    const currentEmails = settings.adminEmails && settings.adminEmails.length > 0
-                      ? settings.adminEmails
-                      : ['dineshghodake941@gmail.com', '', 'modernsalon02@gmail.com', 'admin@modernsalon.com'];
-                    const value = currentEmails[slot.idx] ?? '';
+                    const value = adminAccessDraft.adminEmails[slot.idx] ?? '';
                     return (
                       <div key={slot.idx}>
                         <label className="font-semibold text-zinc-700 dark:text-zinc-300 block mb-1">
@@ -3462,14 +3644,20 @@ export const AdminSuite: React.FC = () => {
                           type="email"
                           value={value}
                           onChange={(e) => {
-                            const next = [
-                              currentEmails[0] ?? 'dineshghodake941@gmail.com',
-                              currentEmails[1] ?? '',
-                              currentEmails[2] ?? 'modernsalon02@gmail.com',
-                              currentEmails[3] ?? 'admin@modernsalon.com'
-                            ];
-                            next[slot.idx] = e.target.value.trim().toLowerCase();
-                            updateSettings({ adminEmails: next });
+                            const updatedVal = e.target.value;
+                            adminAccessVersionRef.current += 1;
+                            setAdminAccessDraft((prev) => {
+                              const nextEmails: [string, string, string, string] = [
+                                prev.adminEmails[0],
+                                prev.adminEmails[1],
+                                prev.adminEmails[2],
+                                prev.adminEmails[3]
+                              ];
+                              nextEmails[slot.idx] = updatedVal;
+                              return { ...prev, adminEmails: nextEmails };
+                            });
+                            setHasUnsavedAdminAccessChanges(true);
+                            setAdminAccessSaveNotice(null);
                           }}
                           className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 text-zinc-900 dark:text-white font-mono focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
                           placeholder={slot.placeholder}
@@ -3489,8 +3677,14 @@ export const AdminSuite: React.FC = () => {
                     </label>
                     <input
                       type="text"
-                      value={settings.adminPassword || 'Salon@Owner#2026'}
-                      onChange={(e) => updateSettings({ adminPassword: e.target.value })}
+                      value={adminAccessDraft.adminPassword}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        adminAccessVersionRef.current += 1;
+                        setAdminAccessDraft(prev => ({ ...prev, adminPassword: val }));
+                        setHasUnsavedAdminAccessChanges(true);
+                        setAdminAccessSaveNotice(null);
+                      }}
                       className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 text-zinc-900 dark:text-white font-mono focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
                       placeholder="e.g. UniqueOwnerPass#2026"
                     />
@@ -3506,8 +3700,14 @@ export const AdminSuite: React.FC = () => {
                     <input
                       type="text"
                       maxLength={8}
-                      value={settings.adminPin || '8104'}
-                      onChange={(e) => updateSettings({ adminPin: e.target.value })}
+                      value={adminAccessDraft.adminPin}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        adminAccessVersionRef.current += 1;
+                        setAdminAccessDraft(prev => ({ ...prev, adminPin: val }));
+                        setHasUnsavedAdminAccessChanges(true);
+                        setAdminAccessSaveNotice(null);
+                      }}
                       className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 text-zinc-900 dark:text-white font-mono focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
                       placeholder="e.g. 8104"
                     />
@@ -3517,11 +3717,11 @@ export const AdminSuite: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="p-3 rounded-xl bg-purple-50/60 dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 flex items-center justify-between">
+                <div className="p-3 rounded-xl bg-purple-50/60 dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                     <span className="text-[11px] text-zinc-700 dark:text-zinc-300">
-                      Primary Admin Owner: <strong>dineshghodake941@gmail.com</strong>. Authorized admin emails share this master password and sync to Firebase &amp; backend immediately.
+                      Active Primary Email: <strong>{adminAccessDraft.adminEmails.find(Boolean) || 'dineshghodake941@gmail.com'}</strong>. All configured emails share the master password and sync to backend &amp; Firestore.
                     </span>
                   </div>
                 </div>

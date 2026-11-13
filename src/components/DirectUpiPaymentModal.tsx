@@ -60,14 +60,14 @@ const BANK_INFO = {
     name: 'MODERN JENTS PARLOUR',
     subtitle: 'Primary Salon Current Account (PhonePe / UPI)',
     upiId: 'ghodakedinesh@ybl',
-    posterImage: '/assets/aistudio/image_2ca5cc29.png'
+    posterImage: '/assets/aistudio/image_d8a337a6.png'
   },
   scanner2: {
     id: 'scanner2',
     name: 'DINESH VITTHAL GHODAKE',
     subtitle: 'Secondary Owner Account (PhonePe / UPI)',
     upiId: '8104026257@axl',
-    posterImage: '/assets/aistudio/image_fce20bf8.png'
+    posterImage: '/assets/aistudio/image_0e674b10.png'
   }
 };
 
@@ -112,16 +112,38 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
   const [hasLaunchedUpiApp, setHasLaunchedUpiApp] = useState<boolean>(false);
   const [showReturnedFromAppBanner, setShowReturnedFromAppBanner] = useState<boolean>(false);
 
+  const isUploadedQrAsset = (url?: string) =>
+    Boolean(
+      url &&
+        (url.startsWith('data:image/') ||
+          url.startsWith('/uploads/qr/') ||
+          url === '/assets/aistudio/image_d8a337a6.png' ||
+          url === '/assets/aistudio/image_0e674b10.png')
+    );
+
+  const shouldDefaultToUploadedQr = (opt: ScannerOption) => {
+    if (opt === 'scanner2') {
+      return Boolean(settings.secondaryQrCustomOnly) || isUploadedQrAsset(settings.secondaryUpiQrCodeUrl || BANK_INFO.scanner2.posterImage);
+    }
+    if (opt === 'scanner1') {
+      return Boolean(settings.primaryQrCustomOnly) || isUploadedQrAsset(settings.upiQrCodeUrl || BANK_INFO.scanner1.posterImage);
+    }
+    return false;
+  };
+
   useEffect(() => {
     if (isOpen && selectedOption !== 'bank') {
-      const isCustomOnly =
-        selectedOption === 'scanner2'
-          ? Boolean(settings.secondaryQrCustomOnly)
-          : Boolean(settings.primaryQrCustomOnly);
-      // Show uploaded custom QR photo directly when VPA wasn't auto-decoded; otherwise show Auto-Amount Dynamic QR
-      setShowPosterStandee(isCustomOnly);
+      // Show admin's uploaded QR scanner photo immediately whenever a custom QR was uploaded or VPA wasn't decoded
+      setShowPosterStandee(shouldDefaultToUploadedQr(selectedOption));
     }
-  }, [isOpen, selectedOption, settings.primaryQrCustomOnly, settings.secondaryQrCustomOnly]);
+  }, [
+    isOpen,
+    selectedOption,
+    settings.primaryQrCustomOnly,
+    settings.secondaryQrCustomOnly,
+    settings.upiQrCodeUrl,
+    settings.secondaryUpiQrCodeUrl
+  ]);
 
   // Compress image via canvas so Firestore fallback never exceeds 1MB doc limit
   const compressImageDataUrl = (dataUrl: string): Promise<string> => {
@@ -687,7 +709,7 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                 type="button"
                 onClick={() => {
                   setSelectedOption('scanner1');
-                  setShowPosterStandee(Boolean(settings.primaryQrCustomOnly));
+                  setShowPosterStandee(shouldDefaultToUploadedQr('scanner1'));
                 }}
                 className={`p-2.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
                   selectedOption === 'scanner1'
@@ -706,7 +728,7 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                 type="button"
                 onClick={() => {
                   setSelectedOption('scanner2');
-                  setShowPosterStandee(Boolean(settings.secondaryQrCustomOnly));
+                  setShowPosterStandee(shouldDefaultToUploadedQr('scanner2'));
                 }}
                 className={`p-2.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
                   selectedOption === 'scanner2'
@@ -788,14 +810,20 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
 
                     {dynamicQrDataUrl ? (
                       <a
-                        href={upiAppLinks.phonepePay}
-                        onClick={(e) => handleUpiAppAnchorClick(e, 'PhonePe', 'safe_launcher')}
+                        href={canUseDirectPhonePeIntent ? upiAppLinks.phonepePay : upiAppLinks.gpayPay}
+                        onClick={(e) =>
+                          handleUpiAppAnchorClick(
+                            e,
+                            canUseDirectPhonePeIntent ? 'PhonePe' : 'Google Pay',
+                            canUseDirectPhonePeIntent ? 'safe_launcher' : 'direct'
+                          )
+                        }
                         className="p-2 bg-white rounded-xl shadow-md border border-purple-200 hover:border-purple-500 transition block cursor-pointer"
-                        title={`Scan or tap to pay ₹${effectiveAdvance} on PhonePe`}
+                        title={`Scan or tap to pay ₹${effectiveAdvance}`}
                       >
                         <img
                           src={dynamicQrDataUrl}
-                          alt={`Scan to pay ₹${effectiveAdvance} on PhonePe`}
+                          alt={`Scan to pay ₹${effectiveAdvance}`}
                           className="w-44 sm:w-48 h-44 sm:h-48 object-contain"
                         />
                       </a>
@@ -854,19 +882,25 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                     <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">
                       {currentUpiTarget.customOnly
                         ? `Save Store QR & scan in PhonePe/GPay • Pay ₹${effectiveAdvance}`
-                        : `Redirects directly with ₹${effectiveAdvance} pre-filled • Payee: ${cleanUpiId}`}
+                        : `Google Pay pre-fills ₹${effectiveAdvance} directly • PhonePe works via Mobile (${activePayeeMobile}) or Gallery QR`}
                     </p>
                   </div>
                   <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 shrink-0">
-                    {hasVerifiedRazorpayMerchant ? '✓ Verified Merchant' : `₹${effectiveAdvance} Auto-Filled`}
+                    {hasVerifiedRazorpayMerchant ? '✓ Verified Merchant' : `Pay ₹${effectiveAdvance}`}
                   </span>
                 </div>
 
                 {/* Strict 2-Option Payment Buttons: PhonePe & Google Pay ONLY */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <a
-                    href={upiAppLinks.phonepePay}
-                    onClick={(e) => handleUpiAppAnchorClick(e, 'PhonePe', 'safe_launcher')}
+                    href={canUseDirectPhonePeIntent ? upiAppLinks.phonepePay : upiAppLinks.phonepeLauncher}
+                    onClick={(e) =>
+                      handleUpiAppAnchorClick(
+                        e,
+                        'PhonePe',
+                        canUseDirectPhonePeIntent ? 'safe_launcher' : 'copy_mobile'
+                      )
+                    }
                     className="py-3 px-3.5 rounded-xl bg-gradient-to-r from-[#5f259f] to-[#7b32c6] hover:from-[#511e8a] hover:to-[#6a29ab] text-white font-extrabold text-xs flex items-center justify-between gap-2 shadow-md transition cursor-pointer"
                   >
                     <div className="flex items-center gap-2 min-w-0">
@@ -876,7 +910,9 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                       <div className="text-left min-w-0">
                         <div className="leading-tight truncate">PhonePe</div>
                         <div className="text-[10px] font-medium text-purple-100 opacity-90 truncate">
-                          Pay ₹{effectiveAdvance}
+                          {canUseDirectPhonePeIntent
+                            ? `Pay ₹${effectiveAdvance}`
+                            : `Open App • Copy ${activePayeeMobile}`}
                         </div>
                       </div>
                     </div>
@@ -919,24 +955,24 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                         </button>
                       </div>
                       <div className="text-[10px] leading-relaxed opacity-90">
-                        {currentUpiTarget.customOnly
+                        {showPosterStandee || currentUpiTarget.customOnly
                           ? `Open PhonePe or Google Pay on your phone and scan the Store Scanner QR above, then enter ₹${effectiveAdvance}.`
                           : `Open PhonePe or Google Pay on your phone and scan the Auto-Amount QR above (pre-fills ₹${effectiveAdvance} automatically).`}
                       </div>
                       <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                         <a
-                          href={upiAppLinks.phonepePay}
+                          href={canUseDirectPhonePeIntent ? upiAppLinks.phonepePay : upiAppLinks.phonepeLauncher}
                           className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#5f259f] hover:bg-[#511e8a] text-white text-[10px] font-bold transition"
                         >
                           <ExternalLink className="w-3 h-3" />
-                          <span>Try Opening PhonePe Link</span>
+                          <span>{canUseDirectPhonePeIntent ? 'Try Opening PhonePe Link' : 'Open PhonePe App'}</span>
                         </a>
                         <a
-                          href={upiAppLinks.genericUpiPay}
+                          href={canUseDirectPhonePeIntent ? upiAppLinks.genericUpiPay : upiAppLinks.gpayPay}
                           className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-bold transition"
                         >
                           <ExternalLink className="w-3 h-3" />
-                          <span>Try UPI App Handler</span>
+                          <span>{canUseDirectPhonePeIntent ? 'Try UPI App Handler' : `Pay ₹${effectiveAdvance} on GPay`}</span>
                         </a>
                       </div>
                     </div>

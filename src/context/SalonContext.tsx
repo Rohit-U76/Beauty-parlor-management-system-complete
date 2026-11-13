@@ -265,25 +265,33 @@ const normalizeLegacySettings = (raw: any): SalonSettings => {
     s.merchantUpiId = s.upiId;
   }
 
-  // Strip deprecated rohitumdale@gmail.com from adminEmails and ensure dineshghodake941@gmail.com is primary
+  // Preserve exact 4 positional Admin Email slots; clear deprecated rohitumdale@gmail.com without shifting indexes
   if (Array.isArray(s.adminEmails)) {
-    const cleanedEmails = s.adminEmails
-      .map((e: string) => (e || '').toLowerCase().trim())
-      .filter((e: string) => Boolean(e) && e !== 'rohitumdale@gmail.com');
-    if (!cleanedEmails.includes('dineshghodake941@gmail.com')) {
-      cleanedEmails.unshift('dineshghodake941@gmail.com');
+    const slots = [0, 1, 2, 3].map((idx) => {
+      const val = (s.adminEmails?.[idx] || '').toLowerCase().trim();
+      return val === 'rohitumdale@gmail.com' ? '' : val;
+    });
+    if (slots.every((v) => !v)) {
+      slots[0] = 'dineshghodake941@gmail.com';
     }
-    s.adminEmails = Array.from(new Set(cleanedEmails));
+    s.adminEmails = slots;
+  } else {
+    s.adminEmails = [
+      'dineshghodake941@gmail.com',
+      '',
+      'modernsalon02@gmail.com',
+      'admin@modernsalon.com'
+    ];
   }
 
-  if (s.upiQrCodeUrl === '/qr-union-bank-phonepe.jpg') {
-    s.upiQrCodeUrl = '/assets/aistudio/image_2ca5cc29.png';
+  if (s.upiQrCodeUrl === '/qr-union-bank-phonepe.jpg' || s.upiQrCodeUrl === '/assets/aistudio/image_2ca5cc29.png') {
+    s.upiQrCodeUrl = '/assets/aistudio/image_d8a337a6.png';
   } else if (raw?.upiQrCodeUrl === undefined && !s.upiQrCodeUrl) {
-    s.upiQrCodeUrl = '/assets/aistudio/image_2ca5cc29.png';
+    s.upiQrCodeUrl = '/assets/aistudio/image_d8a337a6.png';
   }
 
-  if (s.secondaryUpiQrCodeUrl === '/qr-dinesh-ghodake.jpg') {
-    s.secondaryUpiQrCodeUrl = '/assets/aistudio/image_fce20bf8.png';
+  if (s.secondaryUpiQrCodeUrl === '/qr-dinesh-ghodake.jpg' || s.secondaryUpiQrCodeUrl === '/assets/aistudio/image_fce20bf8.png') {
+    s.secondaryUpiQrCodeUrl = '/assets/aistudio/image_0e674b10.png';
   }
   if (raw?.secondaryAccountHolder === undefined && !s.secondaryAccountHolder) {
     s.secondaryAccountHolder = 'DINESH VITTHAL GHODAKE';
@@ -292,7 +300,7 @@ const normalizeLegacySettings = (raw: any): SalonSettings => {
     s.secondaryUpiId = '8104026257@axl';
   }
   if (raw?.secondaryUpiQrCodeUrl === undefined && !s.secondaryUpiQrCodeUrl) {
-    s.secondaryUpiQrCodeUrl = '/assets/aistudio/image_fce20bf8.png';
+    s.secondaryUpiQrCodeUrl = '/assets/aistudio/image_0e674b10.png';
   }
   return s;
 };
@@ -407,6 +415,8 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_settings`);
     return saved ? normalizeLegacySettings(JSON.parse(saved)) : INITIAL_SETTINGS;
   });
+  const latestSettingsRef = useRef<SalonSettings>(settings);
+  latestSettingsRef.current = settings;
 
   const [users, setUsers] = useState<User[]>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_users`);
@@ -774,10 +784,15 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           if (savedSettingsRaw) {
             const parsedSettings = JSON.parse(savedSettingsRaw);
             if (Array.isArray(parsedSettings.adminEmails)) {
-              dynamicAdminEmails = Array.from(new Set([
-                ...dynamicAdminEmails,
-                ...parsedSettings.adminEmails.map((e: string) => (e || '').toLowerCase().trim()).filter(Boolean)
-              ]));
+              const configured = parsedSettings.adminEmails
+                .map((e: string) => (e || '').toLowerCase().trim())
+                .filter(Boolean);
+              if (configured.length > 0) {
+                dynamicAdminEmails = Array.from(new Set([
+                  ...configured,
+                  (parsedSettings.email || '').toLowerCase().trim()
+                ].filter(Boolean)));
+              }
             }
           }
         } catch {}
@@ -1976,16 +1991,18 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         } catch {}
 
         await setDoc(doc(db, 'users', fbUser.uid), cleanFirestoreData(adminProfile), { merge: true });
-        if (settings.adminPassword) {
-          setDoc(
-            doc(db, 'salon_settings', 'main'),
-            cleanFirestoreData({
-              adminPassword: settings.adminPassword,
-              adminPasswordUpdatedAt: settings.adminPasswordUpdatedAt || Date.now()
-            }),
-            { merge: true }
-          ).catch(() => {});
-        }
+        try {
+          const fsSnap = await getDocFromServer(doc(db, 'salon_settings', 'main')).catch(() => null);
+          const fsUpdatedAt = Number(fsSnap?.exists() ? (fsSnap.data() as any)?.settingsUpdatedAt || 0 : 0);
+          const localLatest = latestSettingsRef.current;
+          if (!fsSnap?.exists() || Number(localLatest.settingsUpdatedAt || 0) > fsUpdatedAt) {
+            await setDoc(
+              doc(db, 'salon_settings', 'main'),
+              cleanFirestoreData(localLatest),
+              { merge: true }
+            );
+          }
+        } catch {}
         setCurrentUser(adminProfile);
         setIsGuestMode(false);
         setIsAdminMode(true);
@@ -3136,6 +3153,8 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
 
   const updateSettings = async (newSettings: Partial<SalonSettings>): Promise<void> => {
+    const baseSettings = latestSettingsRef.current;
+    const nextTimestamp = Math.max(Date.now(), Number(baseSettings.settingsUpdatedAt || 0) + 1);
     const syncPayload: Partial<SalonSettings> = {
       ...newSettings,
       ...(newSettings.merchantUpiId !== undefined && newSettings.upiId === undefined
@@ -3145,17 +3164,23 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         ? { merchantUpiId: newSettings.upiId }
         : {}),
       ...(newSettings.adminPassword ? { adminPasswordUpdatedAt: Date.now() } : {}),
-      settingsUpdatedAt: Math.max(Date.now(), Number(settings.settingsUpdatedAt || 0) + 1)
+      settingsUpdatedAt: nextTimestamp
     };
 
-    let nextFullSettings: SalonSettings = { ...settings, ...syncPayload };
+    const nextFullSettings: SalonSettings = normalizeLegacySettings({
+      ...baseSettings,
+      ...syncPayload,
+      settingsUpdatedAt: nextTimestamp
+    });
+    latestSettingsRef.current = nextFullSettings;
+
     setSettings(prev => {
       const merged = normalizeLegacySettings({
         ...prev,
         ...syncPayload,
-        settingsUpdatedAt: Math.max(Number(prev.settingsUpdatedAt || 0) + 1, Number(syncPayload.settingsUpdatedAt || Date.now()))
+        settingsUpdatedAt: Math.max(Number(prev.settingsUpdatedAt || 0) + 1, nextTimestamp)
       });
-      nextFullSettings = merged;
+      latestSettingsRef.current = merged;
       try {
         localStorage.setItem(`${LOCAL_STORAGE_KEY}_settings`, JSON.stringify(merged));
       } catch {}

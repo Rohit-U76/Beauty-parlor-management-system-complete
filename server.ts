@@ -56,14 +56,15 @@ function initDb() {
         bankAccountType: 'Current Account',
         merchantUpiId: 'ghodakedinesh@ybl',
         upiId: 'ghodakedinesh@ybl',
-        upiQrCodeUrl: '/assets/aistudio/image_2ca5cc29.png',
+        upiQrCodeUrl: '/assets/aistudio/image_d8a337a6.png',
         secondaryUpiId: '8104026257@axl',
         secondaryAccountHolder: 'DINESH VITTHAL GHODAKE',
-        secondaryUpiQrCodeUrl: '/assets/aistudio/image_fce20bf8.png',
+        secondaryUpiQrCodeUrl: '/assets/aistudio/image_0e674b10.png',
         adminPassword: 'Salon@Owner#2026',
         adminPin: '8104',
         adminEmails: [
           'dineshghodake941@gmail.com',
+          '',
           'modernsalon02@gmail.com',
           'admin@modernsalon.com'
         ]
