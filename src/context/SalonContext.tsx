@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef, ReactNode } from 'react';
 import {
   ServiceItem,
   Appointment,
@@ -304,10 +304,11 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return saved ? JSON.parse(saved) : INITIAL_INQUIRIES;
   });
 
-  const [customers, setCustomers] = useState<Customer[]>(() => {
+  const [rawCustomers, setRawCustomers] = useState<Customer[]>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_customers`);
     return saved ? JSON.parse(saved) : INITIAL_CUSTOMERS;
   });
+  const setCustomers = setRawCustomers;
 
   const [gallery, setGallery] = useState<GalleryItem[]>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_gallery`);
@@ -366,9 +367,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       try {
         const parsed: User[] = JSON.parse(saved);
         const map = new Map<string, User>();
-        // First put INITIAL_USERS
         INITIAL_USERS.forEach(u => map.set(u.id, u));
-        // Then overwrite with user edits / custom registrations
         parsed.forEach(u => map.set(u.id, { ...map.get(u.id), ...u }));
         return Array.from(map.values());
       } catch {
@@ -392,7 +391,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const [isGuestMode, setIsGuestMode] = useState<boolean>(() => {
     try {
-      const saved = sessionStorage.getItem(`${LOCAL_STORAGE_KEY}_guest_mode`);
+      const saved = sessionStorage.getItem(`${LOCAL_STORAGE_KEY}_guest_mode`) || localStorage.getItem(`${LOCAL_STORAGE_KEY}_guest_mode`);
       return saved === 'true';
     } catch {
       return false;
@@ -429,68 +428,270 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   }, [theme]);
 
-  // UI state
+  const CLIENT_TABS = ['home', 'services', 'gallery', 'offers', 'reviews', 'appointments', 'dashboard', 'visits', 'terms', 'about', 'contact'];
+  const ADMIN_TABS = ['dashboard', 'appointments', 'services', 'staff', 'gallery', 'offers', 'reviews', 'customers', 'inquiries', 'reports', 'policies', 'themes', 'settings'];
+
+  const getSavedUserFromStorage = (): User | null => {
+    try {
+      const raw =
+        sessionStorage.getItem(`${LOCAL_STORAGE_KEY}_current_user`) ||
+        localStorage.getItem(`${LOCAL_STORAGE_KEY}_current_user`);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const parseNavHash = () => {
+    try {
+      const rawHash = (window.location.hash || '').replace(/^#\/?/, '').trim();
+      if (!rawHash) return null;
+      if (rawHash === 'admin' || rawHash.startsWith('admin/')) {
+        const sub = rawHash.split('/')[1] || '';
+        return { mode: 'admin' as const, tab: ADMIN_TABS.includes(sub) ? sub : 'dashboard' };
+      }
+      if (CLIENT_TABS.includes(rawHash)) {
+        return { mode: 'client' as const, tab: rawHash };
+      }
+    } catch {}
+    return null;
+  };
+
+  // UI state — check sessionStorage, localStorage, AND URL hash so refreshing on Admin side NEVER bounces to Client side
   const [isAdminMode, setIsAdminModeState] = useState<boolean>(() => {
     try {
-      const saved = sessionStorage.getItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`);
-      const userSaved = sessionStorage.getItem(`${LOCAL_STORAGE_KEY}_current_user`);
-      if (userSaved) {
-        const u = JSON.parse(userSaved);
-        // Only allow admin mode if user is verified ADMIN and explicitly chose admin view
-        if (u.role === 'ADMIN' && saved === 'true') {
-          return true;
-        }
+      const parsedHash = parseNavHash();
+      const saved =
+        sessionStorage.getItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`) ??
+        localStorage.getItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`);
+      const u = getSavedUserFromStorage();
+      if (u && u.role === 'ADMIN') {
+        if (parsedHash?.mode === 'admin') return true;
+        if (saved === 'true') return true;
+        if (saved === null && parsedHash?.mode !== 'client') return true;
       }
     } catch {}
     return false;
   });
 
-  const setIsAdminMode = (val: boolean) => {
-    setIsAdminModeState(val);
-    try {
-      if (val) {
-        sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, 'true');
-      } else {
-        sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, 'false');
-      }
-    } catch {}
-  };
-
   const [activeNavTab, setActiveNavTabState] = useState<string>(() => {
     try {
-      return sessionStorage.getItem(`${LOCAL_STORAGE_KEY}_active_tab`) || 'home';
+      const parsedHash = parseNavHash();
+      if (parsedHash?.mode === 'client') return parsedHash.tab;
+      return (
+        sessionStorage.getItem(`${LOCAL_STORAGE_KEY}_active_tab`) ||
+        localStorage.getItem(`${LOCAL_STORAGE_KEY}_active_tab`) ||
+        'home'
+      );
     } catch {
       return 'home';
     }
   });
 
-  const setActiveNavTab = (tab: string) => {
-    setActiveNavTabState(tab);
-    try {
-      sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_active_tab`, tab);
-    } catch {}
-  };
-
   const [adminTab, setAdminTabState] = useState<string>(() => {
     try {
-      return sessionStorage.getItem(`${LOCAL_STORAGE_KEY}_admin_tab`) || 'dashboard';
+      const parsedHash = parseNavHash();
+      if (parsedHash?.mode === 'admin') return parsedHash.tab;
+      return (
+        sessionStorage.getItem(`${LOCAL_STORAGE_KEY}_admin_tab`) ||
+        localStorage.getItem(`${LOCAL_STORAGE_KEY}_admin_tab`) ||
+        'dashboard'
+      );
     } catch {
       return 'dashboard';
     }
   });
 
-  const setAdminTab = (tab: string) => {
-    setAdminTabState(tab);
+  const isHandlingPopStateRef = useRef<boolean>(false);
+  const navSnapshotRef = useRef({ isAdminMode, activeNavTab, adminTab });
+  navSnapshotRef.current = { isAdminMode, activeNavTab, adminTab };
+
+  const pushModuleHistory = (nextAdminMode: boolean, nextActiveNav: string, nextAdminTab: string, replace = false) => {
     try {
-      sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_admin_tab`, tab);
+      const targetHash = nextAdminMode ? `#admin/${nextAdminTab}` : `#${nextActiveNav}`;
+      const stateObj = { salonNav: true, isAdminMode: nextAdminMode, activeNavTab: nextActiveNav, adminTab: nextAdminTab };
+      if (replace) {
+        window.history.replaceState(stateObj, '', targetHash);
+      } else if (window.location.hash !== targetHash) {
+        window.history.pushState(stateObj, '', targetHash);
+      }
     } catch {}
   };
+
+  const setIsAdminMode = (val: boolean) => {
+    setIsAdminModeState(val);
+    navSnapshotRef.current = { ...navSnapshotRef.current, isAdminMode: val };
+    try {
+      const flag = val ? 'true' : 'false';
+      sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, flag);
+      localStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, flag);
+    } catch {}
+    if (!isHandlingPopStateRef.current) {
+      const cur = navSnapshotRef.current;
+      pushModuleHistory(val, cur.activeNavTab, cur.adminTab);
+    }
+  };
+
+  const setActiveNavTab = (tab: string) => {
+    setActiveNavTabState(tab);
+    navSnapshotRef.current = { ...navSnapshotRef.current, activeNavTab: tab };
+    try {
+      sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_active_tab`, tab);
+      localStorage.setItem(`${LOCAL_STORAGE_KEY}_active_tab`, tab);
+    } catch {}
+    if (!isHandlingPopStateRef.current) {
+      const cur = navSnapshotRef.current;
+      pushModuleHistory(cur.isAdminMode, tab, cur.adminTab);
+    }
+  };
+
+  const setAdminTab = (tab: string) => {
+    setAdminTabState(tab);
+    navSnapshotRef.current = { ...navSnapshotRef.current, adminTab: tab };
+    try {
+      sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_admin_tab`, tab);
+      localStorage.setItem(`${LOCAL_STORAGE_KEY}_admin_tab`, tab);
+    } catch {}
+    if (!isHandlingPopStateRef.current) {
+      const cur = navSnapshotRef.current;
+      pushModuleHistory(cur.isAdminMode, cur.activeNavTab, tab);
+    }
+  };
+
+  // Seed initial history entry & wire browser/mobile Back button cleanly across all modules
+  useEffect(() => {
+    const initial = navSnapshotRef.current;
+    pushModuleHistory(initial.isAdminMode, initial.activeNavTab, initial.adminTab, true);
+
+    const handlePopState = (event: PopStateEvent) => {
+      isHandlingPopStateRef.current = true;
+      try {
+        const u = getSavedUserFromStorage();
+        const isAllowedAdmin = u?.role === 'ADMIN';
+        const st = event.state;
+        const parsedHash = parseNavHash();
+
+        let nextAdmin = navSnapshotRef.current.isAdminMode;
+        let nextClientTab = navSnapshotRef.current.activeNavTab;
+        let nextAdminTab = navSnapshotRef.current.adminTab;
+
+        if (st && st.salonNav) {
+          nextAdmin = Boolean(st.isAdminMode) && isAllowedAdmin;
+          if (st.activeNavTab) nextClientTab = st.activeNavTab;
+          if (st.adminTab) nextAdminTab = st.adminTab;
+        } else if (parsedHash) {
+          if (parsedHash.mode === 'admin' && isAllowedAdmin) {
+            nextAdmin = true;
+            nextAdminTab = parsedHash.tab;
+          } else if (parsedHash.mode === 'client') {
+            nextAdmin = false;
+            nextClientTab = parsedHash.tab;
+          }
+        } else {
+          // If popped back to bare root hash, return to home/dashboard instead of leaving
+          if (isAllowedAdmin && navSnapshotRef.current.isAdminMode) {
+            nextAdmin = true;
+            nextAdminTab = 'dashboard';
+          } else {
+            nextAdmin = false;
+            nextClientTab = 'home';
+          }
+        }
+
+        setIsAdminModeState(nextAdmin);
+        setActiveNavTabState(nextClientTab);
+        setAdminTabState(nextAdminTab);
+        sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, nextAdmin ? 'true' : 'false');
+        localStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, nextAdmin ? 'true' : 'false');
+        sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_active_tab`, nextClientTab);
+        localStorage.setItem(`${LOCAL_STORAGE_KEY}_active_tab`, nextClientTab);
+        sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_admin_tab`, nextAdminTab);
+        localStorage.setItem(`${LOCAL_STORAGE_KEY}_admin_tab`, nextAdminTab);
+      } finally {
+        setTimeout(() => {
+          isHandlingPopStateRef.current = false;
+        }, 0);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   const [selectedServiceForBooking, setSelectedServiceForBooking] = useState<ServiceItem | null>(null);
   const [isBookingModalOpen, setIsBookingModalOpen] = useState<boolean>(false);
   const [isQuizModalOpen, setIsQuizModalOpen] = useState<boolean>(false);
   const [isAiChatOpen, setIsAiChatOpen] = useState<boolean>(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
   const [broadcastLogs, setBroadcastLogs] = useState<WhatsAppBroadcastLog[]>([]);
+
+  const deletedAppointmentIdsRef = useRef<Set<string>>(new Set());
+  const firestoreAppointmentsRef = useRef<Appointment[]>([]);
+  const apiAppointmentsRef = useRef<Appointment[]>([]);
+  const firestoreUsersRef = useRef<User[]>([]);
+  const apiUsersRef = useRef<User[]>([]);
+  const firestoreCustomersRef = useRef<Customer[]>([]);
+  const apiCustomersRef = useRef<Customer[]>([]);
+
+  const mergeAppointmentsLists = (aList: Appointment[], bList: Appointment[]): Appointment[] => {
+    const map = new Map<string, Appointment>();
+    const pickWinner = (prev: Appointment, next: Appointment): Appointment => {
+      const prevStatus = (prev.bookingStatus || prev.status || 'CONFIRMED').toUpperCase();
+      const nextStatus = (next.bookingStatus || next.status || 'CONFIRMED').toUpperCase();
+      const merged: Appointment = { ...prev, ...next };
+      // Preserve verified bank status or finalized CANCELLED/COMPLETED status from whichever source updated it
+      if (prev.isBankVerified && !next.isBankVerified && nextStatus !== 'CANCELLED') {
+        merged.isBankVerified = true;
+        merged.bankVerifiedSource = prev.bankVerifiedSource;
+        merged.bankName = prev.bankName || merged.bankName;
+        merged.paymentStatus = prev.paymentStatus || merged.paymentStatus;
+      }
+      if ((prevStatus === 'CANCELLED' && nextStatus !== 'CANCELLED') || (nextStatus === 'CANCELLED' && prevStatus !== 'CANCELLED')) {
+        // Keep CANCELLED unless prev/next has explicit newer reopen
+        merged.bookingStatus = 'CANCELLED';
+        merged.status = 'CANCELLED';
+      } else if (prevStatus === 'COMPLETED' && nextStatus === 'CONFIRMED') {
+        merged.bookingStatus = 'COMPLETED';
+        merged.status = 'COMPLETED';
+      }
+      return merged;
+    };
+
+    [...aList, ...bList].forEach(item => {
+      if (!item || !item.id || deletedAppointmentIdsRef.current.has(item.id)) return;
+      const existing = map.get(item.id);
+      map.set(item.id, existing ? pickWinner(existing, item) : item);
+    });
+
+    return Array.from(map.values()).sort(
+      (a, b) => new Date(b.createdAt || b.date || 0).getTime() - new Date(a.createdAt || a.date || 0).getTime()
+    );
+  };
+
+  const mergeUsersLists = (aList: User[], bList: User[]): User[] => {
+    const map = new Map<string, User>();
+    [...aList, ...bList].forEach(u => {
+      if (!u || !u.id) return;
+      const existing = map.get(u.id);
+      map.set(u.id, existing ? { ...existing, ...u, phone: u.phone || existing.phone || '', role: (existing.role === 'ADMIN' || u.role === 'ADMIN') ? 'ADMIN' : (u.role || existing.role) } : u);
+    });
+    return Array.from(map.values());
+  };
+
+  const mergeCustomersLists = (aList: Customer[], bList: Customer[]): Customer[] => {
+    const map = new Map<string, Customer>();
+    [...aList, ...bList].forEach(c => {
+      if (!c || !c.id) return;
+      const existing = map.get(c.id);
+      map.set(c.id, existing ? {
+        ...existing,
+        ...c,
+        totalVisits: Math.max(existing.totalVisits || 0, c.totalVisits || 0),
+        totalSpent: Math.max(existing.totalSpent || 0, c.totalSpent || 0)
+      } : c);
+    });
+    return Array.from(map.values());
+  };
 
   // Sync to localStorage
   useEffect(() => {
@@ -501,14 +702,29 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser) {
-        const isAdminUser = 
-          fbUser.email === 'dineshghodake941@gmail.com' ||
-          fbUser.email === 'rohitumdale@gmail.com' || 
-          fbUser.email === 'modernsalon02@gmail.com' ||
-          fbUser.email === 'admin@modernsalon.com';
+        const fbEmail = (fbUser.email || '').toLowerCase().trim();
+        const savedSettingsRaw = localStorage.getItem(`${LOCAL_STORAGE_KEY}_settings`);
+        let dynamicAdminEmails: string[] = [
+          'dineshghodake941@gmail.com',
+          'rohitumdale@gmail.com',
+          'modernsalon02@gmail.com',
+          'admin@modernsalon.com'
+        ];
+        try {
+          if (savedSettingsRaw) {
+            const parsedSettings = JSON.parse(savedSettingsRaw);
+            if (Array.isArray(parsedSettings.adminEmails)) {
+              dynamicAdminEmails = Array.from(new Set([
+                ...dynamicAdminEmails,
+                ...parsedSettings.adminEmails.map((e: string) => (e || '').toLowerCase().trim()).filter(Boolean)
+              ]));
+            }
+          }
+        } catch {}
+
+        const isAdminUser = Boolean(fbEmail && dynamicAdminEmails.includes(fbEmail));
 
         // STRICT MANDATORY EMAIL VERIFICATION GATE:
-        // Regular customers MUST verify their email before taking an account or entering the dashboard!
         if (!isAdminUser && !fbUser.emailVerified) {
           console.log('Unverified customer session detected - access to dashboard blocked until email confirmed:', fbUser.email);
           setCurrentUser(null);
@@ -516,7 +732,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         }
 
         const userDocRef = doc(db, 'users', fbUser.uid);
-        
+
         // Listen to Firestore profile updates in real time
         const unsubUserDoc = onSnapshot(userDocRef, (snap) => {
           if (snap.exists()) {
@@ -529,7 +745,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               phone: data.phone || fbUser.phoneNumber || '',
               role: isAdminUser ? 'ADMIN' : (data.role || 'CUSTOMER'),
               memberTier: isAdminUser ? 'Owner Admin' : (data.memberTier || 'New Client'),
-              emailVerified: fbUser.emailVerified,
+              emailVerified: fbUser.emailVerified || isAdminUser,
               avatarUrl: data.avatarUrl || fbUser.photoURL || undefined,
               preferredServices: data.preferredServices || [],
               gender: data.gender,
@@ -554,6 +770,31 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               phone: u.phone || (prev && prev.id === u.id ? prev.phone : '') || ''
             }));
             setIsGuestMode(false);
+            if (isAdminUser) {
+              setIsAdminModeState(true);
+              sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, 'true');
+              localStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, 'true');
+            }
+            // Mirror signed-in user to backend /api/auth/users and Firestore customers so CRM sees every account
+            fetch(`/api/auth/users/${u.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(u)
+            }).catch(() => {});
+            if (u.role !== 'ADMIN') {
+              setDoc(doc(db, 'customers', u.id), cleanFirestoreData({
+                id: u.id,
+                name: u.name,
+                phone: u.phone || '',
+                email: u.email || '',
+                totalVisits: u.totalVisits || 0,
+                totalSpent: 0,
+                lastVisit: 'Registered',
+                favoriteService: (u.preferredServices && u.preferredServices[0]) || 'General Styling',
+                memberSince: u.memberSince || '2026',
+                tier: u.memberTier || 'New Client'
+              }), { merge: true }).catch(() => {});
+            }
           } else {
             const newUserData: User = {
               id: fbUser.uid,
@@ -562,7 +803,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               phone: fbUser.phoneNumber || '',
               role: isAdminUser ? 'ADMIN' : 'CUSTOMER',
               memberTier: isAdminUser ? 'Owner Admin' : 'New Client',
-              emailVerified: Boolean(fbUser.emailVerified),
+              emailVerified: Boolean(fbUser.emailVerified) || isAdminUser,
               ...(fbUser.photoURL ? { avatarUrl: fbUser.photoURL } : {}),
               preferredServices: []
             };
@@ -572,6 +813,16 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               phone: newUserData.phone || (prev && prev.id === newUserData.id ? prev.phone : '') || ''
             }));
             setIsGuestMode(false);
+            if (isAdminUser) {
+              setIsAdminModeState(true);
+              sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, 'true');
+              localStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, 'true');
+            }
+            fetch(`/api/auth/users/${newUserData.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(newUserData)
+            }).catch(() => {});
           }
         }, (err) => {
           console.warn('User document snapshot warning:', err.message);
@@ -584,7 +835,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return () => unsubscribeAuth();
   }, []);
 
-  // 2. Real-time Firestore Database Synchronization for Collections
+  // 2. Real-time Firestore Database Synchronization for Collections (Merged cleanly — never clobbers)
   useEffect(() => {
     // Real-time Appointments
     const unsubApts = onSnapshot(collection(db, 'appointments'), (snapshot) => {
@@ -592,8 +843,8 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       snapshot.forEach((d) => {
         apts.push({ id: d.id, ...(d.data() as any) });
       });
-      apts.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-      setAppointments(apts);
+      firestoreAppointmentsRef.current = apts;
+      setAppointments(prev => mergeAppointmentsLists(mergeAppointmentsLists(prev, apiAppointmentsRef.current), apts));
     }, (err) => {
       console.warn('Real-time appointments snapshot notice:', err.message);
     });
@@ -635,7 +886,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       console.warn('Real-time offers snapshot notice:', err.message);
     });
 
-    // Real-time Settings (preserve newer adminPassword updates & normalize legacy bank/QR)
+    // Real-time Settings
     const unsubSettings = onSnapshot(doc(db, 'salon_settings', 'main'), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data() as any;
@@ -677,7 +928,37 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     };
   }, []);
 
-  // Sync with Backend Database API on mount
+  // 2b. Real-time Firestore Listeners for ALL Users & CRM Customers (when Admin / Firebase Signed-In)
+  useEffect(() => {
+    if (currentUser?.role !== 'ADMIN' && !auth.currentUser) return;
+
+    const unsubCustomersFs = onSnapshot(collection(db, 'customers'), (snapshot) => {
+      const custs: Customer[] = [];
+      snapshot.forEach((d) => {
+        custs.push({ id: d.id, ...(d.data() as any) });
+      });
+      firestoreCustomersRef.current = custs;
+      setRawCustomers(prev => mergeCustomersLists(mergeCustomersLists(prev, apiCustomersRef.current), custs));
+    }, () => {});
+
+    const unsubUsersFs = currentUser?.role === 'ADMIN'
+      ? onSnapshot(collection(db, 'users'), (snapshot) => {
+          const fsUsers: User[] = [];
+          snapshot.forEach((d) => {
+            fsUsers.push({ id: d.id, ...(d.data() as any) });
+          });
+          firestoreUsersRef.current = fsUsers;
+          setUsers(prev => mergeUsersLists(mergeUsersLists(prev, apiUsersRef.current), fsUsers));
+        }, () => {})
+      : () => {};
+
+    return () => {
+      unsubCustomersFs();
+      unsubUsersFs();
+    };
+  }, [currentUser?.id, currentUser?.role]);
+
+  // Sync with Backend Database API on mount & periodically (merges cleanly with Firestore instead of clobbering!)
   useEffect(() => {
     fetch('/api/settings')
       .then(res => res.json())
@@ -742,7 +1023,13 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       .then(res => res.json())
       .then(data => {
         if (data.success && Array.isArray(data.inquiries)) {
-          setInquiries(data.inquiries);
+          setInquiries(prev => {
+            const map = new Map<string, ContactInquiry>();
+            [...prev, ...data.inquiries].forEach(inq => {
+              if (inq && inq.id) map.set(inq.id, inq);
+            });
+            return Array.from(map.values());
+          });
         }
       })
       .catch(() => {});
@@ -751,13 +1038,16 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       .then(res => res.json())
       .then(data => {
         if (data.success && Array.isArray(data.users)) {
-          setUsers(data.users);
+          apiUsersRef.current = data.users;
+          setUsers(prev => mergeUsersLists(mergeUsersLists(prev, firestoreUsersRef.current), data.users));
           setCurrentUser(prev => {
             if (!prev) return prev;
-            const fresh = data.users.find((u: any) => 
-              u.id === prev.id || 
-              (u.phone && prev.phone && u.phone === prev.phone) || 
-              (u.email && prev.email && u.email.toLowerCase() === prev.email.toLowerCase())
+            // CRITICAL: Never let a matching phone overwrite an authenticated ADMIN session with a CUSTOMER record
+            if (prev.role === 'ADMIN') return prev;
+            const fresh = data.users.find((u: any) =>
+              u.id === prev.id ||
+              (u.email && prev.email && u.email.toLowerCase() === prev.email.toLowerCase()) ||
+              (u.phone && prev.phone && u.phone === prev.phone && u.role === prev.role)
             );
             if (fresh) {
               const merged = {
@@ -772,15 +1062,6 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             }
             return prev;
           });
-        }
-      })
-      .catch(() => {});
-
-    fetch('/api/customers')
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && Array.isArray(data.customers)) {
-          setCustomers(data.customers);
         }
       })
       .catch(() => {});
@@ -800,23 +1081,16 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       })
       .catch(() => {});
 
-    // Real-Time Database Sync: Fetch appointments, notifications, and customers periodically
+    // Real-Time Database Sync: Merge backend appointments, users, and customers with Firestore without overwriting
     const syncRealTimeAppointments = () => {
       fetch('/api/appointments')
         .then(res => res.json())
         .then(data => {
           if (data.success && Array.isArray(data.appointments)) {
-            setAppointments(prev => {
-              const serverIds = new Set(data.appointments.map((a: any) => a.id));
-              const now = Date.now();
-              // Preserve brand new local bookings created in the last 15s in case background save is in flight
-              const freshLocal = prev.filter(a => {
-                if (serverIds.has(a.id)) return false;
-                const createdTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-                return (now - createdTime) < 15000;
-              });
-              return [...data.appointments, ...freshLocal];
-            });
+            apiAppointmentsRef.current = data.appointments;
+            setAppointments(prev =>
+              mergeAppointmentsLists(mergeAppointmentsLists(prev, firestoreAppointmentsRef.current), data.appointments)
+            );
           }
         })
         .catch(() => {});
@@ -834,7 +1108,18 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         .then(res => res.json())
         .then(data => {
           if (data.success && Array.isArray(data.customers)) {
-            setCustomers(data.customers);
+            apiCustomersRef.current = data.customers;
+            setRawCustomers(prev => mergeCustomersLists(mergeCustomersLists(prev, firestoreCustomersRef.current), data.customers));
+          }
+        })
+        .catch(() => {});
+
+      fetch('/api/auth/users')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && Array.isArray(data.users)) {
+            apiUsersRef.current = data.users;
+            setUsers(prev => mergeUsersLists(mergeUsersLists(prev, firestoreUsersRef.current), data.users));
           }
         })
         .catch(() => {});
@@ -916,8 +1201,8 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   }, [inquiries]);
 
   useEffect(() => {
-    localStorage.setItem(`${LOCAL_STORAGE_KEY}_customers`, JSON.stringify(customers));
-  }, [customers]);
+    localStorage.setItem(`${LOCAL_STORAGE_KEY}_customers`, JSON.stringify(rawCustomers));
+  }, [rawCustomers]);
 
   useEffect(() => {
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_gallery`, JSON.stringify(gallery));
@@ -954,11 +1239,13 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   useEffect(() => {
     try {
       if (currentUser) {
-        sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_current_user`, JSON.stringify(currentUser));
+        const serialized = JSON.stringify(currentUser);
+        sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_current_user`, serialized);
+        localStorage.setItem(`${LOCAL_STORAGE_KEY}_current_user`, serialized);
       } else {
         sessionStorage.removeItem(`${LOCAL_STORAGE_KEY}_current_user`);
+        localStorage.removeItem(`${LOCAL_STORAGE_KEY}_current_user`);
       }
-      localStorage.removeItem(`${LOCAL_STORAGE_KEY}_current_user`);
     } catch {}
   }, [currentUser]);
 
@@ -966,10 +1253,11 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     try {
       if (isGuestMode) {
         sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_guest_mode`, 'true');
+        localStorage.setItem(`${LOCAL_STORAGE_KEY}_guest_mode`, 'true');
       } else {
         sessionStorage.removeItem(`${LOCAL_STORAGE_KEY}_guest_mode`);
+        localStorage.removeItem(`${LOCAL_STORAGE_KEY}_guest_mode`);
       }
-      localStorage.removeItem(`${LOCAL_STORAGE_KEY}_guest_mode`);
     } catch {}
   }, [isGuestMode]);
 
@@ -1196,8 +1484,18 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const clearAllPastData = async (): Promise<{ success: boolean; message: string }> => {
     try {
+      appointments.forEach(a => {
+        if (a?.id) deletedAppointmentIdsRef.current.add(a.id);
+      });
+      firestoreAppointmentsRef.current = [];
+      apiAppointmentsRef.current = [];
+      firestoreCustomersRef.current = [];
+      apiCustomersRef.current = [];
+      firestoreUsersRef.current = firestoreUsersRef.current.filter(u => u.role === 'ADMIN');
+      apiUsersRef.current = apiUsersRef.current.filter(u => u.role === 'ADMIN');
+
       setAppointments([]);
-      setCustomers([]);
+      setRawCustomers([]);
       setInquiries([]);
       setNotifications([]);
       setBroadcastLogs([]);
@@ -1310,6 +1608,10 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           cleanNum === (settings.phone || '8104026257').replace(/\D/g, '');
 
         if (isRecognizedAdminIdent) {
+          // Ensure no stale Firebase customer session hijacks the Admin session upon page refresh
+          if (auth.currentUser && !authorizedAdminEmails.includes((auth.currentUser.email || '').toLowerCase().trim())) {
+            signOut(auth).catch(() => {});
+          }
           const matchedAdminEmail = authorizedAdminEmails.includes(cleanLower)
             ? cleanLower
             : (authorizedAdminEmails[0] || 'dineshghodake941@gmail.com');
@@ -1393,6 +1695,25 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         };
 
         await setDoc(doc(db, 'users', fbUser.uid), cleanFirestoreData(user), { merge: true });
+        fetch(`/api/auth/users/${fbUser.uid}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(user)
+        }).catch(() => {});
+        if (userRole !== 'ADMIN') {
+          setDoc(doc(db, 'customers', fbUser.uid), cleanFirestoreData({
+            id: fbUser.uid,
+            name: user.name,
+            phone: user.phone || '',
+            email: user.email || '',
+            totalVisits: user.totalVisits || 0,
+            totalSpent: 0,
+            lastVisit: 'Signed In',
+            favoriteService: (user.preferredServices && user.preferredServices[0]) || 'General Styling',
+            memberSince: user.memberSince || '2026',
+            tier: user.memberTier || 'Standard'
+          }), { merge: true }).catch(() => {});
+        }
 
         // Push latest adminPassword from backend settings if admin just signed into Firebase
         if (userRole === 'ADMIN' && settings.adminPassword) {
@@ -1496,7 +1817,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         setCurrentUser(adminProfile);
         setIsGuestMode(false);
         setIsAdminMode(true);
-        setActiveNavTab('admin');
+        setAdminTab('dashboard');
         setIsAuthModalOpen(false);
 
         return {
@@ -1539,6 +1860,24 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       };
 
       await setDoc(doc(db, 'users', fbUser.uid), cleanFirestoreData(clientProfile), { merge: true });
+      fetch(`/api/auth/users/${fbUser.uid}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(clientProfile)
+      }).catch(() => {});
+      setDoc(doc(db, 'customers', fbUser.uid), cleanFirestoreData({
+        id: fbUser.uid,
+        name: clientProfile.name,
+        phone: clientProfile.phone || '',
+        email: clientProfile.email || '',
+        totalVisits: clientProfile.totalVisits || 0,
+        totalSpent: 0,
+        lastVisit: 'Signed In',
+        favoriteService: (clientProfile.preferredServices && clientProfile.preferredServices[0]) || 'General Styling',
+        memberSince: clientProfile.memberSince || '2026',
+        tier: clientProfile.memberTier || 'New Client'
+      }), { merge: true }).catch(() => {});
+
       setCurrentUser(clientProfile);
       setIsGuestMode(false);
       setIsAdminMode(false);
@@ -1644,8 +1983,11 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     } catch {}
     setCurrentUser(null);
     setIsGuestMode(false);
-    setIsAdminMode(false);
-    setActiveNavTab('home');
+    setIsAdminModeState(false);
+    setActiveNavTabState('home');
+    setAdminTabState('dashboard');
+    navSnapshotRef.current = { isAdminMode: false, activeNavTab: 'home', adminTab: 'dashboard' };
+    pushModuleHistory(false, 'home', 'dashboard', true);
     sessionStorage.removeItem(`${LOCAL_STORAGE_KEY}_guest_mode`);
     sessionStorage.removeItem(`${LOCAL_STORAGE_KEY}_current_user`);
     sessionStorage.removeItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`);
@@ -1654,6 +1996,8 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     localStorage.removeItem(`${LOCAL_STORAGE_KEY}_guest_mode`);
     localStorage.removeItem(`${LOCAL_STORAGE_KEY}_current_user`);
     localStorage.removeItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`);
+    localStorage.removeItem(`${LOCAL_STORAGE_KEY}_active_tab`);
+    localStorage.removeItem(`${LOCAL_STORAGE_KEY}_admin_tab`);
   };
 
   const updateCurrentUser = async (updates: Partial<User>): Promise<{ success: boolean; user?: User; message?: string }> => {
@@ -1865,12 +2209,31 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       // Fallback safe
     }
 
-    // Update appointments
-    setAppointments(prev => [newAppointment, ...prev]);
+    // Update appointments immediately & persist customer CRM record across Firestore + backend API
+    setAppointments(prev => mergeAppointmentsLists([newAppointment], prev));
 
-    // Update or add customer record
+    const custId = currentUser?.id && currentUser.role !== 'ADMIN' ? currentUser.id : `cust-${Date.now()}`;
+    const customerPayload: Customer = {
+      id: custId,
+      name: payload.clientName,
+      phone: payload.clientPhone,
+      email: payload.clientEmail,
+      totalVisits: 1,
+      totalSpent: payload.totalAmount,
+      lastVisit: payload.date,
+      favoriteService: payload.serviceName,
+      memberSince: new Date().toISOString().split('T')[0],
+      tier: 'New Client'
+    };
+
     setCustomers(prev => {
-      const existing = prev.find(c => c.phone === payload.clientPhone || c.email === payload.clientEmail);
+      const cleanP = (payload.clientPhone || '').replace(/\D/g, '').slice(-10);
+      const cleanE = (payload.clientEmail || '').trim().toLowerCase();
+      const existing = prev.find(c => {
+        const cp = (c.phone || '').replace(/\D/g, '').slice(-10);
+        const ce = (c.email || '').trim().toLowerCase();
+        return (cleanP && cp && cp === cleanP) || (cleanE && ce && ce === cleanE) || c.id === custId;
+      });
       if (existing) {
         return prev.map(c => c.id === existing.id ? {
           ...c,
@@ -1881,27 +2244,25 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           tier: c.totalVisits + 1 >= 10 ? 'VIP Member' : 'Standard'
         } : c);
       } else {
-        const newCust: Customer = {
-          id: `cust-${Date.now()}`,
-          name: payload.clientName,
-          phone: payload.clientPhone,
-          email: payload.clientEmail,
-          totalVisits: 1,
-          totalSpent: payload.totalAmount,
-          lastVisit: payload.date,
-          favoriteService: payload.serviceName,
-          memberSince: new Date().toISOString().split('T')[0],
-          tier: 'New Client'
-        };
-        return [newCust, ...prev];
+        return [customerPayload, ...prev];
       }
     });
+
+    fetch('/api/customers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(customerPayload)
+    }).catch(() => {});
+
+    if (auth.currentUser) {
+      setDoc(doc(db, 'customers', custId), cleanFirestoreData(customerPayload), { merge: true }).catch(() => {});
+    }
 
     // Add admin notification
     const newNotif: NotificationItem = {
       id: `notif-${Date.now()}`,
       title: 'New Online Reservation & 10% Deposit',
-      message: `${payload.clientName} booked ${payload.serviceName} for ${payload.date} at ${payload.timeSlot}. Advance deposit ₹${payload.advanceAmount} verified via Razorpay.`,
+      message: `${payload.clientName} booked ${payload.serviceName} for ${payload.date} at ${payload.timeSlot}. Advance deposit ₹${payload.advanceAmount} verified via UPI.`,
       type: 'booking',
       timestamp: 'Just now',
       read: false
@@ -1914,8 +2275,14 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const updateAppointmentStatus = (id: string, status: AppointmentStatus, extraFields?: Partial<Appointment>) => {
     const target = appointments.find(apt => apt.id === id);
 
+    const applyPatch = (list: Appointment[]) =>
+      list.map(apt => apt.id === id ? { ...apt, bookingStatus: status, status: status, isNew: false, ...(extraFields || {}) } : apt);
+
+    firestoreAppointmentsRef.current = applyPatch(firestoreAppointmentsRef.current);
+    apiAppointmentsRef.current = applyPatch(apiAppointmentsRef.current);
+
     setAppointments(prev => {
-      const updated = prev.map(apt => apt.id === id ? { ...apt, bookingStatus: status, status: status, isNew: false, ...(extraFields || {}) } : apt);
+      const updated = applyPatch(prev);
       localStorage.setItem(`${LOCAL_STORAGE_KEY}_appointments`, JSON.stringify(updated));
       return updated;
     });
@@ -1996,6 +2363,13 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return apt;
     });
 
+    firestoreAppointmentsRef.current = firestoreAppointmentsRef.current.map(apt =>
+      apt.id === id ? { ...apt, date: newDate, timeSlot: newTimeSlot, bookingStatus: 'CONFIRMED' as AppointmentStatus, status: 'CONFIRMED' as AppointmentStatus, isNew: false } : apt
+    );
+    apiAppointmentsRef.current = apiAppointmentsRef.current.map(apt =>
+      apt.id === id ? { ...apt, date: newDate, timeSlot: newTimeSlot, bookingStatus: 'CONFIRMED' as AppointmentStatus, status: 'CONFIRMED' as AppointmentStatus, isNew: false } : apt
+    );
+
     setAppointments(updatedAppointments);
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_appointments`, JSON.stringify(updatedAppointments));
 
@@ -2061,6 +2435,13 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return apt;
     });
 
+    firestoreAppointmentsRef.current = firestoreAppointmentsRef.current.map(apt =>
+      apt.id === id ? { ...apt, bookingStatus: 'CANCELLED' as AppointmentStatus, status: 'CANCELLED' as AppointmentStatus, notes: cancelNotes, isNew: false } : apt
+    );
+    apiAppointmentsRef.current = apiAppointmentsRef.current.map(apt =>
+      apt.id === id ? { ...apt, bookingStatus: 'CANCELLED' as AppointmentStatus, status: 'CANCELLED' as AppointmentStatus, notes: cancelNotes, isNew: false } : apt
+    );
+
     setAppointments(updatedAppointments);
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_appointments`, JSON.stringify(updatedAppointments));
 
@@ -2109,6 +2490,10 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const deleteAppointment = (id: string) => {
     const target = appointments.find(apt => apt.id === id);
+
+    deletedAppointmentIdsRef.current.add(id);
+    firestoreAppointmentsRef.current = firestoreAppointmentsRef.current.filter(apt => apt.id !== id);
+    apiAppointmentsRef.current = apiAppointmentsRef.current.filter(apt => apt.id !== id);
 
     setAppointments(prev => {
       const updated = prev.filter(apt => apt.id !== id);
@@ -2600,23 +2985,158 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setStaffMembers(prev => prev.filter(m => m.id !== id));
   };
 
+  // Unified Multi-User Customers CRM computation: combines stored CRM rows + ALL registered users + ALL clients across appointments
+  const customers: Customer[] = useMemo(() => {
+    const crmList: Customer[] = [];
+
+    const normPhone = (p?: string) => {
+      const d = (p || '').replace(/\D/g, '');
+      return d.length >= 10 ? d.slice(-10) : d;
+    };
+    const normEmail = (e?: string) => (e || '').trim().toLowerCase();
+    const normName = (n?: string) => (n || '').trim().toLowerCase();
+
+    const findMatchIndex = (phone?: string, email?: string, name?: string, id?: string) => {
+      const p = normPhone(phone);
+      const e = normEmail(email);
+      const n = normName(name);
+      return crmList.findIndex(c => {
+        if (id && c.id === id) return true;
+        const cp = normPhone(c.phone);
+        const ce = normEmail(c.email);
+        const cn = normName(c.name);
+        if (p && cp && p === cp) return true;
+        if (e && ce && e === ce) return true;
+        if (!p && !e && n && cn && n === cn) return true;
+        return false;
+      });
+    };
+
+    // 1. Seed from persisted CRM customers (Firestore + Backend API)
+    rawCustomers.forEach(c => {
+      if (!c) return;
+      const idx = findMatchIndex(c.phone, c.email, c.name, c.id);
+      if (idx === -1) {
+        crmList.push({ ...c });
+      } else {
+        crmList[idx] = {
+          ...crmList[idx],
+          ...c,
+          phone: c.phone || crmList[idx].phone,
+          email: c.email || crmList[idx].email,
+          totalVisits: Math.max(crmList[idx].totalVisits || 0, c.totalVisits || 0),
+          totalSpent: Math.max(crmList[idx].totalSpent || 0, c.totalSpent || 0)
+        };
+      }
+    });
+
+    // 2. Include EVERY non-admin registered/logged-in user (from Firestore users + API users)
+    users.forEach(u => {
+      if (!u || u.role === 'ADMIN') return;
+      const idx = findMatchIndex(u.phone, u.email, u.name, u.id);
+      if (idx === -1) {
+        crmList.push({
+          id: u.id,
+          name: u.name || 'Valued Client',
+          phone: u.phone || '',
+          email: u.email || '',
+          totalVisits: u.totalVisits || 0,
+          totalSpent: 0,
+          lastVisit: 'Registered',
+          favoriteService: (u.preferredServices && u.preferredServices[0]) || 'General Styling',
+          memberSince: u.memberSince || '2026',
+          tier: u.memberTier || 'New Client'
+        });
+      } else {
+        crmList[idx] = {
+          ...crmList[idx],
+          name: u.name || crmList[idx].name,
+          phone: u.phone || crmList[idx].phone,
+          email: u.email || crmList[idx].email
+        };
+      }
+    });
+
+    // 3. Recompute live visits, spending, last visit & favorite service from ALL non-cancelled appointments
+    appointments.forEach(apt => {
+      const st = (apt.bookingStatus || apt.status || 'CONFIRMED').toUpperCase();
+      if (st === 'CANCELLED') return;
+
+      let idx = findMatchIndex(apt.clientPhone, apt.clientEmail, apt.clientName, apt.userId);
+      if (idx === -1) {
+        crmList.push({
+          id: apt.userId || `cust-${normPhone(apt.clientPhone) || apt.id}`,
+          name: apt.clientName || 'Walk-in Client',
+          phone: apt.clientPhone || '',
+          email: apt.clientEmail || '',
+          totalVisits: 0,
+          totalSpent: 0,
+          lastVisit: apt.date || 'Recent',
+          favoriteService: apt.serviceName || 'Salon Service',
+          memberSince: (apt.date || '').slice(0, 4) || '2026',
+          tier: 'New Client'
+        });
+        idx = crmList.length - 1;
+      }
+    });
+
+    return crmList.map(cust => {
+      const cp = normPhone(cust.phone);
+      const ce = normEmail(cust.email);
+      const cn = normName(cust.name);
+
+      const matchedApts = appointments.filter(apt => {
+        const st = (apt.bookingStatus || apt.status || 'CONFIRMED').toUpperCase();
+        if (st === 'CANCELLED') return false;
+        if (apt.userId && cust.id && apt.userId === cust.id) return true;
+        const ap = normPhone(apt.clientPhone);
+        const ae = normEmail(apt.clientEmail);
+        const an = normName(apt.clientName);
+        if (cp && ap && cp === ap) return true;
+        if (ce && ae && ce === ae) return true;
+        if (!cp && !ap && !ce && !ae && cn && an && cn === an) return true;
+        return false;
+      });
+
+      if (matchedApts.length > 0) {
+        const totalVisits = matchedApts.length;
+        const totalSpent = matchedApts.reduce((sum, a) => sum + (Number(a.totalAmount) || 0), 0);
+        const sorted = [...matchedApts].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        return {
+          ...cust,
+          totalVisits,
+          totalSpent,
+          lastVisit: sorted[0]?.date || cust.lastVisit || 'Recent',
+          favoriteService: sorted[0]?.serviceName || cust.favoriteService,
+          tier: totalVisits >= 5 ? 'VIP Member' : (totalVisits >= 1 ? 'Standard' : 'New Client')
+        };
+      }
+      return cust;
+    }).sort((a, b) => (b.totalSpent - a.totalSpent) || (b.totalVisits - a.totalVisits));
+  }, [rawCustomers, users, appointments]);
+
   // Financial & Operational Stat calculations
   const totalRevenue = appointments.reduce((sum, apt) => {
-    if (apt.bookingStatus !== 'CANCELLED') {
-      return sum + apt.totalAmount;
+    const st = (apt.bookingStatus || apt.status || 'CONFIRMED').toUpperCase();
+    if (st !== 'CANCELLED') {
+      return sum + (Number(apt.totalAmount) || 0);
     }
     return sum;
   }, 0);
 
   const advanceDepositTotal = appointments.reduce((sum, apt) => {
-    if (apt.bookingStatus !== 'CANCELLED') {
-      return sum + apt.advancePaid;
+    const st = (apt.bookingStatus || apt.status || 'CONFIRMED').toUpperCase();
+    if (st !== 'CANCELLED') {
+      return sum + (Number(apt.advancePaid) || 0);
     }
     return sum;
   }, 0);
 
   const totalBookingsCount = appointments.length;
-  const confirmedBookingsCount = appointments.filter(a => a.bookingStatus === 'CONFIRMED' || a.bookingStatus === 'COMPLETED').length;
+  const confirmedBookingsCount = appointments.filter(a => {
+    const st = (a.bookingStatus || a.status || 'CONFIRMED').toUpperCase();
+    return st === 'CONFIRMED' || st === 'COMPLETED';
+  }).length;
   const activeCustomersCount = customers.length;
   const pendingInquiriesCount = inquiries.filter(i => i.status === 'NEW' || i.status === 'IN PROGRESS').length;
 

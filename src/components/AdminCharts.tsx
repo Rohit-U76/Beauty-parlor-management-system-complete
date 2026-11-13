@@ -45,17 +45,20 @@ const COLORS = {
 const PIE_COLORS = ['#d4af37', '#e5c158', '#10b981', '#38bdf8', '#a855f7', '#f43f5e'];
 
 export const AdminCharts: React.FC = () => {
-  const { appointments, services, theme } = useSalon();
+  const { appointments, services, customers, theme } = useSalon();
   const isDark = theme !== 'light';
+
+  const isActiveBooking = (a: { bookingStatus?: string; status?: string }) =>
+    ((a.bookingStatus || a.status || 'CONFIRMED').toUpperCase() !== 'CANCELLED');
 
   // Chart View Controls
   const [revenueChartType, setRevenueChartType] = useState<'area' | 'bar'>('area');
   const [revenueTimeframe, setRevenueTimeframe] = useState<'all' | 'recent'>('all');
   const [serviceMetric, setServiceMetric] = useState<'bookings' | 'revenue'>('bookings');
 
-  // 1. Monthly Revenue & 10% Advance Deposit Dataset (100% Real Appointments)
+  // 1. Monthly Revenue & 10% Advance Deposit Dataset (100% Real Appointments across all accounts)
   const monthlyRevenueData = useMemo(() => {
-    const activeApts = appointments.filter(a => a.bookingStatus !== 'CANCELLED');
+    const activeApts = appointments.filter(isActiveBooking);
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const now = new Date();
 
@@ -99,9 +102,9 @@ export const AdminCharts: React.FC = () => {
     return revenueTimeframe === 'recent' ? sorted.slice(-4) : sorted;
   }, [appointments, revenueTimeframe]);
 
-  // 2. Service Popularity & Category Breakdown Dataset (100% Real Appointments)
+  // 2. Service Popularity & Category Breakdown Dataset (100% Real Appointments across all accounts)
   const { servicePopularityData, categoryDistributionData, topPerformingService, activeBookingsCount } = useMemo(() => {
-    const activeApts = appointments.filter(a => a.bookingStatus !== 'CANCELLED');
+    const activeApts = appointments.filter(isActiveBooking);
     const serviceCounts: Record<string, { bookings: number; revenue: number; category: string; price: number }> = {};
 
     activeApts.forEach(a => {
@@ -160,13 +163,13 @@ export const AdminCharts: React.FC = () => {
   // Overall totals for overview metric cards (computed strictly from active appointments)
   const totalRevenueSum = useMemo(() => {
     return appointments
-      .filter(a => a.bookingStatus !== 'CANCELLED')
+      .filter(isActiveBooking)
       .reduce((acc, cur) => acc + (Number(cur.totalAmount) || 0), 0);
   }, [appointments]);
 
   const totalAdvanceSum = useMemo(() => {
     return appointments
-      .filter(a => a.bookingStatus !== 'CANCELLED')
+      .filter(isActiveBooking)
       .reduce((acc, cur) => acc + (Number(cur.advancePaid) || 0), 0);
   }, [appointments]);
 
@@ -190,24 +193,24 @@ export const AdminCharts: React.FC = () => {
               {data.bookings} Bookings
             </span>
           </div>
-          <div className="space-y-1.5 pt-1 border-t border-zinc-800/60 font-mono">
+          <div className={`space-y-1.5 pt-1 border-t font-mono ${isDark ? 'border-zinc-800/60' : 'border-zinc-200'}`}>
             <div className="flex items-center justify-between gap-4">
-              <span className="text-zinc-400 flex items-center gap-1.5">
+              <span className="text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-yellow-500 inline-block"></span>
                 Total Revenue:
               </span>
-              <span className="font-bold text-yellow-400">₹{data.revenue.toLocaleString()}</span>
+              <span className="font-bold text-amber-600 dark:text-yellow-400">₹{data.revenue.toLocaleString()}</span>
             </div>
             <div className="flex items-center justify-between gap-4">
-              <span className="text-zinc-400 flex items-center gap-1.5">
+              <span className="text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
                 10% Advance Deposit:
               </span>
-              <span className="font-bold text-emerald-400">₹{data.advance.toLocaleString()}</span>
+              <span className="font-bold text-emerald-600 dark:text-emerald-400">₹{data.advance.toLocaleString()}</span>
             </div>
-            <div className="flex items-center justify-between gap-4 text-[11px] pt-1 text-zinc-400">
+            <div className="flex items-center justify-between gap-4 text-[11px] pt-1 text-zinc-500 dark:text-zinc-400">
               <span>Avg Ticket Size:</span>
-              <span className="text-zinc-300">₹{data.avgTicket}</span>
+              <span className="text-zinc-800 dark:text-zinc-300 font-semibold">₹{data.avgTicket}</span>
             </div>
           </div>
         </div>
@@ -228,18 +231,18 @@ export const AdminCharts: React.FC = () => {
         }`}>
           <div className="font-bold text-sm text-yellow-500">{data.fullName}</div>
           <div className="text-[11px] text-zinc-400">{data.category}</div>
-          <div className="space-y-1 pt-1.5 border-t border-zinc-800/60 font-mono">
+          <div className={`space-y-1 pt-1.5 border-t font-mono ${isDark ? 'border-zinc-800/60' : 'border-zinc-200'}`}>
             <div className="flex items-center justify-between gap-4">
-              <span className="text-zinc-400">Total Bookings:</span>
-              <span className="font-bold text-yellow-400">{data.bookings} sessions</span>
+              <span className="text-zinc-500 dark:text-zinc-400">Total Bookings:</span>
+              <span className="font-bold text-amber-600 dark:text-yellow-400">{data.bookings} sessions</span>
             </div>
             <div className="flex items-center justify-between gap-4">
-              <span className="text-zinc-400">Gross Value:</span>
-              <span className="font-bold text-zinc-200">₹{data.revenue.toLocaleString()}</span>
+              <span className="text-zinc-500 dark:text-zinc-400">Gross Value:</span>
+              <span className="font-bold text-zinc-800 dark:text-zinc-200">₹{data.revenue.toLocaleString()}</span>
             </div>
             <div className="flex items-center justify-between gap-4">
-              <span className="text-zinc-400">10% Adv Online:</span>
-              <span className="font-bold text-emerald-400">₹{data.advanceCollected.toLocaleString()}</span>
+              <span className="text-zinc-500 dark:text-zinc-400">10% Adv Online:</span>
+              <span className="font-bold text-emerald-600 dark:text-emerald-400">₹{data.advanceCollected.toLocaleString()}</span>
             </div>
           </div>
         </div>
@@ -251,21 +254,21 @@ export const AdminCharts: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* SECTION HEADER & PERFORMANCE SUMMARY */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-zinc-800/80">
+      <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b ${isDark ? 'border-zinc-800/80' : 'border-purple-200'}`}>
         <div>
-          <h2 className="text-xl font-bold font-serif text-yellow-400 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-yellow-500" />
+          <h2 className="text-xl font-bold font-serif text-purple-800 dark:text-yellow-400 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-purple-600 dark:text-yellow-500" />
             <span>Salon Performance Analytics &amp; Revenue Trends</span>
           </h2>
-          <p className="text-xs text-zinc-400 mt-0.5">
-            Interactive visual charts for monthly revenue realization, 10% advance deposit receipts, and service popularity distribution.
+          <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
+            Combined multi-account performance across all {customers.length} CRM clients, {activeBookingsCount} bookings, and 10% advance deposit receipts.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="px-3 py-1.5 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 text-xs font-semibold flex items-center gap-1.5">
+          <div className="px-3 py-1.5 rounded-xl bg-purple-100 dark:bg-yellow-500/10 border border-purple-200 dark:border-yellow-500/30 text-purple-800 dark:text-yellow-400 text-xs font-semibold flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Real-time Sync Active</span>
+            <span>All Users Sync Active ({customers.length} Clients)</span>
           </div>
         </div>
       </div>
@@ -273,82 +276,82 @@ export const AdminCharts: React.FC = () => {
       {/* 4 SUMMARY STAT STRIP */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className={`p-4 rounded-2xl border transition-all ${
-          isDark ? 'bg-[#141418] border-zinc-800' : 'bg-white border-zinc-200 shadow-sm'
+          isDark ? 'bg-[#141418] border-zinc-800' : 'bg-white border-purple-200 shadow-sm'
         }`}>
-          <div className="flex items-center justify-between text-xs text-zinc-400 mb-1">
+          <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400 mb-1">
             <span>YTD Realized Revenue</span>
-            <DollarSign className="w-4 h-4 text-yellow-500" />
+            <DollarSign className="w-4 h-4 text-purple-600 dark:text-yellow-500" />
           </div>
-          <div className="text-2xl font-bold text-yellow-400 font-serif">
+          <div className="text-2xl font-bold text-purple-700 dark:text-yellow-400 font-serif">
             ₹{totalRevenueSum.toLocaleString()}
           </div>
-          <div className="text-[11px] text-emerald-500 flex items-center gap-1 mt-1 font-semibold">
+          <div className="text-[11px] text-emerald-600 dark:text-emerald-500 flex items-center gap-1 mt-1 font-semibold">
             <ArrowUpRight className="w-3.5 h-3.5" />
             <span>{activeBookingsCount} active booking{activeBookingsCount === 1 ? '' : 's'}</span>
           </div>
         </div>
 
         <div className={`p-4 rounded-2xl border transition-all ${
-          isDark ? 'bg-[#141418] border-zinc-800' : 'bg-white border-zinc-200 shadow-sm'
+          isDark ? 'bg-[#141418] border-zinc-800' : 'bg-white border-purple-200 shadow-sm'
         }`}>
-          <div className="flex items-center justify-between text-xs text-zinc-400 mb-1">
+          <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400 mb-1">
             <span>Online 10% Deposits</span>
-            <ShieldCheck className="w-4 h-4 text-emerald-500" />
+            <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-500" />
           </div>
-          <div className="text-2xl font-bold text-emerald-400 font-mono">
+          <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">
             ₹{totalAdvanceSum.toLocaleString()}
           </div>
-          <div className="text-[11px] text-zinc-400 mt-1">
-            100% Direct Bank UPI verified capture
+          <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1">
+            Direct Bank UPI verified capture
           </div>
         </div>
 
         <div className={`p-4 rounded-2xl border transition-all ${
-          isDark ? 'bg-[#141418] border-zinc-800' : 'bg-white border-zinc-200 shadow-sm'
+          isDark ? 'bg-[#141418] border-zinc-800' : 'bg-white border-purple-200 shadow-sm'
         }`}>
-          <div className="flex items-center justify-between text-xs text-zinc-400 mb-1">
+          <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400 mb-1">
             <span>Top Performing Service</span>
-            <Award className="w-4 h-4 text-yellow-500" />
+            <Award className="w-4 h-4 text-purple-600 dark:text-yellow-500" />
           </div>
-          <div className="text-sm font-bold text-zinc-100 truncate mt-1">
+          <div className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate mt-1">
             {topPerformingService.fullName}
           </div>
-          <div className="text-[11px] text-yellow-400 mt-1">
+          <div className="text-[11px] text-purple-700 dark:text-yellow-400 mt-1 font-semibold">
             {topPerformingService.bookings} bookings • ₹{topPerformingService.revenue.toLocaleString()}
           </div>
         </div>
 
         <div className={`p-4 rounded-2xl border transition-all ${
-          isDark ? 'bg-[#141418] border-zinc-800' : 'bg-white border-zinc-200 shadow-sm'
+          isDark ? 'bg-[#141418] border-zinc-800' : 'bg-white border-purple-200 shadow-sm'
         }`}>
-          <div className="flex items-center justify-between text-xs text-zinc-400 mb-1">
+          <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400 mb-1">
             <span>Avg Booking Ticket</span>
-            <Calendar className="w-4 h-4 text-blue-400" />
+            <Calendar className="w-4 h-4 text-blue-600 dark:text-blue-400" />
           </div>
-          <div className="text-2xl font-bold text-zinc-100 font-mono">
+          <div className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 font-mono">
             ₹{avgTicketValue.toLocaleString()}
           </div>
-          <div className="text-[11px] text-zinc-400 mt-1">
-            Across {services.length} salon services
+          <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1">
+            Across {customers.length} clients &amp; {services.length} services
           </div>
         </div>
       </div>
 
       {/* CHART 1: MONTHLY REVENUE & ADVANCE DEPOSIT RECHARTS */}
       <div className={`p-5 sm:p-6 rounded-3xl border shadow-xl space-y-4 transition-all ${
-        isDark ? 'bg-[#141418] border-zinc-800' : 'bg-white border-zinc-200'
+        isDark ? 'bg-[#141418] border-zinc-800' : 'bg-white border-purple-200'
       }`}>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-800/60">
+        <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b ${isDark ? 'border-zinc-800/60' : 'border-purple-200/70'}`}>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="font-serif text-lg font-bold text-zinc-100">
+              <h3 className="font-serif text-lg font-bold text-zinc-900 dark:text-zinc-100">
                 Monthly Revenue &amp; 10% Advance Realization
               </h3>
-              <span className="px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400 text-[10px] font-bold">
-                Recharts
+              <span className="px-2 py-0.5 rounded-full bg-purple-100 dark:bg-yellow-500/10 text-purple-700 dark:text-yellow-400 text-[10px] font-bold">
+                All Clients
               </span>
             </div>
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-zinc-600 dark:text-zinc-400">
               Tracking total appointment value alongside verified 10% advance deposit receipts month-by-month.
             </p>
           </div>
@@ -356,15 +359,15 @@ export const AdminCharts: React.FC = () => {
           <div className="flex items-center gap-2 self-end sm:self-auto">
             {/* Timeframe selector */}
             <div className={`flex items-center p-1 rounded-xl border text-xs ${
-              isDark ? 'bg-zinc-900 border-zinc-700/60' : 'bg-zinc-100 border-zinc-300'
+              isDark ? 'bg-zinc-900 border-zinc-700/60' : 'bg-purple-50 border-purple-200'
             }`}>
               <button
                 type="button"
                 onClick={() => setRevenueTimeframe('all')}
-                className={`px-2.5 py-1 rounded-lg transition-all ${
+                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
                   revenueTimeframe === 'all'
                     ? 'bg-yellow-500 text-black font-bold shadow-sm'
-                    : 'text-zinc-400 hover:text-zinc-200'
+                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
                 }`}
               >
                 All Months
@@ -372,10 +375,10 @@ export const AdminCharts: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setRevenueTimeframe('recent')}
-                className={`px-2.5 py-1 rounded-lg transition-all ${
+                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
                   revenueTimeframe === 'recent'
                     ? 'bg-yellow-500 text-black font-bold shadow-sm'
-                    : 'text-zinc-400 hover:text-zinc-200'
+                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
                 }`}
               >
                 Recent (4 Mos)
@@ -456,7 +459,7 @@ export const AdminCharts: React.FC = () => {
                   verticalAlign="top"
                   height={36}
                   formatter={(value) => (
-                    <span className="text-xs text-zinc-300 font-medium ml-1 mr-4">
+                    <span className="text-xs text-zinc-700 dark:text-zinc-300 font-medium ml-1 mr-4">
                       {value === 'revenue' ? 'Total Service Revenue (₹)' : '10% Advance Deposit Collected (₹)'}
                     </span>
                   )}
@@ -511,7 +514,7 @@ export const AdminCharts: React.FC = () => {
                   verticalAlign="top"
                   height={36}
                   formatter={(value) => (
-                    <span className="text-xs text-zinc-300 font-medium ml-1 mr-4">
+                    <span className="text-xs text-zinc-700 dark:text-zinc-300 font-medium ml-1 mr-4">
                       {value === 'revenue' ? 'Total Service Revenue (₹)' : '10% Advance Deposit Collected (₹)'}
                     </span>
                   )}
@@ -541,30 +544,30 @@ export const AdminCharts: React.FC = () => {
         
         {/* CHART 2: SERVICE POPULARITY (BAR CHART) */}
         <div className={`lg:col-span-7 p-5 sm:p-6 rounded-3xl border shadow-xl space-y-4 transition-all ${
-          isDark ? 'bg-[#141418] border-zinc-800' : 'bg-white border-zinc-200'
+          isDark ? 'bg-[#141418] border-zinc-800' : 'bg-white border-purple-200'
         }`}>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-800/60">
+          <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b ${isDark ? 'border-zinc-800/60' : 'border-purple-200/70'}`}>
             <div>
-              <h3 className="font-serif text-base sm:text-lg font-bold text-zinc-100 flex items-center gap-2">
-                <Scissors className="w-4 h-4 text-yellow-500" />
+              <h3 className="font-serif text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                <Scissors className="w-4 h-4 text-purple-600 dark:text-yellow-500" />
                 <span>Service Popularity &amp; Booking Volume</span>
               </h3>
-              <p className="text-xs text-zinc-400">
-                Most requested treatments and cumulative client reservations.
+              <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                Most requested treatments and cumulative client reservations across all accounts.
               </p>
             </div>
 
             {/* Metric Toggle */}
             <div className={`flex items-center p-1 rounded-xl border text-xs self-end sm:self-auto ${
-              isDark ? 'bg-zinc-900 border-zinc-700/60' : 'bg-zinc-100 border-zinc-300'
+              isDark ? 'bg-zinc-900 border-zinc-700/60' : 'bg-purple-50 border-purple-200'
             }`}>
               <button
                 type="button"
                 onClick={() => setServiceMetric('bookings')}
-                className={`px-2.5 py-1 rounded-lg transition-all ${
+                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
                   serviceMetric === 'bookings'
                     ? 'bg-yellow-500 text-black font-bold shadow-sm'
-                    : 'text-zinc-400 hover:text-zinc-200'
+                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
                 }`}
               >
                 Bookings Count
@@ -572,10 +575,10 @@ export const AdminCharts: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setServiceMetric('revenue')}
-                className={`px-2.5 py-1 rounded-lg transition-all ${
+                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
                   serviceMetric === 'revenue'
                     ? 'bg-yellow-500 text-black font-bold shadow-sm'
-                    : 'text-zinc-400 hover:text-zinc-200'
+                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
                 }`}
               >
                 Revenue (₹)
@@ -639,16 +642,16 @@ export const AdminCharts: React.FC = () => {
 
         {/* CHART 3: CATEGORY SHARE DONUT CHART */}
         <div className={`lg:col-span-5 p-5 sm:p-6 rounded-3xl border shadow-xl space-y-4 flex flex-col justify-between transition-all ${
-          isDark ? 'bg-[#141418] border-zinc-800' : 'bg-white border-zinc-200'
+          isDark ? 'bg-[#141418] border-zinc-800' : 'bg-white border-purple-200'
         }`}>
           <div>
-            <div className="flex items-center justify-between pb-3 border-b border-zinc-800/60">
+            <div className={`flex items-center justify-between pb-3 border-b ${isDark ? 'border-zinc-800/60' : 'border-purple-200/70'}`}>
               <div>
-                <h3 className="font-serif text-base sm:text-lg font-bold text-zinc-100 flex items-center gap-2">
-                  <PieIcon className="w-4 h-4 text-yellow-500" />
+                <h3 className="font-serif text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                  <PieIcon className="w-4 h-4 text-purple-600 dark:text-yellow-500" />
                   <span>Category Revenue Share</span>
                 </h3>
-                <p className="text-xs text-zinc-400">
+                <p className="text-xs text-zinc-600 dark:text-zinc-400">
                   Distribution of earnings across departments
                 </p>
               </div>
@@ -710,7 +713,7 @@ export const AdminCharts: React.FC = () => {
           </div>
 
           {/* Category Legend List */}
-          <div className="space-y-1.5 pt-2 border-t border-zinc-800/60 text-xs">
+          <div className={`space-y-1.5 pt-2 border-t text-xs ${isDark ? 'border-zinc-800/60' : 'border-purple-200/70'}`}>
             {categoryDistributionData.length === 0 ? (
               <div className="text-zinc-500 text-center py-1">No department earnings yet</div>
             ) : (
@@ -721,9 +724,9 @@ export const AdminCharts: React.FC = () => {
                       className="w-2.5 h-2.5 rounded-full shrink-0"
                       style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }}
                     ></span>
-                    <span className="text-zinc-300 truncate">{cat.name}</span>
+                    <span className="text-zinc-700 dark:text-zinc-300 truncate font-medium">{cat.name}</span>
                   </div>
-                  <span className="font-mono font-semibold text-zinc-200 shrink-0">
+                  <span className="font-mono font-semibold text-zinc-900 dark:text-zinc-200 shrink-0">
                     ₹{cat.value.toLocaleString()}
                   </span>
                 </div>

@@ -120,6 +120,7 @@ export const AdminSuite: React.FC = () => {
   // Search & Filter
   const [appointmentSearch, setAppointmentSearch] = useState('');
   const [appointmentFilter, setAppointmentFilter] = useState('all');
+  const [customerSearch, setCustomerSearch] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Modals state
@@ -1230,6 +1231,7 @@ export const AdminSuite: React.FC = () => {
                     const status = getAppStatus(app);
                     const cleanPhone = (app.clientPhone || '').replace(/\D/g, '');
                     const whatsappDirectUrl = app.whatsappUrl || `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(`Hello ${app.clientName}, your appointment for ${app.serviceName} at Modern Unisex Salon Mohol is confirmed for ${app.date} at ${app.timeSlot}. Ref: ${app.bookingRef}.`)}`;
+                    const utrRef = app.upiTransactionId || app.razorpayPaymentId || '';
 
                     return (
                       <div
@@ -1239,7 +1241,7 @@ export const AdminSuite: React.FC = () => {
                         {/* Card Header */}
                         <div className="flex items-start justify-between gap-2">
                           <div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="font-mono text-xs font-bold text-purple-700 dark:text-amber-400">
                                 {app.bookingRef}
                               </span>
@@ -1252,20 +1254,31 @@ export const AdminSuite: React.FC = () => {
                               }`}>
                                 {status}
                               </span>
+                              {app.isBankVerified ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/40">
+                                  <ShieldCheck className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
+                                  <span>Bank Credited</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30">
+                                  <Clock className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
+                                  <span>Pending Bank Credit</span>
+                                </span>
+                              )}
                             </div>
                             <h3 className="font-serif font-bold text-base text-zinc-900 dark:text-zinc-100 mt-1">
                               {app.clientName}
                             </h3>
                           </div>
 
-                          <div className="text-right">
+                          <div className="text-right shrink-0">
                             <span className="text-xs text-zinc-500 dark:text-zinc-400 block">Total Bill</span>
                             <span className="font-mono font-bold text-sm text-zinc-900 dark:text-zinc-100">₹{app.totalAmount}</span>
                           </div>
                         </div>
 
-                        {/* Service & Time details */}
-                        <div className="p-2.5 rounded-xl bg-purple-50/70 dark:bg-zinc-950/80 border border-purple-200 dark:border-zinc-800/80 text-xs space-y-1">
+                        {/* Service, Time & UTR Payment Verification details */}
+                        <div className="p-2.5 rounded-xl bg-purple-50/70 dark:bg-zinc-950/80 border border-purple-200 dark:border-zinc-800/80 text-xs space-y-1.5">
                           <div className="flex items-center justify-between text-zinc-800 dark:text-zinc-300">
                             <span className="font-semibold text-purple-700 dark:text-amber-300/90">{app.serviceName}</span>
                             <span className="text-zinc-500">{app.stylistName}</span>
@@ -1273,10 +1286,57 @@ export const AdminSuite: React.FC = () => {
                           <div className="flex items-center justify-between text-zinc-600 dark:text-zinc-400 text-[11px] pt-1 border-t border-purple-200/70 dark:border-zinc-800/60">
                             <span>📅 {app.date} • ⏰ {app.timeSlot}</span>
                             <span className="font-mono text-emerald-700 dark:text-emerald-400 font-semibold">
-                              Adv: ₹{app.advancePaid} (Paid)
+                              Adv: ₹{app.advancePaid}
                             </span>
                           </div>
+                          {utrRef && (
+                            <div className="flex items-center justify-between text-[11px] pt-1 border-t border-purple-200/60 dark:border-zinc-800/60 font-mono">
+                              <div className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300 min-w-0">
+                                <span className="text-purple-700 dark:text-amber-400 font-bold shrink-0">UTR:</span>
+                                <span className="truncate font-semibold">{utrRef}</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(utrRef);
+                                  setActionFeedbackToast(`Copied UTR: ${utrRef}`);
+                                  setTimeout(() => setActionFeedbackToast(null), 2500);
+                                }}
+                                className="px-2 py-0.5 rounded-md bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 flex items-center gap-1 shrink-0 cursor-pointer"
+                                title="Copy UTR to check bank SMS or statement"
+                              >
+                                <Copy className="w-3 h-3" />
+                                <span className="text-[10px]">Copy</span>
+                              </button>
+                            </div>
+                          )}
                         </div>
+
+                        {/* Mobile Bank Credit Confirmation Actions */}
+                        {!app.isBankVerified && status !== 'CANCELLED' && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleConfirmBankCredit(app)}
+                              className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 min-h-[42px] cursor-pointer transition shadow-sm"
+                              title={`Confirm that ₹${app.advancePaid} is credited in your ${settings.bankName || 'HDFC Bank'} account`}
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                              <span>Confirm Credit (₹{app.advancePaid})</span>
+                            </button>
+
+                            {app.upiTransactionId && (
+                              <button
+                                type="button"
+                                onClick={() => handleRejectUtrDeposit(app)}
+                                className="py-2.5 px-3 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/60 dark:hover:bg-red-900 border border-red-300 dark:border-red-500/30 text-red-700 dark:text-red-400 text-xs font-bold min-h-[42px] cursor-pointer transition"
+                                title="Reject fake/invalid UTR and cancel booking"
+                              >
+                                Reject Fake
+                              </button>
+                            )}
+                          </div>
+                        )}
 
                         {/* Direct Communication & Mobile Actions */}
                         <div className="pt-1 flex items-center gap-2 flex-wrap">
@@ -1306,11 +1366,11 @@ export const AdminSuite: React.FC = () => {
                               setSelectedAppForMessaging(app);
                               setShowSmsHubModal(true);
                             }}
-                            className="px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-500/15 dark:hover:bg-emerald-500/25 border border-emerald-300 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold flex items-center gap-1.5 min-h-[40px] cursor-pointer"
-                            title="Send message through WhatsApp"
+                            className="px-3 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-purple-200 dark:border-zinc-700 text-purple-800 dark:text-amber-300 text-xs font-bold flex items-center gap-1.5 min-h-[40px] cursor-pointer"
+                            title="Open SMS & WhatsApp Hub"
                           >
-                            <MessageSquare className="w-3.5 h-3.5" />
-                            <span>WhatsApp</span>
+                            <Send className="w-3.5 h-3.5" />
+                            <span>SMS / Hub</span>
                           </button>
 
                           {app.paymentScreenshotUrl && (
@@ -1709,94 +1769,224 @@ export const AdminSuite: React.FC = () => {
           )}
 
           {/* CUSTOMERS CRM TAB */}
-          {adminTab === 'customers' && (
-            <div className="space-y-5">
-              <div>
-                <h1 className="font-serif text-2xl font-bold text-zinc-100">Customers CRM</h1>
-                <p className="text-xs text-zinc-400">List of registered clients and repeat visit history.</p>
-              </div>
+          {adminTab === 'customers' && (() => {
+            const q = customerSearch.toLowerCase().trim();
+            const filteredCustomers = customers.filter(c =>
+              !q ||
+              (c.name || '').toLowerCase().includes(q) ||
+              (c.phone || '').toLowerCase().includes(q) ||
+              (c.email || '').toLowerCase().includes(q) ||
+              (c.favoriteService || '').toLowerCase().includes(q)
+            );
+            const totalClientVisits = customers.reduce((sum, c) => sum + (c.totalVisits || 0), 0);
+            const totalClientSpend = customers.reduce((sum, c) => sum + (c.totalSpent || 0), 0);
+            const vipOrRepeatCount = customers.filter(c => (c.totalVisits || 0) >= 2).length;
 
-              {/* Desktop Table */}
-              <div className="hidden md:block rounded-2xl bg-zinc-900 border border-zinc-800 overflow-hidden">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-zinc-950 text-zinc-400 uppercase font-semibold border-b border-zinc-800">
-                    <tr>
-                      <th className="px-5 py-3">Client Name</th>
-                      <th className="px-5 py-3">Phone &amp; Email</th>
-                      <th className="px-5 py-3">Visits</th>
-                      <th className="px-5 py-3">Total Spent</th>
-                      <th className="px-5 py-3">Last Visit</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-800">
-                    {customers.map(c => (
-                      <tr key={c.id} className="hover:bg-zinc-800/40">
-                        <td className="px-5 py-4 font-semibold text-zinc-200">{c.name}</td>
-                        <td className="px-5 py-4 text-zinc-400">
-                          <div>{c.phone}</div>
-                          <div className="text-[11px] text-zinc-500">{c.email}</div>
-                        </td>
-                        <td className="px-5 py-4 font-mono">{c.totalVisits} visits</td>
-                        <td className="px-5 py-4 font-bold text-amber-400 font-mono">₹{c.totalSpent.toLocaleString()}</td>
-                        <td className="px-5 py-4 text-zinc-400">{c.lastVisit || 'Recent'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            return (
+              <div className="space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h1 className="font-serif text-2xl font-bold text-zinc-900 dark:text-zinc-100">Customers CRM (All Accounts)</h1>
+                    <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                      Unified client directory synced across all registered user accounts, Google sign-ins, and appointment bookings.
+                    </p>
+                  </div>
+                  <div className="relative w-full sm:w-72">
+                    <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      placeholder="Search client name, phone, email..."
+                      value={customerSearch}
+                      onChange={(e) => setCustomerSearch(e.target.value)}
+                      className="w-full pl-9 pr-8 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
+                    />
+                    {customerSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setCustomerSearch('')}
+                        className="absolute right-2.5 top-2 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 text-xs cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
 
-              {/* Mobile Customers Cards */}
-              <div className="md:hidden space-y-3">
-                {customers.map(c => {
-                  const cleanPhone = (c.phone || '').replace(/\D/g, '');
-                  return (
-                    <div key={c.id} className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-2.5">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h3 className="font-bold text-sm text-zinc-100">{c.name}</h3>
-                          <div className="text-xs text-zinc-400">{c.phone}</div>
-                          {c.email && <div className="text-[11px] text-zinc-500 truncate">{c.email}</div>}
-                        </div>
-                        <div className="text-right">
-                          <span className="text-xs text-zinc-400 block">Spent</span>
-                          <span className="font-mono font-bold text-amber-400 text-sm">₹{c.totalSpent.toLocaleString()}</span>
-                        </div>
-                      </div>
+                {/* CRM Summary Strip */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 space-y-1 shadow-xs">
+                    <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Total CRM Clients</span>
+                    <div className="text-xl font-bold font-mono text-zinc-900 dark:text-zinc-100">{customers.length}</div>
+                    <span className="text-[10px] text-purple-700 dark:text-amber-400 font-semibold">All Accounts</span>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 space-y-1 shadow-xs">
+                    <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Repeat / VIP Clients</span>
+                    <div className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400">{vipOrRepeatCount}</div>
+                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">2+ Bookings</span>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 space-y-1 shadow-xs">
+                    <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Combined Visits</span>
+                    <div className="text-xl font-bold font-mono text-blue-600 dark:text-blue-400">{totalClientVisits}</div>
+                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400">Active Sessions</span>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 space-y-1 shadow-xs">
+                    <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Lifetime Client Value</span>
+                    <div className="text-xl font-bold font-mono text-purple-700 dark:text-amber-400">₹{totalClientSpend.toLocaleString()}</div>
+                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400">Total Billings</span>
+                  </div>
+                </div>
 
-                      <div className="flex items-center justify-between pt-2 border-t border-zinc-800/80 text-xs">
-                        <span className="px-2.5 py-1 rounded-lg bg-zinc-800 text-zinc-300 font-mono">
-                          {c.totalVisits} visits
-                        </span>
-                        <span className="text-zinc-500 text-[11px]">Last: {c.lastVisit || 'Recent'}</span>
-                        <div className="flex items-center gap-1.5">
-                          {c.phone && (
-                            <a
-                              href={`tel:${c.phone}`}
-                              className="p-2 rounded-lg bg-zinc-800 text-amber-400 hover:bg-zinc-700"
-                              title="Call Client"
-                            >
-                              <Phone className="w-3.5 h-3.5" />
-                            </a>
-                          )}
-                          {cleanPhone && (
-                            <a
-                              href={`https://wa.me/91${cleanPhone}?text=${encodeURIComponent(`Hello ${c.name}, greetings from Modern Unisex Salon Mohol!`)}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-2 rounded-lg bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30"
-                              title="WhatsApp Client"
-                            >
-                              <MessageSquare className="w-3.5 h-3.5" />
-                            </a>
-                          )}
-                        </div>
-                      </div>
+                {filteredCustomers.length === 0 ? (
+                  <div className="p-10 text-center rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 text-xs text-zinc-500 dark:text-zinc-400">
+                    {customerSearch ? `No clients matched "${customerSearch}".` : 'No client accounts or bookings recorded yet.'}
+                  </div>
+                ) : (
+                  <>
+                    {/* Desktop Table */}
+                    <div className="hidden md:block rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 overflow-hidden shadow-sm">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-purple-50 dark:bg-zinc-950 text-zinc-700 dark:text-zinc-400 uppercase font-semibold border-b border-purple-200 dark:border-zinc-800">
+                          <tr>
+                            <th className="px-5 py-3">Client Name</th>
+                            <th className="px-5 py-3">Phone &amp; Email</th>
+                            <th className="px-5 py-3">Favorite Service</th>
+                            <th className="px-5 py-3">Visits</th>
+                            <th className="px-5 py-3">Total Spent</th>
+                            <th className="px-5 py-3">Last Visit</th>
+                            <th className="px-5 py-3 text-right">Contact</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-purple-100 dark:divide-zinc-800">
+                          {filteredCustomers.map(c => {
+                            const cleanPhone = (c.phone || '').replace(/\D/g, '').slice(-10);
+                            return (
+                              <tr key={c.id} className="hover:bg-purple-50/50 dark:hover:bg-zinc-800/40 transition-colors">
+                                <td className="px-5 py-4">
+                                  <div className="font-semibold text-zinc-900 dark:text-zinc-100">{c.name}</div>
+                                  <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    c.tier === 'VIP Member'
+                                      ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300'
+                                      : 'bg-purple-100 dark:bg-zinc-800 text-purple-700 dark:text-zinc-300'
+                                  }`}>
+                                    {c.tier || 'Standard'}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-4 text-zinc-700 dark:text-zinc-300">
+                                  <div className="font-mono">{c.phone || '—'}</div>
+                                  <div className="text-[11px] text-zinc-500">{c.email || '—'}</div>
+                                </td>
+                                <td className="px-5 py-4 text-zinc-700 dark:text-zinc-300">
+                                  {c.favoriteService || 'General Styling'}
+                                </td>
+                                <td className="px-5 py-4 font-mono font-semibold text-zinc-900 dark:text-zinc-100">
+                                  {c.totalVisits || 0} visits
+                                </td>
+                                <td className="px-5 py-4 font-bold text-purple-700 dark:text-amber-400 font-mono">
+                                  ₹{(c.totalSpent || 0).toLocaleString()}
+                                </td>
+                                <td className="px-5 py-4 text-zinc-600 dark:text-zinc-400">
+                                  {c.lastVisit || 'Recent'}
+                                </td>
+                                <td className="px-5 py-4 text-right">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    {c.phone && (
+                                      <a
+                                        href={`tel:${c.phone}`}
+                                        className="p-2 rounded-lg bg-purple-100 dark:bg-zinc-800 text-purple-700 dark:text-amber-400 hover:bg-purple-200 dark:hover:bg-zinc-700"
+                                        title="Call Client"
+                                      >
+                                        <Phone className="w-3.5 h-3.5" />
+                                      </a>
+                                    )}
+                                    {cleanPhone && (
+                                      <a
+                                        href={`https://wa.me/91${cleanPhone}?text=${encodeURIComponent(`Hello ${c.name}, greetings from Modern Unisex Salon Mohol!`)}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-600/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-600/30"
+                                        title="WhatsApp Client"
+                                      >
+                                        <MessageSquare className="w-3.5 h-3.5" />
+                                      </a>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
-                  );
-                })}
+
+                    {/* Mobile Customers Cards */}
+                    <div className="md:hidden space-y-3">
+                      {filteredCustomers.map(c => {
+                        const cleanPhone = (c.phone || '').replace(/\D/g, '').slice(-10);
+                        return (
+                          <div key={c.id} className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 space-y-2.5 shadow-sm">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100">{c.name}</h3>
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    c.tier === 'VIP Member'
+                                      ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300'
+                                      : 'bg-purple-100 dark:bg-zinc-800 text-purple-700 dark:text-zinc-300'
+                                  }`}>
+                                    {c.tier || 'Standard'}
+                                  </span>
+                                </div>
+                                <div className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5 font-mono">{c.phone || 'No phone'}</div>
+                                {c.email && <div className="text-[11px] text-zinc-500 truncate">{c.email}</div>}
+                                {c.favoriteService && (
+                                  <div className="text-[11px] text-purple-700 dark:text-amber-300/90 mt-1 font-medium">
+                                    Prefers: {c.favoriteService}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="text-right shrink-0">
+                                <span className="text-xs text-zinc-500 dark:text-zinc-400 block">Spent</span>
+                                <span className="font-mono font-bold text-purple-700 dark:text-amber-400 text-sm">₹{(c.totalSpent || 0).toLocaleString()}</span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between pt-2 border-t border-purple-100 dark:border-zinc-800/80 text-xs">
+                              <span className="px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-300 font-mono font-semibold">
+                                {c.totalVisits || 0} visits
+                              </span>
+                              <span className="text-zinc-500 text-[11px]">Last: {c.lastVisit || 'Recent'}</span>
+                              <div className="flex items-center gap-1.5">
+                                {c.phone && (
+                                  <a
+                                    href={`tel:${c.phone}`}
+                                    className="p-2 rounded-lg bg-purple-100 dark:bg-zinc-800 text-purple-700 dark:text-amber-400 hover:bg-purple-200 dark:hover:bg-zinc-700"
+                                    title="Call Client"
+                                  >
+                                    <Phone className="w-3.5 h-3.5" />
+                                  </a>
+                                )}
+                                {cleanPhone && (
+                                  <a
+                                    href={`https://wa.me/91${cleanPhone}?text=${encodeURIComponent(`Hello ${c.name}, greetings from Modern Unisex Salon Mohol!`)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-600/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-600/30"
+                                    title="WhatsApp Client"
+                                  >
+                                    <MessageSquare className="w-3.5 h-3.5" />
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* INQUIRIES TAB */}
           {adminTab === 'inquiries' && (
@@ -2213,19 +2403,6 @@ export const AdminSuite: React.FC = () => {
                     Manage confidential salon bank accounts, QR scanners, 10% advance deposit rules, and operational settings with 0% platform deductions.
                   </p>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAdminMode(false);
-                    setActiveNavTab('terms');
-                  }}
-                  className="px-3.5 py-2 rounded-xl bg-purple-100 hover:bg-purple-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-purple-900 dark:text-zinc-200 border border-purple-200 dark:border-zinc-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shrink-0 self-start sm:self-auto"
-                  title="Preview Customer Facing Terms & Salon Page"
-                >
-                  <ExternalLink className="w-3.5 h-3.5 text-purple-700 dark:text-amber-400" />
-                  <span>View Client Page</span>
-                </button>
               </div>
 
               {/* Status Header Banner */}

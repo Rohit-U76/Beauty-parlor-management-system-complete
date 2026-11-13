@@ -127,18 +127,21 @@ function syncCustomerStats(db: any) {
     const cName = (cust.name || '').trim().toLowerCase();
 
     const matchedApts = db.appointments.filter((apt: any) => {
+      const aptStatus = (apt.bookingStatus || apt.status || 'CONFIRMED').toUpperCase();
+      if (aptStatus === 'CANCELLED') return false;
+      if (apt.userId && cust.id && apt.userId === cust.id) return true;
       const aCleanPhone = (apt.clientPhone || '').replace(/\D/g, '').slice(-10);
       const aEmail = (apt.clientEmail || '').trim().toLowerCase();
       const aName = (apt.clientName || '').trim().toLowerCase();
       return (cCleanPhone && aCleanPhone && cCleanPhone === aCleanPhone) ||
              (cEmail && aEmail && cEmail === aEmail) ||
-             (cName && aName && cName === aName);
+             (!cCleanPhone && !aCleanPhone && !cEmail && !aEmail && cName && aName && cName === aName);
     });
 
     if (matchedApts.length > 0) {
-      cust.totalVisits = Math.max(cust.totalVisits || 0, matchedApts.length);
+      cust.totalVisits = matchedApts.length;
       const aptSpending = matchedApts.reduce((acc: number, a: any) => acc + (Number(a.totalAmount) || 0), 0);
-      cust.totalSpent = Math.max(cust.totalSpent || 0, aptSpending);
+      cust.totalSpent = aptSpending;
       const sortedByDate = [...matchedApts].sort((a: any, b: any) => (b.date || '').localeCompare(a.date || ''));
       if (sortedByDate[0]?.date) cust.lastVisit = sortedByDate[0].date;
       if (sortedByDate[0]?.serviceName) cust.favoriteService = sortedByDate[0].serviceName;
