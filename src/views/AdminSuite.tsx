@@ -146,10 +146,12 @@ export const AdminSuite: React.FC = () => {
     merchantUpiId: settings.merchantUpiId || settings.upiId || 'ghodakedinesh@ybl',
     upiQrCodeUrl: settings.upiQrCodeUrl || '/assets/aistudio/image_2ca5cc29.png',
     primaryQrCustomOnly: !!settings.primaryQrCustomOnly,
+    primaryUpiExtraParams: settings.primaryUpiExtraParams || '',
     secondaryAccountHolder: settings.secondaryAccountHolder || 'DINESH VITTHAL GHODAKE',
     secondaryUpiId: settings.secondaryUpiId || '8104026257@axl',
     secondaryUpiQrCodeUrl: settings.secondaryUpiQrCodeUrl || '/assets/aistudio/image_fce20bf8.png',
     secondaryQrCustomOnly: !!settings.secondaryQrCustomOnly,
+    secondaryUpiExtraParams: settings.secondaryUpiExtraParams || '',
     bankName: settings.bankName || 'HDFC Bank',
     bankAccountNumber: settings.bankAccountNumber || '50200072074441',
     bankIfsc: settings.bankIfsc || 'HDFC0000635',
@@ -170,10 +172,12 @@ export const AdminSuite: React.FC = () => {
       merchantUpiId: settings.merchantUpiId ?? settings.upiId ?? 'ghodakedinesh@ybl',
       upiQrCodeUrl: settings.upiQrCodeUrl || '/assets/aistudio/image_2ca5cc29.png',
       primaryQrCustomOnly: !!settings.primaryQrCustomOnly,
+      primaryUpiExtraParams: settings.primaryUpiExtraParams || '',
       secondaryAccountHolder: settings.secondaryAccountHolder ?? 'DINESH VITTHAL GHODAKE',
       secondaryUpiId: settings.secondaryUpiId ?? '8104026257@axl',
       secondaryUpiQrCodeUrl: settings.secondaryUpiQrCodeUrl || '/assets/aistudio/image_fce20bf8.png',
       secondaryQrCustomOnly: !!settings.secondaryQrCustomOnly,
+      secondaryUpiExtraParams: settings.secondaryUpiExtraParams || '',
       bankName: settings.bankName ?? 'HDFC Bank',
       bankAccountNumber: settings.bankAccountNumber ?? '50200072074441',
       bankIfsc: settings.bankIfsc ?? 'HDFC0000635',
@@ -187,10 +191,12 @@ export const AdminSuite: React.FC = () => {
     settings.upiId,
     settings.upiQrCodeUrl,
     settings.primaryQrCustomOnly,
+    settings.primaryUpiExtraParams,
     settings.secondaryAccountHolder,
     settings.secondaryUpiId,
     settings.secondaryUpiQrCodeUrl,
     settings.secondaryQrCustomOnly,
+    settings.secondaryUpiExtraParams,
     settings.bankName,
     settings.bankAccountNumber,
     settings.bankIfsc,
@@ -212,10 +218,12 @@ export const AdminSuite: React.FC = () => {
         upiId: cleanPrimaryUpi,
         upiQrCodeUrl: draftToSave.upiQrCodeUrl,
         primaryQrCustomOnly: !!draftToSave.primaryQrCustomOnly,
+        primaryUpiExtraParams: draftToSave.primaryUpiExtraParams || '',
         secondaryAccountHolder: draftToSave.secondaryAccountHolder.trim() || 'DINESH VITTHAL GHODAKE',
         secondaryUpiId: cleanSecondaryUpi,
         secondaryUpiQrCodeUrl: draftToSave.secondaryUpiQrCodeUrl,
         secondaryQrCustomOnly: !!draftToSave.secondaryQrCustomOnly,
+        secondaryUpiExtraParams: draftToSave.secondaryUpiExtraParams || '',
         bankName: draftToSave.bankName.trim(),
         bankAccountNumber: draftToSave.bankAccountNumber.trim(),
         bankIfsc: draftToSave.bankIfsc.trim(),
@@ -254,7 +262,7 @@ export const AdminSuite: React.FC = () => {
     return () => clearTimeout(timer);
   }, [hasUnsavedScannerChanges, scannerDraft]);
 
-  const decodeUpiPayloadFromImage = (img: HTMLImageElement): { vpa: string; payee: string } => {
+  const decodeUpiPayloadFromImage = (img: HTMLImageElement): { vpa: string; payee: string; extraParams: string } => {
     const tryDecodeCanvas = (
       sx: number,
       sy: number,
@@ -291,7 +299,15 @@ export const AdminSuite: React.FC = () => {
           const params = new URLSearchParams(queryPart);
           const vpa = (params.get('pa') || '').trim();
           const payee = (params.get('pn') || '').trim();
-          if (vpa) return { vpa, payee };
+          // Preserve verified merchant metadata (mc, mode, orgid, purpose, sign, mid, etc.)
+          const extra = new URLSearchParams();
+          params.forEach((val, key) => {
+            const lk = key.toLowerCase();
+            if (!['pa', 'pn', 'am', 'cu', 'tn', 'tr'].includes(lk) && val) {
+              extra.set(key, val);
+            }
+          });
+          if (vpa) return { vpa, payee, extraParams: extra.toString() };
         }
       }
       return null;
@@ -329,7 +345,7 @@ export const AdminSuite: React.FC = () => {
     const pass4 = tryDecodeCanvas(0, 0, img.width, img.height, dw, dh, true);
     if (pass4) return pass4;
 
-    return { vpa: '', payee: '' };
+    return { vpa: '', payee: '', extraParams: '' };
   };
 
   const handleQrPhotoUpload = (file: File, targetSlot: 'scanner1' | 'scanner2') => {
@@ -343,7 +359,7 @@ export const AdminSuite: React.FC = () => {
       img.onload = async () => {
         try {
           // 1. Multi-pass QR decode before compression
-          const { vpa: extractedVpa, payee: extractedPayee } = decodeUpiPayloadFromImage(img);
+          const { vpa: extractedVpa, payee: extractedPayee, extraParams: extractedExtra } = decodeUpiPayloadFromImage(img);
 
           // 2. Compress image so it fits reliably under Firestore 1MB limit & db.json
           const saveMax = 560;
@@ -366,6 +382,22 @@ export const AdminSuite: React.FC = () => {
             ? (saveCtx.drawImage(img, 0, 0, sw, sh), saveCanvas.toDataURL('image/jpeg', 0.78))
             : rawDataUrl;
 
+          // 3. Persist QR photo to server (/public/uploads/qr) so URL stays small & universally viewable
+          let finalQrUrl = compressedDataUrl;
+          try {
+            const upRes = await fetch('/api/settings/upload-qr', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ imageBase64: compressedDataUrl, slot: targetSlot })
+            });
+            if (upRes.ok) {
+              const upData = await upRes.json();
+              if (upData?.qrUrl || upData?.url) finalQrUrl = upData.qrUrl || upData.url;
+            }
+          } catch {
+            // Keep compressedDataUrl fallback if offline
+          }
+
           draftEditVersionRef.current += 1;
           const versionAtUpload = draftEditVersionRef.current;
           setIsSavingScannerSettings(true);
@@ -374,19 +406,22 @@ export const AdminSuite: React.FC = () => {
             const nextVpa = extractedVpa || scannerDraftRef.current.merchantUpiId;
             const nextName = extractedPayee || scannerDraftRef.current.accountHolder;
             const customOnly = !extractedVpa;
+            const nextExtra = extractedExtra || '';
             setScannerDraft(prev => ({
               ...prev,
-              upiQrCodeUrl: compressedDataUrl,
+              upiQrCodeUrl: finalQrUrl,
               merchantUpiId: nextVpa,
               accountHolder: nextName,
-              primaryQrCustomOnly: customOnly
+              primaryQrCustomOnly: customOnly,
+              primaryUpiExtraParams: nextExtra
             }));
             await updateSettings({
-              upiQrCodeUrl: compressedDataUrl,
+              upiQrCodeUrl: finalQrUrl,
               merchantUpiId: nextVpa,
               upiId: nextVpa,
               accountHolder: nextName,
-              primaryQrCustomOnly: customOnly
+              primaryQrCustomOnly: customOnly,
+              primaryUpiExtraParams: nextExtra
             });
             if (draftEditVersionRef.current === versionAtUpload) {
               setHasUnsavedScannerChanges(false);
@@ -394,25 +429,28 @@ export const AdminSuite: React.FC = () => {
             setScannerSaveNotice({
               type: 'success',
               text: extractedVpa
-                ? `Scanner 1 QR uploaded & auto-detected UPI ID (${extractedVpa})! Live on client checkout.`
+                ? `Scanner 1 QR uploaded & auto-detected UPI ID (${extractedVpa}${nextExtra ? ' with merchant params' : ''})! Live on client checkout.`
                 : 'Scanner 1 QR image uploaded & set live on client checkout! (Tip: update the UPI ID field if it changed.)'
             });
           } else {
             const nextVpa = extractedVpa || scannerDraftRef.current.secondaryUpiId;
             const nextName = extractedPayee || scannerDraftRef.current.secondaryAccountHolder;
             const customOnly = !extractedVpa;
+            const nextExtra = extractedExtra || '';
             setScannerDraft(prev => ({
               ...prev,
-              secondaryUpiQrCodeUrl: compressedDataUrl,
+              secondaryUpiQrCodeUrl: finalQrUrl,
               secondaryUpiId: nextVpa,
               secondaryAccountHolder: nextName,
-              secondaryQrCustomOnly: customOnly
+              secondaryQrCustomOnly: customOnly,
+              secondaryUpiExtraParams: nextExtra
             }));
             await updateSettings({
-              secondaryUpiQrCodeUrl: compressedDataUrl,
+              secondaryUpiQrCodeUrl: finalQrUrl,
               secondaryUpiId: nextVpa,
               secondaryAccountHolder: nextName,
-              secondaryQrCustomOnly: customOnly
+              secondaryQrCustomOnly: customOnly,
+              secondaryUpiExtraParams: nextExtra
             });
             if (draftEditVersionRef.current === versionAtUpload) {
               setHasUnsavedScannerChanges(false);
@@ -420,7 +458,7 @@ export const AdminSuite: React.FC = () => {
             setScannerSaveNotice({
               type: 'success',
               text: extractedVpa
-                ? `Scanner 2 QR uploaded & auto-detected UPI ID (${extractedVpa})! Live on client checkout.`
+                ? `Scanner 2 QR uploaded & auto-detected UPI ID (${extractedVpa}${nextExtra ? ' with merchant params' : ''})! Live on client checkout.`
                 : 'Scanner 2 QR image uploaded & set live on client checkout! (Tip: update the UPI ID field if it changed.)'
             });
           }
@@ -1384,7 +1422,7 @@ export const AdminSuite: React.FC = () => {
                               </button>
                             </div>
                           )}
-                          <div className="mt-1">
+                          <div className="mt-1 flex items-center gap-1.5 flex-wrap">
                             {app.isBankVerified ? (
                               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/40">
                                 <ShieldCheck className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
@@ -1397,6 +1435,23 @@ export const AdminSuite: React.FC = () => {
                               </span>
                             )}
                           </div>
+                          {app.paymentScreenshotUrl && (
+                            <button
+                              type="button"
+                              onClick={() => setViewingScreenshotUrl(app.paymentScreenshotUrl!)}
+                              className="mt-2 inline-flex items-center gap-2 p-1 pr-2 rounded-lg bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/50 border border-purple-200 dark:border-purple-500/30 transition cursor-pointer group"
+                              title="Click to inspect full uploaded payment screenshot"
+                            >
+                              <img
+                                src={app.paymentScreenshotUrl}
+                                alt={`Receipt from ${app.clientName}`}
+                                className="w-9 h-9 rounded object-cover border border-purple-300 dark:border-purple-500/40 shrink-0"
+                              />
+                              <span className="text-[10px] font-bold text-purple-700 dark:text-purple-300 group-hover:underline">
+                                View Payment Proof
+                              </span>
+                            </button>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -1606,6 +1661,26 @@ export const AdminSuite: React.FC = () => {
                                 <span className="text-[10px]">Copy</span>
                               </button>
                             </div>
+                          )}
+                          {app.paymentScreenshotUrl && (
+                            <button
+                              type="button"
+                              onClick={() => setViewingScreenshotUrl(app.paymentScreenshotUrl!)}
+                              className="w-full mt-1.5 flex items-center justify-between gap-2 p-2 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-purple-500/30 hover:border-purple-400 transition cursor-pointer"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <img
+                                  src={app.paymentScreenshotUrl}
+                                  alt={`Payment proof from ${app.clientName}`}
+                                  className="w-10 h-10 rounded-lg object-cover border border-purple-200 dark:border-zinc-700 shrink-0"
+                                />
+                                <div className="text-left min-w-0">
+                                  <div className="text-[11px] font-bold text-purple-700 dark:text-purple-300">Payment Screenshot Attached</div>
+                                  <div className="text-[10px] text-zinc-500 dark:text-zinc-400">Tap to inspect full receipt photo</div>
+                                </div>
+                              </div>
+                              <Eye className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                            </button>
                           )}
                         </div>
 
@@ -2845,28 +2920,43 @@ export const AdminSuite: React.FC = () => {
                     <div className="pt-2 border-t border-purple-200/80 dark:border-zinc-800 space-y-2">
                       <label className="text-[10px] text-zinc-600 dark:text-zinc-400 font-semibold block">Store Standee QR Poster Image</label>
                       <div className="flex items-center gap-3">
-                        <div className="w-16 h-16 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 overflow-hidden flex items-center justify-center shrink-0 p-1">
+                        <button
+                          type="button"
+                          onClick={() => setViewingScreenshotUrl(scannerDraft.upiQrCodeUrl || '/assets/aistudio/image_2ca5cc29.png')}
+                          className="w-16 h-16 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 overflow-hidden flex items-center justify-center shrink-0 p-1 cursor-pointer hover:ring-2 hover:ring-purple-400 transition"
+                          title="Click to preview full Scanner 1 QR"
+                        >
                           <img
                             src={scannerDraft.upiQrCodeUrl || '/assets/aistudio/image_2ca5cc29.png'}
                             alt="Primary QR Standee"
                             className="w-full h-full object-contain"
                           />
-                        </div>
+                        </button>
                         <div className="space-y-1.5 flex-1">
-                          <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-100 hover:bg-purple-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-purple-900 dark:text-white text-[11px] font-bold cursor-pointer transition">
-                            <Upload className="w-3 h-3 text-purple-700 dark:text-amber-400" />
-                            <span>Upload QR Photo</span>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) handleQrPhotoUpload(file, 'scanner1');
-                                e.target.value = '';
-                              }}
-                            />
-                          </label>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-100 hover:bg-purple-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-purple-900 dark:text-white text-[11px] font-bold cursor-pointer transition">
+                              <Upload className="w-3 h-3 text-purple-700 dark:text-amber-400" />
+                              <span>Upload QR Photo</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleQrPhotoUpload(file, 'scanner1');
+                                  e.target.value = '';
+                                }}
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => setViewingScreenshotUrl(scannerDraft.upiQrCodeUrl || '/assets/aistudio/image_2ca5cc29.png')}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 text-purple-700 dark:text-amber-300 text-[10px] font-bold cursor-pointer hover:bg-purple-50 transition"
+                            >
+                              <Eye className="w-3 h-3" />
+                              <span>View</span>
+                            </button>
+                          </div>
                           <button
                             type="button"
                             onClick={async () => {
@@ -2876,7 +2966,8 @@ export const AdminSuite: React.FC = () => {
                                 upiQrCodeUrl: '/assets/aistudio/image_2ca5cc29.png',
                                 merchantUpiId: 'ghodakedinesh@ybl',
                                 upiId: 'ghodakedinesh@ybl',
-                                primaryQrCustomOnly: false
+                                primaryQrCustomOnly: false,
+                                primaryUpiExtraParams: ''
                               };
                               setScannerDraft(prev => ({ ...prev, ...resetData }));
                               setHasUnsavedScannerChanges(false);
@@ -2928,7 +3019,7 @@ export const AdminSuite: React.FC = () => {
                         value={scannerDraft.secondaryUpiId}
                         onChange={(e) => {
                           draftEditVersionRef.current += 1;
-                          setScannerDraft(prev => ({ ...prev, secondaryUpiId: e.target.value, secondaryQrCustomOnly: false }));
+                          setScannerDraft(prev => ({ ...prev, secondaryUpiId: e.target.value, secondaryQrCustomOnly: false, secondaryUpiExtraParams: '' }));
                           setHasUnsavedScannerChanges(true);
                           setScannerSaveNotice(null);
                         }}
@@ -2944,28 +3035,43 @@ export const AdminSuite: React.FC = () => {
                     <div className="pt-2 border-t border-purple-200/80 dark:border-zinc-800 space-y-2">
                       <label className="text-[10px] text-zinc-600 dark:text-zinc-400 font-semibold block">Scanner 2 Poster Standee</label>
                       <div className="flex items-center gap-3">
-                        <div className="w-16 h-16 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 overflow-hidden flex items-center justify-center shrink-0 p-1">
+                        <button
+                          type="button"
+                          onClick={() => setViewingScreenshotUrl(scannerDraft.secondaryUpiQrCodeUrl || '/assets/aistudio/image_fce20bf8.png')}
+                          className="w-16 h-16 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 overflow-hidden flex items-center justify-center shrink-0 p-1 cursor-pointer hover:ring-2 hover:ring-purple-400 transition"
+                          title="Click to preview full Scanner 2 QR"
+                        >
                           <img
                             src={scannerDraft.secondaryUpiQrCodeUrl || '/assets/aistudio/image_fce20bf8.png'}
                             alt="Secondary QR Standee"
                             className="w-full h-full object-contain"
                           />
-                        </div>
+                        </button>
                         <div className="space-y-1.5 flex-1">
-                          <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-100 hover:bg-purple-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-purple-900 dark:text-white text-[11px] font-bold cursor-pointer transition">
-                            <Upload className="w-3 h-3 text-purple-700 dark:text-purple-400" />
-                            <span>Upload QR Photo</span>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) handleQrPhotoUpload(file, 'scanner2');
-                                e.target.value = '';
-                              }}
-                            />
-                          </label>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-100 hover:bg-purple-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-purple-900 dark:text-white text-[11px] font-bold cursor-pointer transition">
+                              <Upload className="w-3 h-3 text-purple-700 dark:text-purple-400" />
+                              <span>Upload QR Photo</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleQrPhotoUpload(file, 'scanner2');
+                                  e.target.value = '';
+                                }}
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => setViewingScreenshotUrl(scannerDraft.secondaryUpiQrCodeUrl || '/assets/aistudio/image_fce20bf8.png')}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 text-purple-700 dark:text-purple-300 text-[10px] font-bold cursor-pointer hover:bg-purple-50 transition"
+                            >
+                              <Eye className="w-3 h-3" />
+                              <span>View</span>
+                            </button>
+                          </div>
                           <button
                             type="button"
                             onClick={async () => {
@@ -2974,7 +3080,8 @@ export const AdminSuite: React.FC = () => {
                                 secondaryAccountHolder: 'DINESH VITTHAL GHODAKE',
                                 secondaryUpiQrCodeUrl: '/assets/aistudio/image_fce20bf8.png',
                                 secondaryUpiId: '8104026257@axl',
-                                secondaryQrCustomOnly: false
+                                secondaryQrCustomOnly: false,
+                                secondaryUpiExtraParams: ''
                               };
                               setScannerDraft(prev => ({ ...prev, ...resetData }));
                               setHasUnsavedScannerChanges(false);
@@ -2992,6 +3099,75 @@ export const AdminSuite: React.FC = () => {
                       </div>
                     </div>
                   </div>
+                </div>
+
+                {/* Verified Merchant UPI Gateway (Razorpay) — Eliminates PhonePe Personal VPA Browser Security Blocks */}
+                <div className="p-4 rounded-xl bg-purple-50/60 dark:bg-zinc-950 border border-purple-300/70 dark:border-amber-500/30 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <div className="text-xs font-bold text-purple-800 dark:text-amber-400 flex items-center gap-1.5">
+                        <Zap className="w-4 h-4" />
+                        <span>Verified Merchant UPI Gateway (PhonePe &amp; Google Pay Zero-Decline)</span>
+                      </div>
+                      <p className="text-[11px] text-zinc-600 dark:text-zinc-400 mt-0.5 leading-relaxed">
+                        PhonePe Protect blocks browser redirects to personal <code className="font-mono">@ybl/@axl</code> IDs. Add your live Razorpay Merchant API keys (or upload a <strong>PhonePe Business Merchant QR</strong> above) so tapping PhonePe / GPay completes payment directly with zero security block.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleTestGatewayConnection}
+                      disabled={isTestingGateway}
+                      className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 dark:bg-amber-500 dark:hover:bg-amber-400 text-white dark:text-zinc-950 text-[11px] font-bold shrink-0 cursor-pointer disabled:opacity-50 transition"
+                    >
+                      {isTestingGateway ? 'Verifying...' : 'Test Gateway Connection'}
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-semibold text-zinc-600 dark:text-zinc-400 block mb-1">Razorpay Key ID</label>
+                      <input
+                        type="text"
+                        value={settings.razorpayKeyId || ''}
+                        onChange={(e) => updateSettings({ razorpayKeyId: e.target.value.trim() })}
+                        placeholder="rzp_live_... or rzp_test_..."
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="font-semibold text-zinc-600 dark:text-zinc-400 block mb-1">Razorpay Key Secret</label>
+                      <div className="relative">
+                        <input
+                          type={showRazorpaySecret ? 'text' : 'password'}
+                          value={settings.razorpayKeySecret || ''}
+                          onChange={(e) => updateSettings({ razorpayKeySecret: e.target.value.trim() })}
+                          placeholder="Enter Razorpay Key Secret"
+                          className="w-full px-3 py-2 pr-9 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowRazorpaySecret(prev => !prev)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700 dark:hover:text-white cursor-pointer"
+                          title={showRazorpaySecret ? 'Hide secret' : 'Show secret'}
+                        >
+                          {showRazorpaySecret ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {gatewayTestResult && (
+                    <div
+                      className={`p-2.5 rounded-xl border text-[11px] font-semibold flex items-center gap-2 ${
+                        gatewayTestResult.success
+                          ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-600/40 text-emerald-700 dark:text-emerald-300'
+                          : 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-600/40 text-amber-800 dark:text-amber-300'
+                      }`}
+                    >
+                      {gatewayTestResult.success ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> : <AlertCircle className="w-3.5 h-3.5 shrink-0" />}
+                      <span>{gatewayTestResult.message}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Bank Account Details */}
@@ -3222,13 +3398,13 @@ export const AdminSuite: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {[
                     { idx: 0, label: 'Admin Email 1 (Primary Owner) *', placeholder: 'dineshghodake941@gmail.com', defaultVal: 'dineshghodake941@gmail.com' },
-                    { idx: 1, label: 'Admin Email 2 (Backup Admin)', placeholder: 'rohitumdale@gmail.com', defaultVal: 'rohitumdale@gmail.com' },
+                    { idx: 1, label: 'Admin Email 2 (Backup Admin)', placeholder: 'owner.backup@modernsalon.com', defaultVal: '' },
                     { idx: 2, label: 'Admin Email 3 (Backup Admin)', placeholder: 'modernsalon02@gmail.com', defaultVal: 'modernsalon02@gmail.com' },
                     { idx: 3, label: 'Admin Email 4 (Emergency Backup)', placeholder: 'admin@modernsalon.com', defaultVal: 'admin@modernsalon.com' }
                   ].map((slot) => {
                     const currentEmails = settings.adminEmails && settings.adminEmails.length > 0
                       ? settings.adminEmails
-                      : ['dineshghodake941@gmail.com', 'rohitumdale@gmail.com', 'modernsalon02@gmail.com', 'admin@modernsalon.com'];
+                      : ['dineshghodake941@gmail.com', '', 'modernsalon02@gmail.com', 'admin@modernsalon.com'];
                     const value = currentEmails[slot.idx] ?? '';
                     return (
                       <div key={slot.idx}>
@@ -3241,7 +3417,7 @@ export const AdminSuite: React.FC = () => {
                           onChange={(e) => {
                             const next = [
                               currentEmails[0] ?? 'dineshghodake941@gmail.com',
-                              currentEmails[1] ?? 'rohitumdale@gmail.com',
+                              currentEmails[1] ?? '',
                               currentEmails[2] ?? 'modernsalon02@gmail.com',
                               currentEmails[3] ?? 'admin@modernsalon.com'
                             ];
@@ -3272,7 +3448,7 @@ export const AdminSuite: React.FC = () => {
                       placeholder="e.g. UniqueOwnerPass#2026"
                     />
                     <span className="text-[10px] text-zinc-500 mt-1 block">
-                      One shared password for all 4 authorized admin emails
+                      One shared password for all authorized admin emails
                     </span>
                   </div>
 
@@ -3298,10 +3474,113 @@ export const AdminSuite: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                     <span className="text-[11px] text-zinc-700 dark:text-zinc-300">
-                      Failover security active: All 4 admin emails share this master password and sync to Firebase &amp; backend immediately.
+                      Primary Admin Owner: <strong>dineshghodake941@gmail.com</strong>. Authorized admin emails share this master password and sync to Firebase &amp; backend immediately.
                     </span>
                   </div>
                 </div>
+              </div>
+
+              {/* CARD 4: UPLOADED CLIENT PAYMENT SCREENSHOTS & RECEIPT PROOFS */}
+              <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 space-y-4 shadow-sm text-xs lg:col-span-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-purple-100 dark:border-zinc-800 pb-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                      <ImageIcon className="w-4 h-4 text-purple-600 dark:text-amber-400" />
+                      <span>4. Uploaded Client Payment Screenshots &amp; Receipt Proofs</span>
+                    </h3>
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                      Every PhonePe / Google Pay deposit screenshot uploaded during booking appears here immediately for verification.
+                    </p>
+                  </div>
+                  <span className="text-[11px] font-mono font-bold px-2.5 py-1 rounded-lg bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 shrink-0">
+                    {appointments.filter(a => Boolean(a.paymentScreenshotUrl)).length} Screenshot(s) Uploaded
+                  </span>
+                </div>
+
+                {appointments.filter(a => Boolean(a.paymentScreenshotUrl)).length === 0 ? (
+                  <div className="p-6 rounded-xl bg-purple-50/40 dark:bg-zinc-950 border border-dashed border-purple-200 dark:border-zinc-800 text-center text-zinc-500 dark:text-zinc-400 text-xs">
+                    No client payment screenshots have been uploaded yet. Whenever a client uploads a PhonePe or Google Pay receipt screenshot at checkout, it will appear here and in the Appointments tab.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {appointments
+                      .filter(a => Boolean(a.paymentScreenshotUrl))
+                      .map((app) => (
+                        <div
+                          key={`proof-${app.id}`}
+                          className="p-3 rounded-xl bg-purple-50/50 dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 flex flex-col justify-between gap-3"
+                        >
+                          <div className="flex items-start gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setViewingScreenshotUrl(app.paymentScreenshotUrl!)}
+                              className="w-16 h-20 rounded-xl overflow-hidden border border-purple-300 dark:border-purple-500/40 bg-white dark:bg-zinc-900 shrink-0 cursor-pointer hover:ring-2 hover:ring-purple-500 transition"
+                              title="Click to zoom screenshot"
+                            >
+                              <img
+                                src={app.paymentScreenshotUrl}
+                                alt={`Payment proof by ${app.clientName}`}
+                                className="w-full h-full object-cover"
+                              />
+                            </button>
+                            <div className="min-w-0 flex-1 space-y-1">
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="font-mono text-[10px] font-bold text-purple-700 dark:text-amber-400 truncate">
+                                  {app.bookingRef}
+                                </span>
+                                {app.isBankVerified ? (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 shrink-0">
+                                    Verified
+                                  </span>
+                                ) : (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 shrink-0">
+                                    Pending
+                                  </span>
+                                )}
+                              </div>
+                              <div className="font-bold text-zinc-900 dark:text-zinc-100 truncate">{app.clientName}</div>
+                              <div className="text-[11px] text-zinc-600 dark:text-zinc-400">
+                                {app.date} • {app.timeSlot}
+                              </div>
+                              <div className="font-mono text-[11px] text-emerald-700 dark:text-emerald-400 font-bold">
+                                ₹{app.advancePaid} Adv {app.upiTransactionId ? `• UTR: ${app.upiTransactionId}` : ''}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-purple-200/70 dark:border-zinc-800">
+                            <button
+                              type="button"
+                              onClick={() => setViewingScreenshotUrl(app.paymentScreenshotUrl!)}
+                              className="flex-1 px-2.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-bold flex items-center justify-center gap-1 cursor-pointer transition"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>View Full Image</span>
+                            </button>
+                            {!app.isBankVerified && getAppStatus(app) !== 'CANCELLED' && (
+                              <button
+                                type="button"
+                                onClick={() => handleConfirmBankCredit(app)}
+                                className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer transition"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>Confirm</span>
+                              </button>
+                            )}
+                            {!app.isBankVerified && app.upiTransactionId && getAppStatus(app) !== 'CANCELLED' && (
+                              <button
+                                type="button"
+                                onClick={() => handleRejectUtrDeposit(app)}
+                                className="px-2 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/60 border border-red-300 dark:border-red-500/30 text-red-700 dark:text-red-400 text-[11px] font-bold cursor-pointer transition"
+                              >
+                                Reject
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
               </div>
 
             </div>

@@ -64,7 +64,6 @@ function initDb() {
         adminPin: '8104',
         adminEmails: [
           'dineshghodake941@gmail.com',
-          'rohitumdale@gmail.com',
           'modernsalon02@gmail.com',
           'admin@modernsalon.com'
         ]
@@ -227,75 +226,68 @@ function writeDb(data: any) {
   fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
 }
 
-// Helper to dynamically collect all unique client contacts across CRM customers, appointment history, and registered users
-function getUniqueClientContacts(db: any) {
+// Helper to dynamically collect all unique client contacts across CRM customers, appointment history, registered users, inquiries, and synced frontend state
+function getUniqueClientContacts(db: any, extraContacts: any[] = []) {
   const contactMap = new Map<string, { id: string; name: string; phone: string; formattedPhone: string; source: 'customer' | 'appointment' | 'user' }>();
   const adminPhone = (db.settings?.phone || '8104026257').replace(/\D/g, '').slice(-10);
 
-  // 1. Scan customers (CRM records)
-  (db.customers || []).forEach((c: any) => {
-    const raw = (c.phone || '').replace(/\D/g, '');
-    const cleanPhone = raw.slice(-10);
-    if (cleanPhone.length === 10 && cleanPhone !== adminPhone && !cleanPhone.startsWith('00000')) {
+  const registerContact = (rawPhone: any, rawName: any, rawId: any, source: 'customer' | 'appointment' | 'user', allowReplaceName = false) => {
+    const digits = String(rawPhone || '').replace(/\D/g, '');
+    const cleanPhone = digits.slice(-10);
+    if (cleanPhone.length !== 10 || cleanPhone === adminPhone || cleanPhone.startsWith('00000')) return;
+    const trimmedName = String(rawName || '').trim() || 'Valued Client';
+    if (!contactMap.has(cleanPhone)) {
       contactMap.set(cleanPhone, {
-        id: c.id || `cust-${cleanPhone}`,
-        name: (c.name || 'Valued Client').trim(),
+        id: String(rawId || `${source}-${cleanPhone}`),
+        name: trimmedName,
         phone: cleanPhone,
         formattedPhone: `91${cleanPhone}`,
-        source: 'customer'
+        source
       });
+    } else if (allowReplaceName) {
+      const existing = contactMap.get(cleanPhone)!;
+      if (trimmedName !== 'Valued Client' && existing.name === 'Valued Client') {
+        existing.name = trimmedName;
+      }
     }
+  };
+
+  // 1. Scan customers (CRM records)
+  (db.customers || []).forEach((c: any) => {
+    registerContact(c.phone, c.name, c.id, 'customer', false);
   });
 
   // 2. Scan appointments (Booking history - any client who has ever booked)
   (db.appointments || []).forEach((a: any) => {
-    const raw = (a.clientPhone || '').replace(/\D/g, '');
-    const cleanPhone = raw.slice(-10);
-    if (cleanPhone.length === 10 && cleanPhone !== adminPhone && !cleanPhone.startsWith('00000')) {
-      if (!contactMap.has(cleanPhone)) {
-        contactMap.set(cleanPhone, {
-          id: `apt-client-${cleanPhone}`,
-          name: (a.clientName || 'Valued Client').trim(),
-          phone: cleanPhone,
-          formattedPhone: `91${cleanPhone}`,
-          source: 'appointment'
-        });
-      } else {
-        const existing = contactMap.get(cleanPhone)!;
-        if (existing.name === 'Valued Client' && a.clientName) {
-          existing.name = a.clientName.trim();
-        }
-      }
-    }
+    registerContact(a.clientPhone, a.clientName, `apt-client-${a.id || a.clientPhone}`, 'appointment', true);
   });
 
-  // 3. Scan users (Any registered account)
+  // 3. Scan users (Any registered non-admin account)
   (db.users || []).forEach((u: any) => {
     if (u.role === 'ADMIN') return;
-    const raw = (u.phone || '').replace(/\D/g, '');
-    const cleanPhone = raw.slice(-10);
-    if (cleanPhone.length === 10 && cleanPhone !== adminPhone && !cleanPhone.startsWith('00000')) {
-      if (!contactMap.has(cleanPhone)) {
-        contactMap.set(cleanPhone, {
-          id: u.id || `usr-${cleanPhone}`,
-          name: (u.name || 'Valued Client').trim(),
-          phone: cleanPhone,
-          formattedPhone: `91${cleanPhone}`,
-          source: 'user'
-        });
-      } else {
-        const existing = contactMap.get(cleanPhone)!;
-        if (u.name && (existing.name === 'Valued Client' || existing.name !== u.name)) {
-          existing.name = u.name.trim();
-        }
-      }
-    }
+    registerContact(u.phone, u.name, u.id, 'user', true);
+  });
+
+  // 4. Scan consultation inquiries (leads with phone numbers)
+  (db.inquiries || []).forEach((inq: any) => {
+    registerContact(inq.phone, inq.clientName, inq.id, 'customer', true);
+  });
+
+  // 5. Merge live contacts passed from frontend Firestore / SalonContext state
+  (Array.isArray(extraContacts) ? extraContacts : []).forEach((ec: any) => {
+    if (!ec || ec.role === 'ADMIN') return;
+    const src: 'customer' | 'appointment' | 'user' =
+      ec.source === 'appointment' ? 'appointment' : ec.source === 'user' ? 'user' : 'customer';
+    registerContact(ec.phone || ec.clientPhone, ec.name || ec.clientName, ec.id, src, true);
   });
 
   return Array.from(contactMap.values());
 }
 
-function buildOfferWhatsAppMessage(offer: any, clientName = 'Valued Client', salonSettings?: any) {
+function buildOfferWhatsAppMessage(offer: any, clientName = 'Valued Client', salonSettings?: any, customTemplate?: string, appOrigin?: string) {
+  if (customTemplate && customTemplate.trim()) {
+    return customTemplate.replace(/\{\{\s*client_name\s*\}\}/gi, clientName || 'Valued Client');
+  }
   const salonName = salonSettings?.salonName || 'Modern Unisex Salon';
   const salonPhone = salonSettings?.phone || '8104026257';
   const salonAddress = salonSettings?.address || 'B.N. GUND COMPLEX, NEAR KANYA PRASHALA AND ICICI BANK, MOHOL - 413213';
@@ -304,7 +296,7 @@ function buildOfferWhatsAppMessage(offer: any, clientName = 'Valued Client', sal
     : (offer.discountAmount ? `₹${offer.discountAmount} OFF` : 'Special Discount');
   const minBookingStr = offer.minBookingAmount ? `₹${offer.minBookingAmount}` : '₹300';
   const validityStr = offer.validTill || offer.expiryDate || 'Limited Time Only';
-  const appUrl = process.env.APP_URL || 'http://localhost:3000';
+  const appUrl = appOrigin || process.env.APP_URL || 'http://localhost:3000';
   const bookingUrl = `${appUrl}/?coupon=${encodeURIComponent(offer.code)}&action=book`;
 
   return `✨ *EXCLUSIVE SALON OFFER ALERT!* ✨\n` +
@@ -326,30 +318,68 @@ function buildOfferWhatsAppMessage(offer: any, clientName = 'Valued Client', sal
     `_Show this message or enter coupon code during checkout to redeem!_`;
 }
 
-function dispatchWhatsAppOfferBroadcast(db: any, offer: any) {
-  const recipients = getUniqueClientContacts(db);
+async function dispatchWhatsAppOfferBroadcast(
+  db: any,
+  offer: any,
+  options?: { extraContacts?: any[]; customMessage?: string; appOrigin?: string }
+) {
+  const recipients = getUniqueClientContacts(db, options?.extraContacts || []);
   const salonSettings = db.settings || {};
 
   const broadcastId = `bcast-${Date.now()}`;
   const dispatchedAt = new Date().toISOString();
+  const cloudToken = process.env.WHATSAPP_CLOUD_TOKEN;
+  const cloudPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const hasCloudApi = Boolean(cloudToken && cloudPhoneId);
 
-  const recipientResults = recipients.map((r) => {
-    const messageText = buildOfferWhatsAppMessage(offer, r.name, salonSettings);
-    const encodedText = encodeURIComponent(messageText);
-    const whatsappUrl = `https://api.whatsapp.com/send?phone=${r.formattedPhone}&text=${encodedText}`;
-    const webWhatsappUrl = `https://web.whatsapp.com/send?phone=${r.formattedPhone}&text=${encodedText}`;
+  const recipientResults = await Promise.all(
+    recipients.map(async (r) => {
+      const messageText = buildOfferWhatsAppMessage(offer, r.name, salonSettings, options?.customMessage, options?.appOrigin);
+      const encodedText = encodeURIComponent(messageText);
+      const whatsappUrl = `https://api.whatsapp.com/send?phone=${r.formattedPhone}&text=${encodedText}`;
+      const webWhatsappUrl = `https://web.whatsapp.com/send?phone=${r.formattedPhone}&text=${encodedText}`;
 
-    return {
-      id: r.id,
-      name: r.name,
-      phone: r.phone,
-      formattedPhone: r.formattedPhone,
-      source: r.source,
-      whatsappUrl,
-      webWhatsappUrl,
-      status: 'SENT' as const
-    };
-  });
+      let status: 'SENT' | 'QUEUED' = 'QUEUED';
+      let apiMessageId: string | undefined;
+
+      if (hasCloudApi) {
+        try {
+          const graphRes = await fetch(`https://graph.facebook.com/v19.0/${cloudPhoneId}/messages`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${cloudToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              messaging_product: 'whatsapp',
+              to: r.formattedPhone,
+              type: 'text',
+              text: { body: messageText }
+            })
+          });
+          if (graphRes.ok) {
+            const gJson = await graphRes.json().catch(() => ({}));
+            apiMessageId = gJson?.messages?.[0]?.id;
+            status = 'SENT';
+          }
+        } catch (err) {
+          console.warn(`[WhatsApp Cloud API] Failed for ${r.formattedPhone}:`, err);
+        }
+      }
+
+      return {
+        id: r.id,
+        name: r.name,
+        phone: r.phone,
+        formattedPhone: r.formattedPhone,
+        source: r.source,
+        whatsappUrl,
+        webWhatsappUrl,
+        apiMessageId,
+        status
+      };
+    })
+  );
 
   const breakdown = {
     total: recipientResults.length,
@@ -368,10 +398,11 @@ function dispatchWhatsAppOfferBroadcast(db: any, offer: any) {
     discountPercent: offer.discountPercent,
     discountAmount: offer.discountAmount,
     dispatchedAt,
+    deliveryMode: hasCloudApi ? 'WHATSAPP_CLOUD_API' : 'WHATSAPP_LINK_QUEUE',
     totalRecipients: recipientResults.length,
     breakdown,
-    status: 'SUCCESS' as const,
-    messageText: buildOfferWhatsAppMessage(offer, 'Client Name', salonSettings),
+    status: hasCloudApi ? ('SUCCESS' as const) : ('READY' as const),
+    messageText: buildOfferWhatsAppMessage(offer, '{{client_name}}', salonSettings, options?.customMessage, options?.appOrigin),
     recipients: recipientResults
   };
   db.broadcastLogs.unshift(broadcastLog);
@@ -380,15 +411,15 @@ function dispatchWhatsAppOfferBroadcast(db: any, offer: any) {
   if (!db.notifications) db.notifications = [];
   db.notifications.unshift({
     id: `notif-${Date.now()}`,
-    title: `📢 WhatsApp Offer Broadcast Dispatched`,
-    message: `Offer "${offer.code}" (${offer.title}) broadcasted via WhatsApp to ${recipientResults.length} registered and history clients.`,
+    title: `📢 WhatsApp Offer Broadcast Prepared`,
+    message: `Offer "${offer.code}" (${offer.title}) prepared for ${recipientResults.length} unique clients.`,
     type: 'promotion',
     timestamp: 'Just now',
     read: false,
     offerCode: offer.code
   });
 
-  console.log(`[WhatsApp Offer Broadcast]: "${offer.code}" dispatched to ${recipientResults.length} clients!`);
+  console.log(`[WhatsApp Offer Broadcast]: "${offer.code}" prepared for ${recipientResults.length} clients (mode=${broadcastLog.deliveryMode})`);
 
   return broadcastLog;
 }
@@ -657,6 +688,42 @@ async function startServer() {
     }
   });
 
+  const QR_UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads', 'qr');
+  if (!fs.existsSync(QR_UPLOAD_DIR)) {
+    fs.mkdirSync(QR_UPLOAD_DIR, { recursive: true });
+  }
+
+  // Dedicated QR Poster Upload Endpoint for Salon Payment Scanners
+  app.post('/api/settings/upload-qr', (req, res) => {
+    try {
+      const { imageBase64, slot } = req.body;
+      if (!imageBase64) {
+        return res.status(400).json({ success: false, message: 'No QR image provided' });
+      }
+      const matches = imageBase64.match(/^data:([A-Za-z0-9-+\/]+);base64,(.+)$/);
+      let buffer: Buffer;
+      let ext = 'jpg';
+      if (matches && matches.length === 3) {
+        const mime = matches[1];
+        if (mime.includes('png')) ext = 'png';
+        else if (mime.includes('webp')) ext = 'webp';
+        buffer = Buffer.from(matches[2], 'base64');
+      } else {
+        buffer = Buffer.from(imageBase64, 'base64');
+      }
+      const safeSlot = slot === 'scanner2' ? 'scanner2' : 'scanner1';
+      const generatedFilename = `qr_${safeSlot}_${Date.now()}.${ext}`;
+      fs.writeFileSync(path.join(QR_UPLOAD_DIR, generatedFilename), buffer);
+      return res.json({
+        success: true,
+        qrUrl: `/uploads/qr/${generatedFilename}`,
+        filename: generatedFilename
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: 'Failed to save QR photo: ' + err.message });
+    }
+  });
+
   // Health check endpoint with database status
   app.get('/api/health', async (req, res) => {
     const dbStatus = await getMySQLStatus();
@@ -750,7 +817,6 @@ async function startServer() {
         const allowedAdminEmails = Array.from(new Set([
           ...(configuredAdminEmails.length > 0 ? configuredAdminEmails : [
             'dineshghodake941@gmail.com',
-            'rohitumdale@gmail.com',
             'modernsalon02@gmail.com',
             'admin@modernsalon.com'
           ]),
@@ -1170,8 +1236,8 @@ async function startServer() {
     }
   });
 
-  // Create new Offer and automatically broadcast via WhatsApp to every history and current client
-  app.post('/api/offers', (req, res) => {
+  // Create new Offer and automatically prepare WhatsApp broadcast for all history and current clients
+  app.post('/api/offers', async (req, res) => {
     try {
       const {
         code,
@@ -1182,7 +1248,9 @@ async function startServer() {
         minBookingAmount,
         validTill,
         expiryDate,
-        active
+        active,
+        clientContacts,
+        appOrigin
       } = req.body;
 
       if (!code || !title) {
@@ -1208,17 +1276,20 @@ async function startServer() {
       // Add to database
       db.offers = [newOffer, ...db.offers.filter((o: any) => o.code !== cleanCode)];
 
-      // Automatically dispatch WhatsApp broadcast to all history & current clients dynamically
-      const broadcastResult = dispatchWhatsAppOfferBroadcast(db, newOffer);
+      // Automatically prepare WhatsApp broadcast to all history & current clients dynamically
+      const broadcastResult = await dispatchWhatsAppOfferBroadcast(db, newOffer, {
+        extraContacts: clientContacts,
+        appOrigin
+      });
 
       writeDb(db);
 
-      console.log(`[Offer Created & Broadcasted]: ${newOffer.code} -> Dispatched via WhatsApp to ${broadcastResult.totalRecipients} clients`);
+      console.log(`[Offer Created & Prepared Broadcast]: ${newOffer.code} -> ${broadcastResult.totalRecipients} clients`);
       res.status(201).json({
         success: true,
         offer: newOffer,
         broadcast: broadcastResult,
-        message: `Offer ${newOffer.code} published & broadcasted to ${broadcastResult.totalRecipients} clients via WhatsApp successfully.`
+        message: `Offer ${newOffer.code} published with ${broadcastResult.totalRecipients} dynamic WhatsApp recipients ready.`
       });
     } catch (err: any) {
       console.error('Error creating offer and broadcasting:', err);
@@ -1226,22 +1297,28 @@ async function startServer() {
     }
   });
 
-  // Dynamic WhatsApp Broadcast Preview & Live Client Scanner
-  app.get(['/api/offers/:id/broadcast-whatsapp', '/api/offers/:id/broadcast-preview'], (req, res) => {
+  // Dynamic WhatsApp Broadcast Preview & Live Client Scanner (supports GET and POST with synced clientContacts/offer)
+  app.all(['/api/offers/:id/broadcast-preview'], (req, res) => {
     try {
       const { id } = req.params;
       const db = readDb();
-      const offer = (db.offers || []).find((o: any) => o.id === id || o.code === id.toUpperCase());
+      const bodyOffer = req.body?.offer;
+      let offer = (db.offers || []).find((o: any) => o.id === id || o.code === id.toUpperCase());
+      if (!offer && bodyOffer) {
+        offer = bodyOffer;
+      }
 
       if (!offer) {
         return res.status(404).json({ success: false, message: 'Offer not found in database.' });
       }
 
-      const recipients = getUniqueClientContacts(db);
+      const recipients = getUniqueClientContacts(db, req.body?.clientContacts || []);
       const salonSettings = db.settings || {};
+      const customMessage = req.body?.customMessage;
+      const appOrigin = req.body?.appOrigin;
 
       const recipientResults = recipients.map((r) => {
-        const messageText = buildOfferWhatsAppMessage(offer, r.name, salonSettings);
+        const messageText = buildOfferWhatsAppMessage(offer, r.name, salonSettings, customMessage, appOrigin);
         const encodedText = encodeURIComponent(messageText);
         return {
           id: r.id,
@@ -1273,9 +1350,10 @@ async function startServer() {
           discountPercent: offer.discountPercent,
           discountAmount: offer.discountAmount,
           dispatchedAt: new Date().toISOString(),
+          deliveryMode: (process.env.WHATSAPP_CLOUD_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID) ? 'WHATSAPP_CLOUD_API' : 'WHATSAPP_LINK_QUEUE',
           totalRecipients: recipientResults.length,
           breakdown,
-          messageText: buildOfferWhatsAppMessage(offer, 'Client Name', salonSettings),
+          messageText: buildOfferWhatsAppMessage(offer, '{{client_name}}', salonSettings, customMessage, appOrigin),
           recipients: recipientResults
         }
       });
@@ -1284,28 +1362,58 @@ async function startServer() {
     }
   });
 
-  // Re-broadcast an existing offer to all clients (including any users added up to this moment!)
-  app.post('/api/offers/:id/broadcast-whatsapp', (req, res) => {
+  // Broadcast or prepare WhatsApp campaign for all synced clients
+  app.post('/api/offers/:id/broadcast-whatsapp', async (req, res) => {
     try {
       const { id } = req.params;
       const db = readDb();
-      const offer = (db.offers || []).find((o: any) => o.id === id || o.code === id.toUpperCase());
+      let offer = (db.offers || []).find((o: any) => o.id === id || o.code === id.toUpperCase());
+
+      if (!offer && req.body?.offer) {
+        offer = { ...req.body.offer, id: req.body.offer.id || id };
+        db.offers = [offer, ...(db.offers || []).filter((o: any) => o.id !== offer.id)];
+      }
 
       if (!offer) {
         return res.status(404).json({ success: false, message: 'Offer not found in database.' });
       }
 
-      // Dynamically scans all clients (including any new users joined up to now!)
-      const broadcastResult = dispatchWhatsAppOfferBroadcast(db, offer);
+      const broadcastResult = await dispatchWhatsAppOfferBroadcast(db, offer, {
+        extraContacts: req.body?.clientContacts,
+        customMessage: req.body?.customMessage,
+        appOrigin: req.body?.appOrigin
+      });
       writeDb(db);
 
-      console.log(`[Offer Re-Broadcasted]: ${offer.code} -> Dispatched to ${broadcastResult.totalRecipients} clients`);
+      console.log(`[Offer Broadcast]: ${offer.code} -> ${broadcastResult.totalRecipients} recipients (${broadcastResult.deliveryMode})`);
       res.json({
         success: true,
         offer,
         broadcast: broadcastResult,
-        message: `Offer ${offer.code} broadcasted via WhatsApp to ${broadcastResult.totalRecipients} clients successfully.`
+        message: broadcastResult.deliveryMode === 'WHATSAPP_CLOUD_API'
+          ? `Offer ${offer.code} sent via WhatsApp Cloud API to ${broadcastResult.totalRecipients} clients.`
+          : `Offer ${offer.code} prepared for ${broadcastResult.totalRecipients} clients in WhatsApp dispatch queue.`
       });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Persist individual recipient WhatsApp send status in broadcast log
+  app.patch('/api/offers/broadcast-logs/:broadcastId/recipient', (req, res) => {
+    try {
+      const { broadcastId } = req.params;
+      const { recipientId, phone, status } = req.body || {};
+      const db = readDb();
+      const log = (db.broadcastLogs || []).find((b: any) => b.id === broadcastId);
+      if (log && Array.isArray(log.recipients)) {
+        log.recipients = log.recipients.map((r: any) => {
+          const match = (recipientId && r.id === recipientId) || (phone && r.phone === phone);
+          return match ? { ...r, status: status || 'SENT' } : r;
+        });
+        writeDb(db);
+      }
+      res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
     }
@@ -2314,6 +2422,101 @@ async function startServer() {
     } catch (err: any) {
       console.error('Error testing Razorpay connection:', err);
       res.status(500).json({ success: false, message: 'Failed to test Razorpay connection: ' + err.message });
+    }
+  });
+
+  // Real Razorpay Merchant UPI Order Creation (eliminates PhonePe P2P browser-intent security blocks)
+  app.post('/api/payment/create-razorpay-order', async (req, res) => {
+    try {
+      const db = readDb();
+      const keyId = (db.settings?.razorpayKeyId || process.env.RAZORPAY_KEY_ID || '').trim();
+      const keySecret = (db.settings?.razorpayKeySecret || process.env.RAZORPAY_KEY_SECRET || '').trim();
+
+      if (!keyId || !keySecret || keyId === 'rzp_test_modern_salon_mohol') {
+        return res.json({
+          success: false,
+          fallbackToDirectUpi: true,
+          message: 'Live Razorpay merchant keys not configured. Using direct UPI/QR flow.'
+        });
+      }
+
+      const advanceAmount = Math.max(1, Number(req.body?.advanceAmount || 0));
+      const amountPaise = Math.round(advanceAmount * 100);
+      const authHeader = 'Basic ' + Buffer.from(`${keyId}:${keySecret}`).toString('base64');
+
+      const rzpRes = await fetch('https://api.razorpay.com/v1/orders', {
+        method: 'POST',
+        headers: {
+          'Authorization': authHeader,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          amount: amountPaise,
+          currency: 'INR',
+          receipt: req.body?.bookingRef || `ms_${Date.now()}`,
+          notes: {
+            serviceName: req.body?.serviceName || 'Salon Booking Advance',
+            customerName: req.body?.customerName || 'Client',
+            customerPhone: req.body?.customerPhone || ''
+          }
+        })
+      });
+
+      const orderJson = await rzpRes.json().catch(() => ({}));
+      if (!rzpRes.ok || !orderJson.id) {
+        return res.status(400).json({
+          success: false,
+          fallbackToDirectUpi: true,
+          message: orderJson.error?.description || 'Could not create Razorpay merchant order.'
+        });
+      }
+
+      return res.json({
+        success: true,
+        keyId,
+        orderId: orderJson.id,
+        amountPaise: orderJson.amount,
+        currency: orderJson.currency || 'INR'
+      });
+    } catch (err: any) {
+      return res.status(500).json({
+        success: false,
+        fallbackToDirectUpi: true,
+        message: err?.message || 'Razorpay order error'
+      });
+    }
+  });
+
+  // Verify Razorpay Merchant Payment Signature (HMAC-SHA256)
+  app.post('/api/payment/verify-razorpay', (req, res) => {
+    try {
+      const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body || {};
+      if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+        return res.status(400).json({ success: false, message: 'Missing Razorpay payment verification fields.' });
+      }
+      const db = readDb();
+      const keySecret = (db.settings?.razorpayKeySecret || process.env.RAZORPAY_KEY_SECRET || '').trim();
+      if (!keySecret) {
+        return res.status(400).json({ success: false, message: 'Razorpay Key Secret is missing.' });
+      }
+
+      const expectedSig = crypto
+        .createHmac('sha256', keySecret)
+        .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+        .digest('hex');
+
+      if (expectedSig !== razorpay_signature) {
+        return res.status(400).json({ success: false, message: 'Invalid Razorpay signature verification.' });
+      }
+
+      return res.json({
+        success: true,
+        verified: true,
+        paymentId: razorpay_payment_id,
+        orderId: razorpay_order_id
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: err?.message || 'Verification failed' });
     }
   });
 

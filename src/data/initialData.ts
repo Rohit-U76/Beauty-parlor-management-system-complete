@@ -1123,7 +1123,6 @@ export const INITIAL_SETTINGS: SalonSettings = {
   adminPin: '8104',
   adminEmails: [
     'dineshghodake941@gmail.com',
-    'rohitumdale@gmail.com',
     'modernsalon02@gmail.com',
     'admin@modernsalon.com'
   ],

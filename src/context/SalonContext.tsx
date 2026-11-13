@@ -252,8 +252,8 @@ const normalizeLegacySettings = (raw: any): SalonSettings => {
     s.bankAccountType = 'Current Account';
   }
 
-  // Only upgrade exact legacy Union Bank / old QR strings independently — NEVER clobber admin-customized UPI IDs or uploaded QRs
-  if (s.merchantUpiId === '9975236976@ibl' || s.upiId === '9975236976@ibl') {
+  // Upgrade exact legacy Union Bank / old QR / personal VPA strings cleanly without clobbering newer admin edits
+  if (s.merchantUpiId === '9975236976@ibl' || s.upiId === '9975236976@ibl' || s.merchantUpiId === '9975236976@ybl' || s.upiId === '9975236976@ybl') {
     s.merchantUpiId = 'ghodakedinesh@ybl';
     s.upiId = 'ghodakedinesh@ybl';
   } else if (raw?.merchantUpiId === undefined && raw?.upiId === undefined && !s.merchantUpiId) {
@@ -263,6 +263,17 @@ const normalizeLegacySettings = (raw: any): SalonSettings => {
     s.upiId = s.merchantUpiId;
   } else if (s.upiId !== undefined && s.merchantUpiId === undefined) {
     s.merchantUpiId = s.upiId;
+  }
+
+  // Strip deprecated rohitumdale@gmail.com from adminEmails and ensure dineshghodake941@gmail.com is primary
+  if (Array.isArray(s.adminEmails)) {
+    const cleanedEmails = s.adminEmails
+      .map((e: string) => (e || '').toLowerCase().trim())
+      .filter((e: string) => Boolean(e) && e !== 'rohitumdale@gmail.com');
+    if (!cleanedEmails.includes('dineshghodake941@gmail.com')) {
+      cleanedEmails.unshift('dineshghodake941@gmail.com');
+    }
+    s.adminEmails = Array.from(new Set(cleanedEmails));
   }
 
   if (s.upiQrCodeUrl === '/qr-union-bank-phonepe.jpg') {
@@ -685,6 +696,10 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const prevStatus = (prev.bookingStatus || prev.status || 'CONFIRMED').toUpperCase();
       const nextStatus = (next.bookingStatus || next.status || 'CONFIRMED').toUpperCase();
       const merged: Appointment = { ...prev, ...next };
+      // Never allow an empty screenshot URL from stale polling/snapshot overwrite an existing uploaded payment proof
+      if (!merged.paymentScreenshotUrl && prev.paymentScreenshotUrl) {
+        merged.paymentScreenshotUrl = prev.paymentScreenshotUrl;
+      }
       // Preserve verified bank status or finalized CANCELLED/COMPLETED status from whichever source updated it
       if (prev.isBankVerified && !next.isBankVerified && nextStatus !== 'CANCELLED') {
         merged.isBankVerified = true;
@@ -752,7 +767,6 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         const savedSettingsRaw = localStorage.getItem(`${LOCAL_STORAGE_KEY}_settings`);
         let dynamicAdminEmails: string[] = [
           'dineshghodake941@gmail.com',
-          'rohitumdale@gmail.com',
           'modernsalon02@gmail.com',
           'admin@modernsalon.com'
         ];
@@ -1556,7 +1570,6 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const authorizedAdminEmails = Array.from(new Set([
       ...(configuredEmails.length > 0 ? configuredEmails : [
         'dineshghodake941@gmail.com',
-        'rohitumdale@gmail.com',
         'modernsalon02@gmail.com',
         'admin@modernsalon.com'
       ]),
@@ -1692,7 +1705,6 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const authorizedAdminEmails = Array.from(new Set([
       ...(configuredEmails.length > 0 ? configuredEmails : [
         'dineshghodake941@gmail.com',
-        'rohitumdale@gmail.com',
         'modernsalon02@gmail.com',
         'admin@modernsalon.com'
       ]),
@@ -1925,7 +1937,6 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const authorizedAdminEmails = Array.from(new Set([
         ...(configuredEmails.length > 0 ? configuredEmails : [
           'dineshghodake941@gmail.com',
-          'rohitumdale@gmail.com',
           'modernsalon02@gmail.com',
           'admin@modernsalon.com'
         ]),
@@ -2389,7 +2400,8 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       // Fallback safe
     }
 
-    // Update appointments immediately & persist customer CRM record across Firestore + backend API
+    // Update appointments immediately (including API ref) & persist customer CRM record across Firestore + backend API
+    apiAppointmentsRef.current = mergeAppointmentsLists([newAppointment], apiAppointmentsRef.current);
     setAppointments(prev => mergeAppointmentsLists([newAppointment], prev));
 
     const custId = currentUser?.id && currentUser.role !== 'ADMIN' ? currentUser.id : `cust-${Date.now()}`;
@@ -2846,6 +2858,17 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }).catch(err => console.warn('Gallery backend delete note:', err));
   };
 
+  const collectSyncClientContacts = () => {
+    const list: any[] = [];
+    (customers || []).forEach(c => list.push({ id: c.id, name: c.name, phone: c.phone, source: 'customer' }));
+    (users || []).forEach(u => {
+      if (u.role !== 'ADMIN') list.push({ id: u.id, name: u.name, phone: u.phone, role: u.role, source: 'user' });
+    });
+    (appointments || []).forEach(a => list.push({ id: `apt-${a.id}`, name: a.clientName, phone: a.clientPhone, source: 'appointment' }));
+    (inquiries || []).forEach(inq => list.push({ id: `inq-${inq.id}`, name: inq.clientName, phone: inq.phone, source: 'customer' }));
+    return list;
+  };
+
   // Offers & Automated WhatsApp Broadcast Management
   const addOffer = async (offer: Omit<OfferCoupon, 'id'>): Promise<{ success: boolean; broadcast?: any; offer?: OfferCoupon }> => {
     const newOffer: OfferCoupon = {
@@ -2862,7 +2885,11 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const res = await fetch('/api/offers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newOffer)
+        body: JSON.stringify({
+          ...newOffer,
+          clientContacts: collectSyncClientContacts(),
+          appOrigin: typeof window !== 'undefined' ? window.location.origin : ''
+        })
       });
       const data = await res.json();
       if (data.success && data.offer) {
@@ -2879,10 +2906,16 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
 
   const broadcastOfferWhatsApp = async (offerId: string): Promise<{ success: boolean; broadcast?: any; message?: string }> => {
+    const matchedOffer = offers.find(o => o.id === offerId || o.code === offerId.toUpperCase());
     try {
       const res = await fetch(`/api/offers/${offerId}/broadcast-whatsapp`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          offer: matchedOffer,
+          clientContacts: collectSyncClientContacts(),
+          appOrigin: typeof window !== 'undefined' ? window.location.origin : ''
+        })
       });
       const data = await res.json();
       if (data.success && data.broadcast) {

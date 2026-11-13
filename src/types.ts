@@ -255,10 +255,12 @@ export interface SalonSettings {
   upiId?: string; // Scanner 1 VPA alias
   upiQrCodeUrl?: string; // Scanner 1 QR poster image URL
   primaryQrCustomOnly?: boolean; // True when Scanner 1 custom QR photo was uploaded without auto-decoded VPA
+  primaryUpiExtraParams?: string; // Preserved merchant QR parameters (e.g. mc, mode, orgid, sign)
   secondaryUpiId?: string; // Scanner 2 VPA (e.g. 8104026257@axl)
   secondaryAccountHolder?: string;
   secondaryUpiQrCodeUrl?: string; // Scanner 2 QR poster image URL
   secondaryQrCustomOnly?: boolean; // True when Scanner 2 custom QR photo was uploaded without auto-decoded VPA
+  secondaryUpiExtraParams?: string; // Preserved merchant QR parameters for Scanner 2
   razorpayKeyId?: string;
   razorpayKeySecret?: string;
   paymentGatewayMode?: 'live' | 'test';

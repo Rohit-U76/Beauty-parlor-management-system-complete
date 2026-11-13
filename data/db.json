@@ -31,7 +31,6 @@
     "adminPin": "8104",
     "adminEmails": [
       "dineshghodake941@gmail.com",
-      "rohitumdale@gmail.com",
       "modernsalon02@gmail.com",
       "admin@modernsalon.com"
     ],
@@ -75,7 +74,17 @@
     }
   ],
   "reviews": [],
-  "notifications": [],
+  "notifications": [
+    {
+      "id": "notif-1794594049989",
+      "title": "📢 WhatsApp Offer Broadcast Prepared",
+      "message": "Offer \"TEST20\" (Festive 20% Off) prepared for 2 unique clients.",
+      "type": "promotion",
+      "timestamp": "Just now",
+      "read": false,
+      "offerCode": "TEST20"
+    }
+  ],
   "broadcastLogs": [],
   "verifiedDeposits": [],
   "gallery": []
