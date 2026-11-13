@@ -16,7 +16,8 @@ import {
   Star,
   Check,
   Compass,
-  Scissors
+  Scissors,
+  Gift
 } from 'lucide-react';
 import { useSalon } from '../context/SalonContext';
 import { ModernSalonLogo } from './ModernSalonLogo';
@@ -280,21 +281,23 @@ export const AuthGatewayScreen: React.FC<AuthGatewayScreenProps> = ({ initialTab
       </div>
 
       {/* Top Bar */}
-      <header className="relative z-10 w-full max-w-6xl mx-auto px-4 sm:px-6 py-6 flex items-center justify-between border-b border-purple-200/80 dark:border-zinc-800/80">
-        <div className="flex items-center gap-3">
-          <ModernSalonLogo size="md" showTagline={false} />
-          <div>
-            <h1 className="font-serif font-bold text-lg sm:text-xl text-zinc-900 dark:text-white tracking-wide">
+      <header className="relative z-10 w-full max-w-6xl mx-auto px-3.5 sm:px-6 py-4 sm:py-6 flex items-center justify-between gap-2 border-b border-purple-200/80 dark:border-zinc-800/80">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="shrink-0 max-w-[110px] sm:max-w-none [&_div]:!whitespace-normal [&_div]:!flex-wrap [&_span]:!whitespace-normal">
+            <ModernSalonLogo size="md" showTagline={false} />
+          </div>
+          <div className="min-w-0">
+            <h1 className="font-serif font-bold text-base sm:text-xl text-zinc-900 dark:text-white tracking-wide leading-tight">
               {settings.salonName}
             </h1>
-            <p className="text-xs text-purple-700 dark:text-amber-400 font-semibold">
+            <p className="text-[11px] sm:text-xs text-purple-700 dark:text-amber-400 font-semibold leading-snug">
               Mohol • Premier Unisex Salon &amp; Bridal Studio
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <ThemeToggle showLabel={true} />
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <ThemeToggle showLabel={true} className="!rounded-xl !px-2.5 !py-2 max-w-[104px] sm:max-w-none [&_span]:leading-tight [&_span]:text-[11px] sm:[&_span]:text-xs" />
           <div className="hidden sm:flex px-3.5 py-1.5 rounded-xl bg-purple-100/80 dark:bg-zinc-900/90 border border-purple-200 dark:border-amber-500/30 text-xs font-semibold text-purple-800 dark:text-amber-400 items-center gap-2 shadow-sm">
             <Lock className="w-3.5 h-3.5 text-purple-600 dark:text-amber-400" />
             <span>Authorization Required</span>
@@ -318,8 +321,9 @@ export const AuthGatewayScreen: React.FC<AuthGatewayScreenProps> = ({ initialTab
                 {activeTab === 'customer_register' && 'Create Your Salon Account'}
                 {activeTab === 'admin_login' && 'Salon Owner & Staff Login'}
               </h2>
-              {activeTab !== 'customer_login' && (
-                <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400">
+              {(activeTab === 'customer_login' || activeTab === 'customer_register' || activeTab === 'admin_login') && (
+                <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 max-w-sm mx-auto leading-relaxed">
+                  {activeTab === 'customer_login' && 'Access reward points, booking passes, and express checkouts'}
                   {activeTab === 'customer_register' && 'Register your client profile for quick and seamless appointments'}
                   {activeTab === 'admin_login' && 'Master Stylist Dashboard & Business Operations'}
                 </p>
@@ -360,7 +364,7 @@ export const AuthGatewayScreen: React.FC<AuthGatewayScreenProps> = ({ initialTab
                     : 'text-zinc-600 dark:text-zinc-400 hover:text-purple-700 dark:hover:text-zinc-200'
                 }`}
               >
-                <Sparkles className="w-3.5 h-3.5" />
+                <Gift className="w-3.5 h-3.5" />
                 <span className="truncate">Sign Up</span>
               </button>
 
@@ -513,7 +517,7 @@ export const AuthGatewayScreen: React.FC<AuthGatewayScreenProps> = ({ initialTab
                   <div className="absolute inset-0 flex items-center">
                     <div className="w-full border-t border-purple-200/60 dark:border-zinc-800" />
                   </div>
-                  <div className="relative bg-white dark:bg-zinc-900 px-3 text-[10px] text-zinc-500 uppercase tracking-wider font-bold">
+                  <div className="relative bg-white dark:bg-[#141418] px-3 text-[10px] text-zinc-500 uppercase tracking-wider font-bold">
                     Or continue with
                   </div>
                 </div>
@@ -692,7 +696,7 @@ export const AuthGatewayScreen: React.FC<AuthGatewayScreenProps> = ({ initialTab
                   <div className="absolute inset-0 flex items-center">
                     <div className="w-full border-t border-purple-200/60 dark:border-zinc-800" />
                   </div>
-                  <div className="relative bg-white dark:bg-zinc-900 px-3 text-[10px] text-zinc-500 uppercase tracking-wider font-bold">
+                  <div className="relative bg-white dark:bg-[#141418] px-3 text-[10px] text-zinc-500 uppercase tracking-wider font-bold">
                     Or sign up with
                   </div>
                 </div>
