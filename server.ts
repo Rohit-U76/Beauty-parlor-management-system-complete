@@ -1347,12 +1347,27 @@ async function startServer() {
       if (updates.adminPassword && updates.adminPassword !== db.settings?.adminPassword) {
         updates.adminPasswordUpdatedAt = Date.now();
       }
+      if (updates.merchantUpiId !== undefined && updates.upiId === undefined) {
+        updates.upiId = updates.merchantUpiId;
+      } else if (updates.upiId !== undefined && updates.merchantUpiId === undefined) {
+        updates.merchantUpiId = updates.upiId;
+      }
+      const prevTs = Number(db.settings?.settingsUpdatedAt || 0);
+      const reqTs = Number(updates.settingsUpdatedAt || 0);
+      updates.settingsUpdatedAt = Math.max(Date.now(), prevTs + 1, reqTs);
+
       db.settings = { ...db.settings, ...updates };
       writeDb(db);
       if (isMySQLConnected()) {
         await saveSettingsToMySQL(db.settings);
       }
-      console.log('[Settings Updated in DB]:', updates);
+      console.log('[Settings Updated in DB]:', {
+        merchantUpiId: db.settings?.merchantUpiId,
+        secondaryUpiId: db.settings?.secondaryUpiId,
+        accountHolder: db.settings?.accountHolder,
+        secondaryAccountHolder: db.settings?.secondaryAccountHolder,
+        settingsUpdatedAt: db.settings?.settingsUpdatedAt
+      });
       res.json({ success: true, settings: db.settings, message: 'Settings updated successfully' });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });

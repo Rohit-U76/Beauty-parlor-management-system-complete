@@ -200,6 +200,7 @@ interface SalonContextType {
 
   // Settings & Schedule Blackout
   updateSettings: (newSettings: Partial<SalonSettings>) => Promise<void>;
+  refreshSettings: () => Promise<void>;
   toggleOwnerBreakToday: (forcedState?: boolean) => void;
   addBlockedSlotWindow: (window: Omit<BlockedSlotWindow, 'id' | 'createdAt'>) => void;
   updateBlockedSlotWindow: (id: string, updates: Partial<BlockedSlotWindow>) => void;
@@ -249,26 +250,64 @@ const normalizeLegacySettings = (raw: any): SalonSettings => {
   if (!s.bankAccountType) {
     s.bankAccountType = 'Current Account';
   }
-  if (
-    !s.merchantUpiId ||
+
+  // Only upgrade exact legacy Union Bank / old QR strings — NEVER clobber admin-customized UPI IDs or uploaded QRs
+  const isLegacyPrimaryUpi =
     s.merchantUpiId === '9975236976@ibl' ||
     s.upiId === '9975236976@ibl' ||
-    s.upiQrCodeUrl === '/qr-union-bank-phonepe.jpg'
-  ) {
+    s.upiQrCodeUrl === '/qr-union-bank-phonepe.jpg';
+  if (isLegacyPrimaryUpi) {
     s.merchantUpiId = 'ghodakedinesh@ybl';
     s.upiId = 'ghodakedinesh@ybl';
     s.upiQrCodeUrl = '/assets/aistudio/image_2ca5cc29.png';
+  } else {
+    if (raw?.merchantUpiId === undefined && raw?.upiId === undefined && !s.merchantUpiId) {
+      s.merchantUpiId = 'ghodakedinesh@ybl';
+      s.upiId = 'ghodakedinesh@ybl';
+    } else if (s.merchantUpiId !== undefined && s.upiId === undefined) {
+      s.upiId = s.merchantUpiId;
+    } else if (s.upiId !== undefined && s.merchantUpiId === undefined) {
+      s.merchantUpiId = s.upiId;
+    }
+    if (raw?.upiQrCodeUrl === undefined && !s.upiQrCodeUrl) {
+      s.upiQrCodeUrl = '/assets/aistudio/image_2ca5cc29.png';
+    }
   }
-  if (
-    !s.secondaryUpiQrCodeUrl ||
-    s.secondaryUpiQrCodeUrl === '/qr-dinesh-ghodake.jpg' ||
-    s.secondaryAccountHolder === 'DINESH GHODAKE'
-  ) {
+
+  if (s.secondaryUpiQrCodeUrl === '/qr-dinesh-ghodake.jpg') {
+    s.secondaryUpiQrCodeUrl = '/assets/aistudio/image_fce20bf8.png';
+  }
+  if (raw?.secondaryAccountHolder === undefined && !s.secondaryAccountHolder) {
     s.secondaryAccountHolder = 'DINESH VITTHAL GHODAKE';
-    s.secondaryUpiId = s.secondaryUpiId || '8104026257@axl';
+  }
+  if (raw?.secondaryUpiId === undefined && !s.secondaryUpiId) {
+    s.secondaryUpiId = '8104026257@axl';
+  }
+  if (raw?.secondaryUpiQrCodeUrl === undefined && !s.secondaryUpiQrCodeUrl) {
     s.secondaryUpiQrCodeUrl = '/assets/aistudio/image_fce20bf8.png';
   }
   return s;
+};
+
+const mergeIncomingSettings = (prev: SalonSettings, incomingRaw: any): SalonSettings => {
+  if (!incomingRaw || typeof incomingRaw !== 'object') return prev;
+  const prevUpdated = Number(prev.settingsUpdatedAt || 0);
+  const incomingUpdated = Number(incomingRaw.settingsUpdatedAt || 0);
+  const prevPassTs = Number(prev.adminPasswordUpdatedAt || 0);
+  const nextPassTs = Number(incomingRaw.adminPasswordUpdatedAt || 0);
+
+  // If local state is strictly newer than incoming snapshot/cache, keep newer local values on top
+  const isLocalNewer = prevUpdated > 0 && prevUpdated > incomingUpdated;
+  const mergedBase = isLocalNewer
+    ? { ...incomingRaw, ...prev, settingsUpdatedAt: prevUpdated }
+    : { ...prev, ...incomingRaw, settingsUpdatedAt: Math.max(prevUpdated, incomingUpdated) };
+
+  const normalized = normalizeLegacySettings(mergedBase);
+  if (prev.adminPassword && prevPassTs > nextPassTs) {
+    normalized.adminPassword = prev.adminPassword;
+    normalized.adminPasswordUpdatedAt = prevPassTs;
+  }
+  return normalized;
 };
 
 // One-time clean slate check for legacy seeded dashboard data
@@ -457,18 +496,23 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return null;
   };
 
-  // UI state — check sessionStorage, localStorage, AND URL hash so refreshing on Admin side NEVER bounces to Client side
+  // UI state — strictly respect explicit customer/admin portal choice so Client sessions NEVER bounce to Admin on refresh
   const [isAdminMode, setIsAdminModeState] = useState<boolean>(() => {
     try {
       const parsedHash = parseNavHash();
+      const savedPortal =
+        sessionStorage.getItem(`${LOCAL_STORAGE_KEY}_portal_mode`) ??
+        localStorage.getItem(`${LOCAL_STORAGE_KEY}_portal_mode`);
       const saved =
         sessionStorage.getItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`) ??
         localStorage.getItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`);
       const u = getSavedUserFromStorage();
+      if (savedPortal === 'customer' || saved === 'false' || parsedHash?.mode === 'client') {
+        return false;
+      }
       if (u && u.role === 'ADMIN') {
         if (parsedHash?.mode === 'admin') return true;
-        if (saved === 'true') return true;
-        if (saved === null && parsedHash?.mode !== 'client') return true;
+        if (saved === 'true' || savedPortal === 'admin') return true;
       }
     } catch {}
     return false;
@@ -523,8 +567,11 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     navSnapshotRef.current = { ...navSnapshotRef.current, isAdminMode: val };
     try {
       const flag = val ? 'true' : 'false';
+      const portal = val ? 'admin' : 'customer';
       sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, flag);
       localStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, flag);
+      sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, portal);
+      localStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, portal);
     } catch {}
     if (!isHandlingPopStateRef.current) {
       const cur = navSnapshotRef.current;
@@ -603,6 +650,8 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         setAdminTabState(nextAdminTab);
         sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, nextAdmin ? 'true' : 'false');
         localStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, nextAdmin ? 'true' : 'false');
+        sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, nextAdmin ? 'admin' : 'customer');
+        localStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, nextAdmin ? 'admin' : 'customer');
         sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_active_tab`, nextClientTab);
         localStorage.setItem(`${LOCAL_STORAGE_KEY}_active_tab`, nextClientTab);
         sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_admin_tab`, nextAdminTab);
@@ -724,6 +773,25 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
         const isAdminUser = Boolean(fbEmail && dynamicAdminEmails.includes(fbEmail));
 
+        // Respect explicit portal mode so a user who signed in on the Client Portal NEVER gets switched to Admin after refreshing!
+        const readPortalAdminIntent = () => {
+          try {
+            const parsedHash = parseNavHash();
+            const savedPortal =
+              sessionStorage.getItem(`${LOCAL_STORAGE_KEY}_portal_mode`) ??
+              localStorage.getItem(`${LOCAL_STORAGE_KEY}_portal_mode`);
+            const savedFlag =
+              sessionStorage.getItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`) ??
+              localStorage.getItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`);
+            if (savedPortal === 'customer' || savedFlag === 'false' || parsedHash?.mode === 'client') {
+              return false;
+            }
+            return parsedHash?.mode === 'admin' || savedPortal === 'admin' || savedFlag === 'true';
+          } catch {
+            return false;
+          }
+        };
+
         // STRICT MANDATORY EMAIL VERIFICATION GATE:
         if (!isAdminUser && !fbUser.emailVerified) {
           console.log('Unverified customer session detected - access to dashboard blocked until email confirmed:', fbUser.email);
@@ -735,16 +803,20 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
         // Listen to Firestore profile updates in real time
         const unsubUserDoc = onSnapshot(userDocRef, (snap) => {
+          const wantsAdminPortal = isAdminUser && readPortalAdminIntent();
           if (snap.exists()) {
             const data = snap.data();
+            const resolvedRole: UserRole = wantsAdminPortal ? 'ADMIN' : 'CUSTOMER';
             const u: User = {
               id: fbUser.uid,
               name: data.name || fbUser.displayName || 'Client',
               username: data.username,
               email: data.email || fbUser.email || '',
               phone: data.phone || fbUser.phoneNumber || '',
-              role: isAdminUser ? 'ADMIN' : (data.role || 'CUSTOMER'),
-              memberTier: isAdminUser ? 'Owner Admin' : (data.memberTier || 'New Client'),
+              role: resolvedRole,
+              memberTier: resolvedRole === 'ADMIN'
+                ? 'Owner Admin'
+                : (data.memberTier && data.memberTier !== 'Owner Admin' ? data.memberTier : 'New Client'),
               emailVerified: fbUser.emailVerified || isAdminUser,
               avatarUrl: data.avatarUrl || fbUser.photoURL || undefined,
               preferredServices: data.preferredServices || [],
@@ -765,15 +837,31 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               totalVisits: data.totalVisits,
               memberSince: data.memberSince
             };
-            setCurrentUser(prev => ({
-              ...u,
-              phone: u.phone || (prev && prev.id === u.id ? prev.phone : '') || ''
-            }));
+            setCurrentUser(prev => {
+              const mergedUser: User = {
+                ...u,
+                phone: u.phone || (prev && prev.id === u.id ? prev.phone : '') || ''
+              };
+              try {
+                const ser = JSON.stringify(mergedUser);
+                sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_current_user`, ser);
+                localStorage.setItem(`${LOCAL_STORAGE_KEY}_current_user`, ser);
+              } catch {}
+              return mergedUser;
+            });
             setIsGuestMode(false);
-            if (isAdminUser) {
+            if (wantsAdminPortal) {
               setIsAdminModeState(true);
               sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, 'true');
               localStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, 'true');
+              sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, 'admin');
+              localStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, 'admin');
+            } else {
+              setIsAdminModeState(false);
+              sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, 'false');
+              localStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, 'false');
+              sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, 'customer');
+              localStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, 'customer');
             }
             // Mirror signed-in user to backend /api/auth/users and Firestore customers so CRM sees every account
             fetch(`/api/auth/users/${u.id}`, {
@@ -796,27 +884,44 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               }), { merge: true }).catch(() => {});
             }
           } else {
+            const resolvedRole: UserRole = wantsAdminPortal ? 'ADMIN' : 'CUSTOMER';
             const newUserData: User = {
               id: fbUser.uid,
               name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Client',
               email: fbUser.email || '',
               phone: fbUser.phoneNumber || '',
-              role: isAdminUser ? 'ADMIN' : 'CUSTOMER',
-              memberTier: isAdminUser ? 'Owner Admin' : 'New Client',
+              role: resolvedRole,
+              memberTier: resolvedRole === 'ADMIN' ? 'Owner Admin' : 'New Client',
               emailVerified: Boolean(fbUser.emailVerified) || isAdminUser,
               ...(fbUser.photoURL ? { avatarUrl: fbUser.photoURL } : {}),
               preferredServices: []
             };
             setDoc(userDocRef, cleanFirestoreData(newUserData), { merge: true }).catch((err) => handleFirestoreError(err, OperationType.WRITE, `users/${fbUser.uid}`));
-            setCurrentUser(prev => ({
-              ...newUserData,
-              phone: newUserData.phone || (prev && prev.id === newUserData.id ? prev.phone : '') || ''
-            }));
+            setCurrentUser(prev => {
+              const mergedUser: User = {
+                ...newUserData,
+                phone: newUserData.phone || (prev && prev.id === newUserData.id ? prev.phone : '') || ''
+              };
+              try {
+                const ser = JSON.stringify(mergedUser);
+                sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_current_user`, ser);
+                localStorage.setItem(`${LOCAL_STORAGE_KEY}_current_user`, ser);
+              } catch {}
+              return mergedUser;
+            });
             setIsGuestMode(false);
-            if (isAdminUser) {
+            if (wantsAdminPortal) {
               setIsAdminModeState(true);
               sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, 'true');
               localStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, 'true');
+              sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, 'admin');
+              localStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, 'admin');
+            } else {
+              setIsAdminModeState(false);
+              sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, 'false');
+              localStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, 'false');
+              sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, 'customer');
+              localStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, 'customer');
             }
             fetch(`/api/auth/users/${newUserData.id}`, {
               method: 'PUT',
@@ -886,18 +991,15 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       console.warn('Real-time offers snapshot notice:', err.message);
     });
 
-    // Real-time Settings
+    // Real-time Settings (respects monotonic settingsUpdatedAt so older Firestore docs never overwrite newer API saves)
     const unsubSettings = onSnapshot(doc(db, 'salon_settings', 'main'), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data() as any;
         setSettings((prev) => {
-          const prevTs = Number(prev.adminPasswordUpdatedAt || 0);
-          const nextTs = Number(data.adminPasswordUpdatedAt || 0);
-          const merged = normalizeLegacySettings({ ...prev, ...data });
-          if (prev.adminPassword && prevTs > nextTs) {
-            merged.adminPassword = prev.adminPassword;
-            merged.adminPasswordUpdatedAt = prevTs;
-          }
+          const merged = mergeIncomingSettings(prev, data);
+          try {
+            localStorage.setItem(`${LOCAL_STORAGE_KEY}_settings`, JSON.stringify(merged));
+          } catch {}
           return merged;
         });
       }
@@ -965,14 +1067,10 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       .then(data => {
         if (data.success && data.settings) {
           setSettings(prev => {
-            const prevTs = Number(prev.adminPasswordUpdatedAt || 0);
-            const srvTs = Number(data.settings.adminPasswordUpdatedAt || 0);
-            const merged = normalizeLegacySettings({ ...prev, ...data.settings });
-            if (prev.adminPassword && prevTs > srvTs) {
-              merged.adminPassword = prev.adminPassword;
-              merged.adminPasswordUpdatedAt = prevTs;
-            }
-            localStorage.setItem(`${LOCAL_STORAGE_KEY}_settings`, JSON.stringify(merged));
+            const merged = mergeIncomingSettings(prev, data.settings);
+            try {
+              localStorage.setItem(`${LOCAL_STORAGE_KEY}_settings`, JSON.stringify(merged));
+            } catch {}
             return merged;
           });
           if (data.settings.advancePercentage) {
@@ -1050,9 +1148,13 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               (u.phone && prev.phone && u.phone === prev.phone && u.role === prev.role)
             );
             if (fresh) {
-              const merged = {
+              const merged: User = {
                 ...prev,
                 ...fresh,
+                role: prev.role,
+                memberTier: prev.role === 'CUSTOMER' && fresh.memberTier === 'Owner Admin'
+                  ? (prev.memberTier || 'New Client')
+                  : (fresh.memberTier || prev.memberTier),
                 phone: fresh.phone || prev.phone || '',
                 name: fresh.name || prev.name
               };
@@ -1129,18 +1231,14 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         .then(data => {
           if (data.success && data.settings) {
             setSettings(prev => {
-              const prevTs = Number(prev.adminPasswordUpdatedAt || 0);
-              const srvTs = Number(data.settings.adminPasswordUpdatedAt || 0);
-              const merged = normalizeLegacySettings({
-                ...prev,
+              const merged = mergeIncomingSettings(prev, {
                 ...data.settings,
                 blockedWindows: data.settings.blockedWindows !== undefined ? data.settings.blockedWindows : (prev.blockedWindows || []),
                 isOwnerOnBreakToday: data.settings.isOwnerOnBreakToday !== undefined ? data.settings.isOwnerOnBreakToday : (prev.isOwnerOnBreakToday || false)
               });
-              if (prev.adminPassword && prevTs > srvTs) {
-                merged.adminPassword = prev.adminPassword;
-                merged.adminPasswordUpdatedAt = prevTs;
-              }
+              try {
+                localStorage.setItem(`${LOCAL_STORAGE_KEY}_settings`, JSON.stringify(merged));
+              } catch {}
               return merged;
             });
           }
@@ -1305,6 +1403,12 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (auth.currentUser) {
         await reload(auth.currentUser);
         if (auth.currentUser.emailVerified) {
+          try {
+            sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, 'customer');
+            localStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, 'customer');
+            sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, 'false');
+            localStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, 'false');
+          } catch {}
           const verifiedUser = await loadSavedUserDoc(
             auth.currentUser.uid,
             auth.currentUser.email || '',
@@ -1313,6 +1417,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           );
           setDoc(doc(db, 'users', auth.currentUser.uid), cleanFirestoreData({ emailVerified: true }), { merge: true }).catch(() => {});
           setCurrentUser(verifiedUser);
+          setIsAdminMode(false);
           setIsGuestMode(false);
           setIsAuthModalOpen(false);
           return { verified: true, message: 'Email confirmed! Your account is activated.', user: verifiedUser };
@@ -1321,6 +1426,12 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
       // 2. If email & password credentials provided, attempt sign in to verify status
       if (email && password) {
+        try {
+          sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, 'customer');
+          localStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, 'customer');
+          sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, 'false');
+          localStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, 'false');
+        } catch {}
         const userCred = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password.trim());
         const fbUser = userCred.user;
         if (fbUser.emailVerified) {
@@ -1332,6 +1443,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           );
           setDoc(doc(db, 'users', fbUser.uid), cleanFirestoreData({ emailVerified: true }), { merge: true }).catch(() => {});
           setCurrentUser(verifiedUser);
+          setIsAdminMode(false);
           setIsGuestMode(false);
           setIsAuthModalOpen(false);
           return { verified: true, message: 'Email confirmed! Your account is activated.', user: verifiedUser };
@@ -1624,6 +1736,14 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             memberTier: 'Owner Admin',
             emailVerified: true
           };
+          try {
+            sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, 'admin');
+            localStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, 'admin');
+            sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, 'true');
+            localStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, 'true');
+            sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_current_user`, JSON.stringify(adminUser));
+            localStorage.setItem(`${LOCAL_STORAGE_KEY}_current_user`, JSON.stringify(adminUser));
+          } catch {}
           setCurrentUser(adminUser);
           setIsAdminMode(true);
           setIsGuestMode(false);
@@ -1636,6 +1756,16 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     // 2. Real-time Firebase Authentication with mandatory email verification check
     if (rawInput.includes('@')) {
       try {
+        // Pre-lock portal intent BEFORE signInWithEmailAndPassword so onAuthStateChanged never races
+        const preIntentPortal = expectedRole === 'ADMIN' ? 'admin' : 'customer';
+        const preIntentFlag = expectedRole === 'ADMIN' ? 'true' : 'false';
+        try {
+          sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, preIntentPortal);
+          localStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, preIntentPortal);
+          sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, preIntentFlag);
+          localStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, preIntentFlag);
+        } catch {}
+
         const userCredential = await signInWithEmailAndPassword(auth, rawInput.toLowerCase(), cleanSecret);
         const fbUser = userCredential.user;
 
@@ -1661,7 +1791,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           };
         }
 
-        const userRole: UserRole = (expectedRole === 'ADMIN' || isUserAdmin) && expectedRole !== 'CUSTOMER' ? 'ADMIN' : 'CUSTOMER';
+        const userRole: UserRole = expectedRole === 'ADMIN' && isUserAdmin ? 'ADMIN' : 'CUSTOMER';
 
         // Load existing saved profile from Firestore & backend DB so saved phone/details are preserved
         let existingDocData: any = {};
@@ -1691,8 +1821,23 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           phone: existingDocData.phone || existingDbUser.phone || fbUser.phoneNumber || '',
           role: userRole,
           emailVerified: true,
-          memberTier: userRole === 'ADMIN' ? 'Owner Admin' : (existingDocData.memberTier || existingDbUser.memberTier || 'Standard')
+          memberTier: userRole === 'ADMIN'
+            ? 'Owner Admin'
+            : (existingDocData.memberTier && existingDocData.memberTier !== 'Owner Admin'
+                ? existingDocData.memberTier
+                : (existingDbUser.memberTier && existingDbUser.memberTier !== 'Owner Admin' ? existingDbUser.memberTier : 'Standard'))
         };
+
+        try {
+          const portal = userRole === 'ADMIN' ? 'admin' : 'customer';
+          const flag = userRole === 'ADMIN' ? 'true' : 'false';
+          sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, portal);
+          localStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, portal);
+          sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, flag);
+          localStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, flag);
+          sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_current_user`, JSON.stringify(user));
+          localStorage.setItem(`${LOCAL_STORAGE_KEY}_current_user`, JSON.stringify(user));
+        } catch {}
 
         await setDoc(doc(db, 'users', fbUser.uid), cleanFirestoreData(user), { merge: true });
         fetch(`/api/auth/users/${fbUser.uid}`, {
@@ -1760,7 +1905,17 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const requestedRole: 'ADMIN' | 'CUSTOMER' = 
       typeof optionsOrRole === 'string'
         ? optionsOrRole
-        : optionsOrRole?.forRole || (isAdminMode ? 'ADMIN' : 'CUSTOMER');
+        : optionsOrRole?.forRole || 'CUSTOMER';
+
+    // Lock portal intent BEFORE signInWithPopup fires onAuthStateChanged so mobile/client sign-ins never switch to admin
+    try {
+      const prePortal = requestedRole === 'ADMIN' ? 'admin' : 'customer';
+      const preFlag = requestedRole === 'ADMIN' ? 'true' : 'false';
+      sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, prePortal);
+      localStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, prePortal);
+      sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, preFlag);
+      localStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, preFlag);
+    } catch {}
 
     try {
       const result = await signInWithPopup(auth, googleProvider);
@@ -1803,6 +1958,15 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           ...(fbUser.photoURL ? { avatarUrl: fbUser.photoURL } : {})
         };
 
+        try {
+          sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, 'admin');
+          localStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, 'admin');
+          sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, 'true');
+          localStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, 'true');
+          sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_current_user`, JSON.stringify(adminProfile));
+          localStorage.setItem(`${LOCAL_STORAGE_KEY}_current_user`, JSON.stringify(adminProfile));
+        } catch {}
+
         await setDoc(doc(db, 'users', fbUser.uid), cleanFirestoreData(adminProfile), { merge: true });
         if (settings.adminPassword) {
           setDoc(
@@ -1827,7 +1991,14 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         };
       }
 
-      // CUSTOMER GOOGLE SIGN-IN — preserve previously saved phone & profile details
+      // CUSTOMER GOOGLE SIGN-IN — strictly lock portal_mode = 'customer' so refreshes stay on Client side
+      try {
+        sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, 'customer');
+        localStorage.setItem(`${LOCAL_STORAGE_KEY}_portal_mode`, 'customer');
+        sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, 'false');
+        localStorage.setItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`, 'false');
+      } catch {}
+
       let existingDocData: any = {};
       try {
         const snap = await getDoc(doc(db, 'users', fbUser.uid));
@@ -1846,6 +2017,11 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         }
       } catch {}
 
+      const resolvedCustomerTier =
+        existingDocData.memberTier && existingDocData.memberTier !== 'Owner Admin'
+          ? existingDocData.memberTier
+          : (existingDbUser.memberTier && existingDbUser.memberTier !== 'Owner Admin' ? existingDbUser.memberTier : 'New Client');
+
       const clientProfile: User = {
         ...existingDbUser,
         ...existingDocData,
@@ -1854,10 +2030,15 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         email: fbUser.email || existingDocData.email || existingDbUser.email || '',
         phone: existingDocData.phone || existingDbUser.phone || fbUser.phoneNumber || '',
         role: 'CUSTOMER',
-        memberTier: existingDocData.memberTier || existingDbUser.memberTier || 'New Client',
+        memberTier: resolvedCustomerTier,
         emailVerified: true,
         ...(existingDocData.avatarUrl || fbUser.photoURL ? { avatarUrl: existingDocData.avatarUrl || fbUser.photoURL } : {})
       };
+
+      try {
+        sessionStorage.setItem(`${LOCAL_STORAGE_KEY}_current_user`, JSON.stringify(clientProfile));
+        localStorage.setItem(`${LOCAL_STORAGE_KEY}_current_user`, JSON.stringify(clientProfile));
+      } catch {}
 
       await setDoc(doc(db, 'users', fbUser.uid), cleanFirestoreData(clientProfile), { merge: true });
       fetch(`/api/auth/users/${fbUser.uid}`, {
@@ -1991,11 +2172,13 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     sessionStorage.removeItem(`${LOCAL_STORAGE_KEY}_guest_mode`);
     sessionStorage.removeItem(`${LOCAL_STORAGE_KEY}_current_user`);
     sessionStorage.removeItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`);
+    sessionStorage.removeItem(`${LOCAL_STORAGE_KEY}_portal_mode`);
     sessionStorage.removeItem(`${LOCAL_STORAGE_KEY}_active_tab`);
     sessionStorage.removeItem(`${LOCAL_STORAGE_KEY}_admin_tab`);
     localStorage.removeItem(`${LOCAL_STORAGE_KEY}_guest_mode`);
     localStorage.removeItem(`${LOCAL_STORAGE_KEY}_current_user`);
     localStorage.removeItem(`${LOCAL_STORAGE_KEY}_is_admin_mode`);
+    localStorage.removeItem(`${LOCAL_STORAGE_KEY}_portal_mode`);
     localStorage.removeItem(`${LOCAL_STORAGE_KEY}_active_tab`);
     localStorage.removeItem(`${LOCAL_STORAGE_KEY}_admin_tab`);
   };
@@ -2869,37 +3052,83 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
 
   // Settings
+  const refreshSettings = async (): Promise<void> => {
+    try {
+      const res = await fetch('/api/settings', { cache: 'no-store' });
+      const data = await res.json();
+      if (data?.success && data.settings) {
+        setSettings(prev => {
+          const merged = mergeIncomingSettings(prev, data.settings);
+          try {
+            localStorage.setItem(`${LOCAL_STORAGE_KEY}_settings`, JSON.stringify(merged));
+          } catch {}
+          return merged;
+        });
+      }
+    } catch {}
+  };
+
   const updateSettings = async (newSettings: Partial<SalonSettings>): Promise<void> => {
-    const enriched = {
+    const syncPayload: Partial<SalonSettings> = {
       ...newSettings,
-      ...(newSettings.adminPassword ? { adminPasswordUpdatedAt: Date.now() } : {})
+      ...(newSettings.merchantUpiId !== undefined && newSettings.upiId === undefined
+        ? { upiId: newSettings.merchantUpiId }
+        : {}),
+      ...(newSettings.upiId !== undefined && newSettings.merchantUpiId === undefined
+        ? { merchantUpiId: newSettings.upiId }
+        : {}),
+      ...(newSettings.adminPassword ? { adminPasswordUpdatedAt: Date.now() } : {}),
+      settingsUpdatedAt: Math.max(Date.now(), Number(settings.settingsUpdatedAt || 0) + 1)
     };
+
+    let nextFullSettings: SalonSettings = { ...settings, ...syncPayload };
     setSettings(prev => {
-      const merged = { ...prev, ...enriched };
-      localStorage.setItem(`${LOCAL_STORAGE_KEY}_settings`, JSON.stringify(merged));
+      const merged = normalizeLegacySettings({
+        ...prev,
+        ...syncPayload,
+        settingsUpdatedAt: Math.max(Number(prev.settingsUpdatedAt || 0) + 1, Number(syncPayload.settingsUpdatedAt || Date.now()))
+      });
+      nextFullSettings = merged;
+      try {
+        localStorage.setItem(`${LOCAL_STORAGE_KEY}_settings`, JSON.stringify(merged));
+      } catch {}
       return merged;
     });
 
     // If advancePercentage changed, recalculate advanceDeposit for all services dynamically
-    if (enriched.advancePercentage !== undefined) {
-      const newPct = Number(enriched.advancePercentage);
+    if (syncPayload.advancePercentage !== undefined) {
+      const newPct = Number(syncPayload.advancePercentage);
       setServices(prev => prev.map(s => ({
         ...s,
         advanceDeposit: Math.round((s.price * newPct) / 100)
       })));
     }
 
-    // Persist to Firebase Cloud Firestore in real time
-    setDoc(doc(db, 'salon_settings', 'main'), cleanFirestoreData(enriched), { merge: true })
-      .catch(err => console.warn('Failed to sync settings to Firestore:', err));
+    // Persist to Firebase Cloud Firestore in real time (only attempt if Firebase session exists to avoid unauth error logs)
+    if (auth.currentUser) {
+      setDoc(doc(db, 'salon_settings', 'main'), cleanFirestoreData(nextFullSettings), { merge: true })
+        .catch(err => console.warn('Failed to sync settings to Firestore:', err));
+    }
 
-    // Persist to backend database API
+    // Persist to backend database API (db.json + MySQL) so ALL clients receive updates cleanly
     try {
-      await fetch('/api/settings', {
+      const res = await fetch('/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(enriched)
+        body: JSON.stringify(syncPayload)
       });
+      if (res.ok) {
+        const resData = await res.json();
+        if (resData?.success && resData.settings) {
+          setSettings(prev => {
+            const merged = mergeIncomingSettings(prev, resData.settings);
+            try {
+              localStorage.setItem(`${LOCAL_STORAGE_KEY}_settings`, JSON.stringify(merged));
+            } catch {}
+            return merged;
+          });
+        }
+      }
     } catch (err) {
       console.error('Failed to sync settings to API:', err);
     }
@@ -3257,6 +3486,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         markNotificationAsRead,
         markAllNotificationsRead,
         updateSettings,
+        refreshSettings,
         toggleOwnerBreakToday,
         addBlockedSlotWindow,
         updateBlockedSlotWindow,

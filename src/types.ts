@@ -272,6 +272,7 @@ export interface SalonSettings {
   blockedWindows?: BlockedSlotWindow[];
   isOwnerOnBreakToday?: boolean;
   breakNoticeMessage?: string;
+  settingsUpdatedAt?: number;
 }
 
 export interface SalonPolicyItem {
