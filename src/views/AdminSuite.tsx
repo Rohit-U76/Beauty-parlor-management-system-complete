@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard,
   Calendar,
@@ -147,9 +147,11 @@ export const AdminSuite: React.FC = () => {
     accountHolder: settings.accountHolder || 'MODERN JENTS PARLOUR',
     merchantUpiId: settings.merchantUpiId || settings.upiId || 'ghodakedinesh@ybl',
     upiQrCodeUrl: settings.upiQrCodeUrl || '/assets/aistudio/image_2ca5cc29.png',
+    primaryQrCustomOnly: !!settings.primaryQrCustomOnly,
     secondaryAccountHolder: settings.secondaryAccountHolder || 'DINESH VITTHAL GHODAKE',
     secondaryUpiId: settings.secondaryUpiId || '8104026257@axl',
     secondaryUpiQrCodeUrl: settings.secondaryUpiQrCodeUrl || '/assets/aistudio/image_fce20bf8.png',
+    secondaryQrCustomOnly: !!settings.secondaryQrCustomOnly,
     bankName: settings.bankName || 'HDFC Bank',
     bankAccountNumber: settings.bankAccountNumber || '50200072074441',
     bankIfsc: settings.bankIfsc || 'HDFC0000635',
@@ -159,6 +161,9 @@ export const AdminSuite: React.FC = () => {
   const [hasUnsavedScannerChanges, setHasUnsavedScannerChanges] = useState(false);
   const [isSavingScannerSettings, setIsSavingScannerSettings] = useState(false);
   const [scannerSaveNotice, setScannerSaveNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const scannerDraftRef = useRef(scannerDraft);
+  scannerDraftRef.current = scannerDraft;
+  const draftEditVersionRef = useRef(0);
 
   useEffect(() => {
     if (hasUnsavedScannerChanges) return;
@@ -166,9 +171,11 @@ export const AdminSuite: React.FC = () => {
       accountHolder: settings.accountHolder ?? 'MODERN JENTS PARLOUR',
       merchantUpiId: settings.merchantUpiId ?? settings.upiId ?? 'ghodakedinesh@ybl',
       upiQrCodeUrl: settings.upiQrCodeUrl || '/assets/aistudio/image_2ca5cc29.png',
+      primaryQrCustomOnly: !!settings.primaryQrCustomOnly,
       secondaryAccountHolder: settings.secondaryAccountHolder ?? 'DINESH VITTHAL GHODAKE',
       secondaryUpiId: settings.secondaryUpiId ?? '8104026257@axl',
       secondaryUpiQrCodeUrl: settings.secondaryUpiQrCodeUrl || '/assets/aistudio/image_fce20bf8.png',
+      secondaryQrCustomOnly: !!settings.secondaryQrCustomOnly,
       bankName: settings.bankName ?? 'HDFC Bank',
       bankAccountNumber: settings.bankAccountNumber ?? '50200072074441',
       bankIfsc: settings.bankIfsc ?? 'HDFC0000635',
@@ -181,9 +188,11 @@ export const AdminSuite: React.FC = () => {
     settings.merchantUpiId,
     settings.upiId,
     settings.upiQrCodeUrl,
+    settings.primaryQrCustomOnly,
     settings.secondaryAccountHolder,
     settings.secondaryUpiId,
     settings.secondaryUpiQrCodeUrl,
+    settings.secondaryQrCustomOnly,
     settings.bankName,
     settings.bankAccountNumber,
     settings.bankIfsc,
@@ -192,39 +201,137 @@ export const AdminSuite: React.FC = () => {
     settings.settingsUpdatedAt
   ]);
 
-  const handleSaveScannerSettings = async () => {
+  const persistScannerDraft = async (draftToSave: typeof scannerDraft, isAutoSave = false) => {
+    const versionAtStart = draftEditVersionRef.current;
     setIsSavingScannerSettings(true);
-    setScannerSaveNotice(null);
+    if (!isAutoSave) setScannerSaveNotice(null);
     try {
-      const cleanPrimaryUpi = scannerDraft.merchantUpiId.trim();
-      const cleanSecondaryUpi = scannerDraft.secondaryUpiId.trim();
+      const cleanPrimaryUpi = draftToSave.merchantUpiId.trim();
+      const cleanSecondaryUpi = draftToSave.secondaryUpiId.trim();
       await updateSettings({
-        accountHolder: scannerDraft.accountHolder.trim() || 'MODERN JENTS PARLOUR',
+        accountHolder: draftToSave.accountHolder.trim() || 'MODERN JENTS PARLOUR',
         merchantUpiId: cleanPrimaryUpi,
         upiId: cleanPrimaryUpi,
-        upiQrCodeUrl: scannerDraft.upiQrCodeUrl,
-        secondaryAccountHolder: scannerDraft.secondaryAccountHolder.trim() || 'DINESH VITTHAL GHODAKE',
+        upiQrCodeUrl: draftToSave.upiQrCodeUrl,
+        primaryQrCustomOnly: !!draftToSave.primaryQrCustomOnly,
+        secondaryAccountHolder: draftToSave.secondaryAccountHolder.trim() || 'DINESH VITTHAL GHODAKE',
         secondaryUpiId: cleanSecondaryUpi,
-        secondaryUpiQrCodeUrl: scannerDraft.secondaryUpiQrCodeUrl,
-        bankName: scannerDraft.bankName.trim(),
-        bankAccountNumber: scannerDraft.bankAccountNumber.trim(),
-        bankIfsc: scannerDraft.bankIfsc.trim(),
-        bankBranch: scannerDraft.bankBranch.trim(),
-        bankAccountType: scannerDraft.bankAccountType.trim()
+        secondaryUpiQrCodeUrl: draftToSave.secondaryUpiQrCodeUrl,
+        secondaryQrCustomOnly: !!draftToSave.secondaryQrCustomOnly,
+        bankName: draftToSave.bankName.trim(),
+        bankAccountNumber: draftToSave.bankAccountNumber.trim(),
+        bankIfsc: draftToSave.bankIfsc.trim(),
+        bankBranch: draftToSave.bankBranch.trim(),
+        bankAccountType: draftToSave.bankAccountType.trim()
       });
-      setHasUnsavedScannerChanges(false);
-      setScannerSaveNotice({
-        type: 'success',
-        text: `Scanner & UPI details saved (${cleanPrimaryUpi || 'updated'}) and live on the client booking checkout.`
-      });
+      if (draftEditVersionRef.current === versionAtStart) {
+        setHasUnsavedScannerChanges(false);
+        setScannerSaveNotice({
+          type: 'success',
+          text: `Scanner & UPI details saved (${cleanPrimaryUpi || 'updated'}) and live on the client booking checkout.`
+        });
+      }
     } catch (err: any) {
-      setScannerSaveNotice({
-        type: 'error',
-        text: err?.message || 'Could not save scanner settings. Please try again.'
-      });
+      if (!isAutoSave) {
+        setScannerSaveNotice({
+          type: 'error',
+          text: err?.message || 'Could not save scanner settings. Please try again.'
+        });
+      }
     } finally {
       setIsSavingScannerSettings(false);
     }
+  };
+
+  const handleSaveScannerSettings = async () => {
+    await persistScannerDraft(scannerDraftRef.current, false);
+  };
+
+  // Auto-save UPI / Bank edits 600ms after Admin stops typing so navigating to Client Booking never drops changes
+  useEffect(() => {
+    if (!hasUnsavedScannerChanges) return;
+    const timer = setTimeout(() => {
+      persistScannerDraft(scannerDraftRef.current, true);
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [hasUnsavedScannerChanges, scannerDraft]);
+
+  const decodeUpiPayloadFromImage = (img: HTMLImageElement): { vpa: string; payee: string } => {
+    const tryDecodeCanvas = (
+      sx: number,
+      sy: number,
+      sw: number,
+      sh: number,
+      tw: number,
+      th: number,
+      highContrast = false
+    ) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = tw;
+      canvas.height = th;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, tw, th);
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, tw, th);
+      const imgData = ctx.getImageData(0, 0, tw, th);
+      if (highContrast) {
+        const d = imgData.data;
+        for (let i = 0; i < d.length; i += 4) {
+          const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+          const v = lum < 138 ? 0 : 255;
+          d[i] = v;
+          d[i + 1] = v;
+          d[i + 2] = v;
+        }
+      }
+      const decoded = jsQR(imgData.data, tw, th, { inversionAttempts: 'attemptBoth' });
+      if (decoded?.data) {
+        const rawStr = decoded.data.trim();
+        if (rawStr.toLowerCase().startsWith('upi://') || rawStr.includes('pa=')) {
+          const queryPart = rawStr.includes('?') ? rawStr.split('?')[1] : rawStr;
+          const params = new URLSearchParams(queryPart);
+          const vpa = (params.get('pa') || '').trim();
+          const payee = (params.get('pn') || '').trim();
+          if (vpa) return { vpa, payee };
+        }
+      }
+      return null;
+    };
+
+    const maxDim = 1000;
+    let dw = img.width;
+    let dh = img.height;
+    if (dw > maxDim || dh > maxDim) {
+      if (dw > dh) {
+        dh = Math.round((dh * maxDim) / dw);
+        dw = maxDim;
+      } else {
+        dw = Math.round((dw * maxDim) / dh);
+        dh = maxDim;
+      }
+    }
+
+    // Pass 1: Full frame
+    const pass1 = tryDecodeCanvas(0, 0, img.width, img.height, dw, dh, false);
+    if (pass1) return pass1;
+
+    // Pass 2: Center crop (where PhonePe / GPay / Paytm standee QR square sits)
+    const cropSize = Math.round(Math.min(img.width, img.height) * 0.72);
+    const cropX = Math.max(0, Math.round((img.width - cropSize) / 2));
+    const cropY = Math.max(0, Math.round((img.height - cropSize) / 2));
+    const pass2 = tryDecodeCanvas(cropX, cropY, cropSize, cropSize, 720, 720, false);
+    if (pass2) return pass2;
+
+    // Pass 3: High-contrast B&W threshold on center crop
+    const pass3 = tryDecodeCanvas(cropX, cropY, cropSize, cropSize, 720, 720, true);
+    if (pass3) return pass3;
+
+    // Pass 4: High-contrast B&W threshold on full frame
+    const pass4 = tryDecodeCanvas(0, 0, img.width, img.height, dw, dh, true);
+    if (pass4) return pass4;
+
+    return { vpa: '', payee: '' };
   };
 
   const handleQrPhotoUpload = (file: File, targetSlot: 'scanner1' | 'scanner2') => {
@@ -237,41 +344,8 @@ export const AdminSuite: React.FC = () => {
       const img = new Image();
       img.onload = async () => {
         try {
-          // 1. Decode QR payload at reasonable resolution before compression
-          const decodeMax = 1000;
-          let dw = img.width;
-          let dh = img.height;
-          if (dw > decodeMax || dh > decodeMax) {
-            if (dw > dh) {
-              dh = Math.round((dh * decodeMax) / dw);
-              dw = decodeMax;
-            } else {
-              dw = Math.round((dw * decodeMax) / dh);
-              dh = decodeMax;
-            }
-          }
-          const decodeCanvas = document.createElement('canvas');
-          decodeCanvas.width = dw;
-          decodeCanvas.height = dh;
-          const decodeCtx = decodeCanvas.getContext('2d');
-          let extractedVpa = '';
-          let extractedPayee = '';
-          if (decodeCtx) {
-            decodeCtx.drawImage(img, 0, 0, dw, dh);
-            const imgData = decodeCtx.getImageData(0, 0, dw, dh);
-            const decoded = jsQR(imgData.data, dw, dh, { inversionAttempts: 'attemptBoth' });
-            if (decoded?.data) {
-              try {
-                const rawStr = decoded.data.trim();
-                if (rawStr.toLowerCase().startsWith('upi://') || rawStr.includes('pa=')) {
-                  const queryPart = rawStr.includes('?') ? rawStr.split('?')[1] : rawStr;
-                  const params = new URLSearchParams(queryPart);
-                  extractedVpa = (params.get('pa') || '').trim();
-                  extractedPayee = (params.get('pn') || '').trim();
-                }
-              } catch {}
-            }
-          }
+          // 1. Multi-pass QR decode before compression
+          const { vpa: extractedVpa, payee: extractedPayee } = decodeUpiPayloadFromImage(img);
 
           // 2. Compress image so it fits reliably under Firestore 1MB limit & db.json
           const saveMax = 720;
@@ -291,52 +365,65 @@ export const AdminSuite: React.FC = () => {
           saveCanvas.height = sh;
           const saveCtx = saveCanvas.getContext('2d');
           const compressedDataUrl = saveCtx
-            ? (saveCtx.drawImage(img, 0, 0, sw, sh), saveCanvas.toDataURL('image/jpeg', 0.82))
+            ? (saveCtx.drawImage(img, 0, 0, sw, sh), saveCanvas.toDataURL('image/jpeg', 0.84))
             : rawDataUrl;
 
+          draftEditVersionRef.current += 1;
+          const versionAtUpload = draftEditVersionRef.current;
           setIsSavingScannerSettings(true);
+
           if (targetSlot === 'scanner1') {
-            const nextVpa = extractedVpa || scannerDraft.merchantUpiId;
-            const nextName = extractedPayee || scannerDraft.accountHolder;
+            const nextVpa = extractedVpa || scannerDraftRef.current.merchantUpiId;
+            const nextName = extractedPayee || scannerDraftRef.current.accountHolder;
+            const customOnly = !extractedVpa;
             setScannerDraft(prev => ({
               ...prev,
               upiQrCodeUrl: compressedDataUrl,
               merchantUpiId: nextVpa,
-              accountHolder: nextName
+              accountHolder: nextName,
+              primaryQrCustomOnly: customOnly
             }));
             await updateSettings({
               upiQrCodeUrl: compressedDataUrl,
               merchantUpiId: nextVpa,
               upiId: nextVpa,
-              accountHolder: nextName
+              accountHolder: nextName,
+              primaryQrCustomOnly: customOnly
             });
-            setHasUnsavedScannerChanges(false);
+            if (draftEditVersionRef.current === versionAtUpload) {
+              setHasUnsavedScannerChanges(false);
+            }
             setScannerSaveNotice({
               type: 'success',
               text: extractedVpa
-                ? `Scanner 1 QR uploaded & auto-detected UPI ID (${extractedVpa})! Saved to client checkout.`
-                : 'Scanner 1 QR image saved & live on client checkout. Verify UPI ID below and click Save if needed.'
+                ? `Scanner 1 QR uploaded & auto-detected UPI ID (${extractedVpa})! Live on client checkout.`
+                : 'Scanner 1 QR image uploaded & set live on client checkout! (Tip: update the UPI ID field if it changed.)'
             });
           } else {
-            const nextVpa = extractedVpa || scannerDraft.secondaryUpiId;
-            const nextName = extractedPayee || scannerDraft.secondaryAccountHolder;
+            const nextVpa = extractedVpa || scannerDraftRef.current.secondaryUpiId;
+            const nextName = extractedPayee || scannerDraftRef.current.secondaryAccountHolder;
+            const customOnly = !extractedVpa;
             setScannerDraft(prev => ({
               ...prev,
               secondaryUpiQrCodeUrl: compressedDataUrl,
               secondaryUpiId: nextVpa,
-              secondaryAccountHolder: nextName
+              secondaryAccountHolder: nextName,
+              secondaryQrCustomOnly: customOnly
             }));
             await updateSettings({
               secondaryUpiQrCodeUrl: compressedDataUrl,
               secondaryUpiId: nextVpa,
-              secondaryAccountHolder: nextName
+              secondaryAccountHolder: nextName,
+              secondaryQrCustomOnly: customOnly
             });
-            setHasUnsavedScannerChanges(false);
+            if (draftEditVersionRef.current === versionAtUpload) {
+              setHasUnsavedScannerChanges(false);
+            }
             setScannerSaveNotice({
               type: 'success',
               text: extractedVpa
-                ? `Scanner 2 QR uploaded & auto-detected UPI ID (${extractedVpa})! Saved to client checkout.`
-                : 'Scanner 2 QR image saved & live on client checkout. Verify UPI ID below and click Save if needed.'
+                ? `Scanner 2 QR uploaded & auto-detected UPI ID (${extractedVpa})! Live on client checkout.`
+                : 'Scanner 2 QR image uploaded & set live on client checkout! (Tip: update the UPI ID field if it changed.)'
             });
           }
         } catch (err: any) {
@@ -2724,6 +2811,7 @@ export const AdminSuite: React.FC = () => {
                         type="text"
                         value={scannerDraft.accountHolder}
                         onChange={(e) => {
+                          draftEditVersionRef.current += 1;
                           setScannerDraft(prev => ({ ...prev, accountHolder: e.target.value }));
                           setHasUnsavedScannerChanges(true);
                           setScannerSaveNotice(null);
@@ -2742,7 +2830,8 @@ export const AdminSuite: React.FC = () => {
                         type="text"
                         value={scannerDraft.merchantUpiId}
                         onChange={(e) => {
-                          setScannerDraft(prev => ({ ...prev, merchantUpiId: e.target.value }));
+                          draftEditVersionRef.current += 1;
+                          setScannerDraft(prev => ({ ...prev, merchantUpiId: e.target.value, primaryQrCustomOnly: false }));
                           setHasUnsavedScannerChanges(true);
                           setScannerSaveNotice(null);
                         }}
@@ -2750,7 +2839,7 @@ export const AdminSuite: React.FC = () => {
                         className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-purple-300 dark:border-amber-500/60 text-purple-700 dark:text-amber-400 font-mono text-xs font-bold focus:outline-none focus:border-purple-500 dark:focus:border-amber-400"
                       />
                       <span className="text-[10px] text-zinc-500 block mt-1">
-                        Uploading a QR photo auto-detects its UPI ID, or type a new VPA and click Save.
+                        Uploading a QR photo auto-detects its UPI ID, or type a new VPA (auto-saves immediately).
                       </span>
                     </div>
 
@@ -2783,11 +2872,13 @@ export const AdminSuite: React.FC = () => {
                           <button
                             type="button"
                             onClick={async () => {
+                              draftEditVersionRef.current += 1;
                               const resetData = {
                                 accountHolder: 'MODERN JENTS PARLOUR',
                                 upiQrCodeUrl: '/assets/aistudio/image_2ca5cc29.png',
                                 merchantUpiId: 'ghodakedinesh@ybl',
-                                upiId: 'ghodakedinesh@ybl'
+                                upiId: 'ghodakedinesh@ybl',
+                                primaryQrCustomOnly: false
                               };
                               setScannerDraft(prev => ({ ...prev, ...resetData }));
                               setHasUnsavedScannerChanges(false);
@@ -2822,6 +2913,7 @@ export const AdminSuite: React.FC = () => {
                         type="text"
                         value={scannerDraft.secondaryAccountHolder}
                         onChange={(e) => {
+                          draftEditVersionRef.current += 1;
                           setScannerDraft(prev => ({ ...prev, secondaryAccountHolder: e.target.value }));
                           setHasUnsavedScannerChanges(true);
                           setScannerSaveNotice(null);
@@ -2837,7 +2929,8 @@ export const AdminSuite: React.FC = () => {
                         type="text"
                         value={scannerDraft.secondaryUpiId}
                         onChange={(e) => {
-                          setScannerDraft(prev => ({ ...prev, secondaryUpiId: e.target.value }));
+                          draftEditVersionRef.current += 1;
+                          setScannerDraft(prev => ({ ...prev, secondaryUpiId: e.target.value, secondaryQrCustomOnly: false }));
                           setHasUnsavedScannerChanges(true);
                           setScannerSaveNotice(null);
                         }}
@@ -2878,10 +2971,12 @@ export const AdminSuite: React.FC = () => {
                           <button
                             type="button"
                             onClick={async () => {
+                              draftEditVersionRef.current += 1;
                               const resetData = {
                                 secondaryAccountHolder: 'DINESH VITTHAL GHODAKE',
                                 secondaryUpiQrCodeUrl: '/assets/aistudio/image_fce20bf8.png',
-                                secondaryUpiId: '8104026257@axl'
+                                secondaryUpiId: '8104026257@axl',
+                                secondaryQrCustomOnly: false
                               };
                               setScannerDraft(prev => ({ ...prev, ...resetData }));
                               setHasUnsavedScannerChanges(false);
@@ -2915,6 +3010,7 @@ export const AdminSuite: React.FC = () => {
                         type="text"
                         value={scannerDraft.bankName}
                         onChange={(e) => {
+                          draftEditVersionRef.current += 1;
                           setScannerDraft(prev => ({ ...prev, bankName: e.target.value }));
                           setHasUnsavedScannerChanges(true);
                         }}
@@ -2928,6 +3024,7 @@ export const AdminSuite: React.FC = () => {
                         type="text"
                         value={scannerDraft.accountHolder}
                         onChange={(e) => {
+                          draftEditVersionRef.current += 1;
                           setScannerDraft(prev => ({ ...prev, accountHolder: e.target.value }));
                           setHasUnsavedScannerChanges(true);
                         }}
@@ -2941,6 +3038,7 @@ export const AdminSuite: React.FC = () => {
                         type="text"
                         value={scannerDraft.bankAccountNumber}
                         onChange={(e) => {
+                          draftEditVersionRef.current += 1;
                           setScannerDraft(prev => ({ ...prev, bankAccountNumber: e.target.value }));
                           setHasUnsavedScannerChanges(true);
                         }}
@@ -2954,6 +3052,7 @@ export const AdminSuite: React.FC = () => {
                         type="text"
                         value={scannerDraft.bankIfsc}
                         onChange={(e) => {
+                          draftEditVersionRef.current += 1;
                           setScannerDraft(prev => ({ ...prev, bankIfsc: e.target.value }));
                           setHasUnsavedScannerChanges(true);
                         }}
@@ -2967,6 +3066,7 @@ export const AdminSuite: React.FC = () => {
                         type="text"
                         value={scannerDraft.bankBranch}
                         onChange={(e) => {
+                          draftEditVersionRef.current += 1;
                           setScannerDraft(prev => ({ ...prev, bankBranch: e.target.value }));
                           setHasUnsavedScannerChanges(true);
                         }}
@@ -2980,6 +3080,7 @@ export const AdminSuite: React.FC = () => {
                         type="text"
                         value={scannerDraft.bankAccountType}
                         onChange={(e) => {
+                          draftEditVersionRef.current += 1;
                           setScannerDraft(prev => ({ ...prev, bankAccountType: e.target.value }));
                           setHasUnsavedScannerChanges(true);
                         }}
@@ -2987,6 +3088,30 @@ export const AdminSuite: React.FC = () => {
                       />
                     </div>
                   </div>
+                </div>
+
+                {/* Bottom Save Footer */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-purple-100 dark:border-zinc-800">
+                  <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                    {hasUnsavedScannerChanges
+                      ? 'Saving automatically to Client Booking Checkout...'
+                      : `Synced with Client Checkout (${scannerDraft.merchantUpiId || 'updated'})`}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleSaveScannerSettings}
+                    disabled={isSavingScannerSettings}
+                    className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 dark:bg-amber-500 dark:hover:bg-amber-400 text-white dark:text-zinc-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition cursor-pointer disabled:opacity-50"
+                  >
+                    {isSavingScannerSettings ? (
+                      <span>Saving...</span>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Save Scanner &amp; UPI</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
 

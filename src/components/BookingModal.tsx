@@ -42,6 +42,7 @@ export const BookingModal: React.FC = () => {
     offers,
     createAppointment,
     settings,
+    refreshSettings,
     currentUser,
     appointments,
     isOwnerOnBreakToday,
@@ -107,6 +108,7 @@ export const BookingModal: React.FC = () => {
   // Set default date (today or tomorrow) and fresh state on modal open
   useEffect(() => {
     if (isBookingModalOpen) {
+      refreshSettings();
       const dateStr = getLocalDateString();
       setSelectedDate(dateStr);
       const targetService = selectedServiceForBooking || services[0] || null;

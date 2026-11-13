@@ -254,9 +254,11 @@ export interface SalonSettings {
   merchantUpiId?: string; // Scanner 1 VPA (PhonePe / HDFC Bank: ghodakedinesh@ybl)
   upiId?: string; // Scanner 1 VPA alias
   upiQrCodeUrl?: string; // Scanner 1 QR poster image URL
+  primaryQrCustomOnly?: boolean; // True when Scanner 1 custom QR photo was uploaded without auto-decoded VPA
   secondaryUpiId?: string; // Scanner 2 VPA (e.g. 8104026257@axl)
   secondaryAccountHolder?: string;
   secondaryUpiQrCodeUrl?: string; // Scanner 2 QR poster image URL
+  secondaryQrCustomOnly?: boolean; // True when Scanner 2 custom QR photo was uploaded without auto-decoded VPA
   razorpayKeyId?: string;
   razorpayKeySecret?: string;
   paymentGatewayMode?: 'live' | 'test';

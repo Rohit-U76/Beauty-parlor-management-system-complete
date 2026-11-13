@@ -56,6 +56,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
   setDoc,
   updateDoc,
@@ -251,27 +252,23 @@ const normalizeLegacySettings = (raw: any): SalonSettings => {
     s.bankAccountType = 'Current Account';
   }
 
-  // Only upgrade exact legacy Union Bank / old QR strings — NEVER clobber admin-customized UPI IDs or uploaded QRs
-  const isLegacyPrimaryUpi =
-    s.merchantUpiId === '9975236976@ibl' ||
-    s.upiId === '9975236976@ibl' ||
-    s.upiQrCodeUrl === '/qr-union-bank-phonepe.jpg';
-  if (isLegacyPrimaryUpi) {
+  // Only upgrade exact legacy Union Bank / old QR strings independently — NEVER clobber admin-customized UPI IDs or uploaded QRs
+  if (s.merchantUpiId === '9975236976@ibl' || s.upiId === '9975236976@ibl') {
     s.merchantUpiId = 'ghodakedinesh@ybl';
     s.upiId = 'ghodakedinesh@ybl';
+  } else if (raw?.merchantUpiId === undefined && raw?.upiId === undefined && !s.merchantUpiId) {
+    s.merchantUpiId = 'ghodakedinesh@ybl';
+    s.upiId = 'ghodakedinesh@ybl';
+  } else if (s.merchantUpiId !== undefined && s.upiId === undefined) {
+    s.upiId = s.merchantUpiId;
+  } else if (s.upiId !== undefined && s.merchantUpiId === undefined) {
+    s.merchantUpiId = s.upiId;
+  }
+
+  if (s.upiQrCodeUrl === '/qr-union-bank-phonepe.jpg') {
     s.upiQrCodeUrl = '/assets/aistudio/image_2ca5cc29.png';
-  } else {
-    if (raw?.merchantUpiId === undefined && raw?.upiId === undefined && !s.merchantUpiId) {
-      s.merchantUpiId = 'ghodakedinesh@ybl';
-      s.upiId = 'ghodakedinesh@ybl';
-    } else if (s.merchantUpiId !== undefined && s.upiId === undefined) {
-      s.upiId = s.merchantUpiId;
-    } else if (s.upiId !== undefined && s.merchantUpiId === undefined) {
-      s.merchantUpiId = s.upiId;
-    }
-    if (raw?.upiQrCodeUrl === undefined && !s.upiQrCodeUrl) {
-      s.upiQrCodeUrl = '/assets/aistudio/image_2ca5cc29.png';
-    }
+  } else if (raw?.upiQrCodeUrl === undefined && !s.upiQrCodeUrl) {
+    s.upiQrCodeUrl = '/assets/aistudio/image_2ca5cc29.png';
   }
 
   if (s.secondaryUpiQrCodeUrl === '/qr-dinesh-ghodake.jpg') {
@@ -3054,15 +3051,29 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   // Settings
   const refreshSettings = async (): Promise<void> => {
     try {
-      const res = await fetch('/api/settings', { cache: 'no-store' });
-      const data = await res.json();
-      if (data?.success && data.settings) {
+      const [apiRes, fsRes] = await Promise.allSettled([
+        fetch('/api/settings', { cache: 'no-store' }).then(r => r.json()),
+        getDocFromServer(doc(db, 'salon_settings', 'main'))
+      ]);
+
+      const incomingCandidates: any[] = [];
+      if (apiRes.status === 'fulfilled' && apiRes.value?.success && apiRes.value.settings) {
+        incomingCandidates.push(apiRes.value.settings);
+      }
+      if (fsRes.status === 'fulfilled' && fsRes.value?.exists()) {
+        incomingCandidates.push(fsRes.value.data());
+      }
+
+      if (incomingCandidates.length > 0) {
         setSettings(prev => {
-          const merged = mergeIncomingSettings(prev, data.settings);
+          let next = prev;
+          for (const cand of incomingCandidates) {
+            next = mergeIncomingSettings(next, cand);
+          }
           try {
-            localStorage.setItem(`${LOCAL_STORAGE_KEY}_settings`, JSON.stringify(merged));
+            localStorage.setItem(`${LOCAL_STORAGE_KEY}_settings`, JSON.stringify(next));
           } catch {}
-          return merged;
+          return next;
         });
       }
     } catch {}

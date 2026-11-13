@@ -444,7 +444,19 @@ async function startServer() {
   try {
     const mysqlState = await loadDbFromMySQL();
     if (mysqlState && mysqlState.users && mysqlState.users.length > 0) {
-      writeDb(mysqlState);
+      const existingDb = readDb();
+      const mergedSettings = {
+        ...(mysqlState.settings || {}),
+        ...(existingDb.settings || {}),
+        salonName: existingDb.settings?.salonName || mysqlState.settings?.salonName,
+        phone: existingDb.settings?.phone || mysqlState.settings?.phone,
+        email: existingDb.settings?.email || mysqlState.settings?.email
+      };
+      writeDb({
+        ...existingDb,
+        ...mysqlState,
+        settings: mergedSettings
+      });
       console.log('🌟 [MySQL Database]: Successfully synchronized latest salon state from MySQL.');
     }
   } catch (err: any) {
