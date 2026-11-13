@@ -135,7 +135,11 @@
         "instagramUrl": { "type": "string", "maxLength": 250 },
         "mapsUrl": { "type": "string", "maxLength": 250 },
         "gstNumber": { "type": "string", "maxLength": 100 },
-        "staffType": { "type": "string", "maxLength": 100 }
+        "staffType": { "type": "string", "maxLength": 100 },
+        "adminPassword": { "type": "string", "maxLength": 100 },
+        "adminPasswordUpdatedAt": { "type": "number" },
+        "adminPin": { "type": "string", "maxLength": 20 },
+        "adminEmails": { "type": "string", "maxLength": 500 }
       },
       "required": ["salonName", "phone", "email"]
     },

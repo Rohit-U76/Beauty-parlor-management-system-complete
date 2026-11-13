@@ -200,16 +200,15 @@ export const AiAssistantWidget: React.FC = () => {
 
   return (
     <>
-      {/* Floating Widget Trigger Button - Short label on mobile to avoid merging */}
-      <div className="fixed bottom-20 right-3 sm:bottom-6 sm:right-6 z-40">
+      {/* Floating Widget Trigger Button */}
+      <div className="fixed bottom-[76px] right-3 sm:bottom-6 sm:right-6 z-40">
         <button
           id="ai-assistant-floating-btn"
           onClick={toggleAiChat}
-          className="px-2.5 py-1.5 sm:px-4 sm:py-2.5 rounded-full bg-purple-600 hover:bg-purple-700 text-white dark:bg-gradient-to-r dark:from-yellow-500 dark:to-amber-500 dark:hover:from-yellow-400 dark:hover:to-amber-400 dark:text-black font-bold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 shadow-2xl shadow-purple-600/30 dark:shadow-yellow-500/30 border border-purple-400/40 dark:border-yellow-300/40 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+          className="px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-full bg-purple-600 hover:bg-purple-700 text-white dark:bg-gradient-to-r dark:from-yellow-500 dark:to-amber-500 dark:hover:from-yellow-400 dark:hover:to-amber-400 dark:text-black font-bold text-xs sm:text-sm flex items-center gap-2 shadow-2xl shadow-purple-600/30 dark:shadow-yellow-500/30 border border-purple-400/40 dark:border-yellow-300/40 transition-all hover:scale-105 active:scale-95 cursor-pointer"
         >
           <Bot className="w-4 h-4 sm:w-5 sm:h-5 text-white dark:text-black" />
-          <span className="inline sm:hidden text-xs">AI</span>
-          <span className="hidden sm:inline">AI Assistant</span>
+          <span>AI Assistant</span>
           <span className="w-2 h-2 rounded-full bg-emerald-400 dark:bg-emerald-700 animate-pulse"></span>
         </button>
       </div>

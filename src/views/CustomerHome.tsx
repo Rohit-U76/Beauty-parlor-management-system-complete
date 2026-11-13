@@ -64,11 +64,11 @@ export const CustomerHome: React.FC = () => {
   return (
     <div className="space-y-10 sm:space-y-16 pb-28 lg:pb-16">
       {/* HERO SECTION */}
-      <section id="section-home-hero" className="pt-2 sm:pt-6 pb-6 sm:pb-10 px-3 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 items-center">
+      <section id="section-home-hero" className="pt-2.5 sm:pt-6 pb-6 sm:pb-10 px-3.5 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-8 items-center">
           
           {/* Left Hero Content */}
-          <div className="lg:col-span-7 space-y-4 sm:space-y-5 text-left">
+          <div className="lg:col-span-7 space-y-3 sm:space-y-5 text-left">
             <div className="flex items-center gap-2 flex-wrap">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-semibold">
                 <Sparkles className="w-3.5 h-3.5 text-amber-500" />
@@ -81,7 +81,7 @@ export const CustomerHome: React.FC = () => {
                     setActiveNavTab('services');
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-xs font-bold animate-pulse hover:bg-amber-500/25 transition cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[11px] sm:text-xs font-bold animate-pulse hover:bg-amber-500/25 transition cursor-pointer"
                 >
                   <Flame className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
                   <span>{todaySummary.fillingFastSlots.length} Slots Filling Fast Today</span>
@@ -89,24 +89,24 @@ export const CustomerHome: React.FC = () => {
               )}
             </div>
 
-            <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 leading-[1.15]">
+            <h1 className="font-serif text-[29px] min-[380px]:text-[32px] sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 leading-[1.12]">
               Hair, Skin &amp; Bridal Styling for Everyone
             </h1>
 
-            <p className="text-sm sm:text-base text-zinc-600 dark:text-zinc-300 max-w-2xl leading-relaxed">
+            <p className="text-[14px] min-[380px]:text-[15px] sm:text-base text-zinc-600 dark:text-zinc-300 max-w-2xl leading-relaxed">
               Book your appointment online in 60 seconds with a {settings.advancePercentage || 10}% advance deposit. Enjoy dedicated stylist time with zero waiting.
             </p>
 
             {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 pt-1 sm:pt-2">
               <button
                 id="hero-schedule-btn"
                 onClick={() => openBookingModal()}
-                className="px-6 py-3.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white dark:bg-purple-500 dark:hover:bg-purple-600 dark:text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-purple-600/25 active:scale-98 transition-all cursor-pointer"
+                className="px-6 py-3 sm:py-3.5 rounded-2xl sm:rounded-xl bg-purple-600 hover:bg-purple-700 text-white dark:bg-purple-500 dark:hover:bg-purple-600 dark:text-white font-bold text-sm flex items-center justify-center gap-2.5 shadow-lg shadow-purple-600/25 active:scale-98 transition-all cursor-pointer"
               >
                 <Calendar className="w-4 h-4 text-white" />
                 <span>Book Appointment</span>
-                <span className="text-[11px] font-semibold bg-white/20 px-2 py-0.5 rounded-md">
+                <span className="text-[11px] font-semibold bg-white/25 px-2.5 py-0.5 rounded-md">
                   {settings.advancePercentage || 10}% Advance
                 </span>
               </button>
@@ -117,7 +117,7 @@ export const CustomerHome: React.FC = () => {
                   setActiveNavTab('services');
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
-                className="px-6 py-3.5 rounded-xl border border-zinc-300 dark:border-zinc-700 hover:bg-purple-50 dark:hover:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-semibold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
+                className="px-6 py-3 sm:py-3.5 rounded-2xl sm:rounded-xl border border-zinc-300 dark:border-zinc-700 hover:bg-purple-50 dark:hover:bg-zinc-800/80 text-zinc-900 dark:text-zinc-100 font-semibold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
               >
                 <span>View Price List</span>
                 <ArrowRight className="w-4 h-4 text-purple-600 dark:text-purple-400" />
@@ -125,16 +125,16 @@ export const CustomerHome: React.FC = () => {
             </div>
 
             {/* Quick Benefits */}
-            <div className="pt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 font-medium border-t border-zinc-200 dark:border-zinc-800">
-              <div className="flex items-center gap-2">
+            <div className="pt-1.5 sm:pt-4 grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 font-medium sm:border-t sm:border-zinc-200 dark:sm:border-zinc-800">
+              <div className="flex items-center gap-2.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                 <span>Zero Waiting Time</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                 <span>Clear, Fixed Prices</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                 <span>Clean &amp; Sanitized Chairs</span>
               </div>
@@ -142,12 +142,12 @@ export const CustomerHome: React.FC = () => {
           </div>
 
           {/* Right Hero Image Card with Interactive Quiz */}
-          <div className="lg:col-span-5 relative mt-4 lg:mt-0">
+          <div className="lg:col-span-5 relative mt-1 sm:mt-4 lg:mt-0">
             <div className="relative rounded-3xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xl group">
               <img
                 src="https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?auto=format&fit=crop&w=1000&q=80"
                 alt="Modern Salon interior Mohol"
-                className="w-full h-[320px] sm:h-[400px] object-cover group-hover:scale-105 transition-all duration-700"
+                className="w-full h-[300px] sm:h-[400px] object-cover group-hover:scale-105 transition-all duration-700"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-purple-950/70 via-black/20 to-transparent dark:from-black/85 dark:via-black/30 dark:to-transparent"></div>
 

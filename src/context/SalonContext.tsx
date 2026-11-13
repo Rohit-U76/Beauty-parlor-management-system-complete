@@ -1153,13 +1153,18 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return { success: false, message: 'Please enter a valid administrator email address to receive the password reset link.' };
     }
 
-    const authorizedAdminEmails = [
-      'dineshghodake941@gmail.com',
-      'rohitumdale@gmail.com',
-      'modernsalon02@gmail.com',
-      ...(settings.adminEmails || []).map(e => e.toLowerCase().trim()),
+    const configuredEmails = (settings.adminEmails || [])
+      .map(e => (e || '').toLowerCase().trim())
+      .filter(Boolean);
+    const authorizedAdminEmails = Array.from(new Set([
+      ...(configuredEmails.length > 0 ? configuredEmails : [
+        'dineshghodake941@gmail.com',
+        'rohitumdale@gmail.com',
+        'modernsalon02@gmail.com',
+        'admin@modernsalon.com'
+      ]),
       (settings.email || '').toLowerCase().trim()
-    ].filter(Boolean);
+    ].filter(Boolean)));
 
     if (!authorizedAdminEmails.includes(cleanEmail)) {
       return {
@@ -1274,15 +1279,20 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       };
     }
 
-    const authorizedAdminEmails = [
-      'dineshghodake941@gmail.com',
-      'rohitumdale@gmail.com',
-      'modernsalon02@gmail.com',
-      ...(settings.adminEmails || []).map(e => e.toLowerCase().trim()),
+    const configuredEmails = (settings.adminEmails || [])
+      .map(e => (e || '').toLowerCase().trim())
+      .filter(Boolean);
+    const authorizedAdminEmails = Array.from(new Set([
+      ...(configuredEmails.length > 0 ? configuredEmails : [
+        'dineshghodake941@gmail.com',
+        'rohitumdale@gmail.com',
+        'modernsalon02@gmail.com',
+        'admin@modernsalon.com'
+      ]),
       (settings.email || '').toLowerCase().trim()
-    ].filter(Boolean);
+    ].filter(Boolean)));
 
-    // 1. Admin Master Password / PIN check (editable from Admin Settings and stored in Firestore)
+    // 1. Admin Master Password / PIN check (shared across all 4 authorized admin emails)
     const configuredAdminPassword = settings.adminPassword || 'Salon@Owner#2026';
     const configuredAdminPin = settings.adminPin || '8104';
 
@@ -1299,11 +1309,14 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           authorizedAdminEmails.includes(cleanLower) ||
           cleanNum === (settings.phone || '8104026257').replace(/\D/g, '');
 
-        if (isRecognizedAdminIdent || isInputAdminPass) {
+        if (isRecognizedAdminIdent) {
+          const matchedAdminEmail = authorizedAdminEmails.includes(cleanLower)
+            ? cleanLower
+            : (authorizedAdminEmails[0] || 'dineshghodake941@gmail.com');
           const adminUser: User = {
             id: 'usr-admin-owner',
             name: 'Salon Owner (Dinesh Ghodake)',
-            email: settings.adminEmails?.[0] || 'dineshghodake941@gmail.com',
+            email: matchedAdminEmail,
             phone: settings.phone || '8104026257',
             role: 'ADMIN',
             memberTier: 'Owner Admin',
@@ -1313,7 +1326,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           setIsAdminMode(true);
           setIsGuestMode(false);
           setIsAuthModalOpen(false);
-          return { success: true, message: 'Owner credentials verified. Welcome to Admin Suite!', user: adminUser };
+          return { success: true, message: `Owner credentials verified (${matchedAdminEmail}). Welcome to Admin Suite!`, user: adminUser };
         }
       }
     }
@@ -1433,13 +1446,18 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const fbUser = result.user;
       const cleanEmail = (fbUser.email || '').toLowerCase().trim();
 
-      const authorizedAdminEmails = [
-        'dineshghodake941@gmail.com',
-        'rohitumdale@gmail.com',
-        'modernsalon02@gmail.com',
-        ...(settings.adminEmails || []).map(e => e.toLowerCase().trim()),
+      const configuredEmails = (settings.adminEmails || [])
+        .map(e => (e || '').toLowerCase().trim())
+        .filter(Boolean);
+      const authorizedAdminEmails = Array.from(new Set([
+        ...(configuredEmails.length > 0 ? configuredEmails : [
+          'dineshghodake941@gmail.com',
+          'rohitumdale@gmail.com',
+          'modernsalon02@gmail.com',
+          'admin@modernsalon.com'
+        ]),
         (settings.email || '').toLowerCase().trim()
-      ].filter(Boolean);
+      ].filter(Boolean)));
 
       const isAuthorizedAdmin = authorizedAdminEmails.includes(cleanEmail);
 
@@ -1449,7 +1467,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           await signOut(auth);
           return {
             success: false,
-            message: `Access Denied: Google account (${fbUser.email}) is NOT registered as a Salon Administrator. Please sign in with your authorized admin Google account (dineshghodake941@gmail.com) or use Client Sign In.`
+            message: `Access Denied: Google account (${fbUser.email}) is NOT registered among the 4 authorized Salon Admin emails. Please sign in with one of your authorized admin Google accounts or use Client Sign In.`
           };
         }
 

@@ -90,10 +90,13 @@ export const Navbar: React.FC = () => {
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 truncate">
             <span className="flex h-2 w-2 shrink-0 rounded-full bg-amber-500 animate-pulse"></span>
-            <span className="text-amber-600 dark:text-amber-400 font-bold shrink-0">
+            <span className="hidden sm:inline text-amber-600 dark:text-amber-400 font-bold shrink-0">
               Modern Unisex Salon
             </span>
-            <span className="text-zinc-600 dark:text-zinc-300 font-medium md:hidden">• Mohol</span>
+            <span className="text-zinc-700 dark:text-zinc-300 font-medium sm:hidden truncate">
+              B.N. Gund Complex, Mohol • {settings.advancePercentage || 10}% Online Advance
+            </span>
+            <span className="hidden sm:inline md:hidden text-zinc-600 dark:text-zinc-300 font-medium">• Mohol</span>
             <span className="hidden md:inline truncate text-zinc-700 dark:text-zinc-300">
               • Mohol • B.N. Gund Complex • {settings.advancePercentage || 10}% Online Advance Deposit
             </span>
@@ -124,20 +127,19 @@ export const Navbar: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. Top Header Action Row: Logo on Left; Theme, Notification, Profile of client & Book appointment in the SAME ROW on Right */}
-      <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
+      {/* 2. Top Header Action Row: Logo on Left; Theme, Notification, Profile of client (& Book appointment on sm+) in the SAME ROW on Right */}
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">
         <div className="flex items-center justify-between h-14 sm:h-16 gap-1.5 sm:gap-2">
           
-          {/* Logo */}
+          {/* Logo (single instance — tagline auto-hides on < sm) */}
           <div 
             onClick={() => handleNav('home')}
             className="cursor-pointer group select-none shrink min-w-0"
           >
-            <ModernSalonLogo size="md" showTagline={false} className="sm:hidden" />
-            <ModernSalonLogo size="md" showTagline={true} className="hidden sm:inline-flex" />
+            <ModernSalonLogo size="md" showTagline={true} />
           </div>
 
-          {/* Right Action Items - ALL in the SAME ROW across desktop and mobile */}
+          {/* Right Action Items */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             {/* 1. Theme Change */}
             <div className="shrink-0" title="Toggle Light / Dark Theme">
@@ -149,10 +151,10 @@ export const Navbar: React.FC = () => {
               <button
                 id="navbar-reminder-bell-btn"
                 onClick={() => setNotificationsOpen(!notificationsOpen)}
-                className={`p-1.5 sm:p-2 rounded-xl border transition relative flex items-center justify-center cursor-pointer ${
+                className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full border transition relative flex items-center justify-center cursor-pointer ${
                   upcomingReminders.length > 0
                     ? 'border-amber-500/50 bg-amber-500/15 text-amber-600 dark:text-amber-400'
-                    : 'border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800/60 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+                    : 'border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
                 }`}
                 title="Upcoming appointment alerts & reminders"
                 aria-label="Appointment reminders"
@@ -250,12 +252,12 @@ export const Navbar: React.FC = () => {
             <button
               id="navbar-client-profile-btn"
               onClick={openProfileModal}
-              className="px-2 py-1.5 sm:px-3 sm:py-2 rounded-xl text-xs font-bold bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 hover:border-purple-500 dark:hover:border-purple-400 transition flex items-center gap-1 sm:gap-2 cursor-pointer shadow-sm shrink-0"
+              className="p-1 sm:px-3 sm:py-1.5 rounded-full sm:rounded-xl text-xs font-bold bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 hover:border-purple-500 dark:hover:border-purple-400 transition flex items-center gap-1 sm:gap-2 cursor-pointer shadow-sm shrink-0"
               title="Click to edit and save your client profile & preferences"
             >
               {currentUser ? (
                 <>
-                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-purple-600 text-white flex items-center justify-center font-extrabold text-[10px] sm:text-[11px] shrink-0">
+                  <div className="w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center font-extrabold text-[11px] shrink-0">
                     {currentUser.name.charAt(0).toUpperCase()}
                   </div>
                   <span className="hidden sm:inline-block max-w-[80px] lg:max-w-[120px] truncate font-bold text-zinc-900 dark:text-zinc-100">
@@ -265,8 +267,10 @@ export const Navbar: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-600 dark:text-purple-400 shrink-0" />
-                  <span className="font-bold text-[11px] sm:text-xs text-zinc-800 dark:text-zinc-200">
+                  <div className="w-6 h-6 sm:w-auto sm:h-auto rounded-full flex items-center justify-center">
+                    <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                  </div>
+                  <span className="hidden sm:inline font-bold text-xs text-zinc-800 dark:text-zinc-200">
                     Profile
                   </span>
                   <span className="hidden md:inline-block text-[10px] text-purple-600 dark:text-purple-400 font-semibold bg-purple-50 dark:bg-purple-950/40 px-1.5 py-0.2 rounded-full">
@@ -276,18 +280,15 @@ export const Navbar: React.FC = () => {
               )}
             </button>
 
-            {/* 4. Book Appointment - in the SAME row! */}
+            {/* 4. Book Appointment - hidden on mobile since MobileBottomNav & Hero CTA already provide dedicated Book buttons */}
             <button
               id="navbar-book-appointment-btn"
               onClick={() => openBookingModal()}
-              className="px-2 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-[11px] sm:text-xs flex items-center gap-1 sm:gap-1.5 shadow-sm shadow-purple-600/20 active:scale-95 transition cursor-pointer shrink-0"
+              className="hidden sm:flex px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs items-center gap-1.5 shadow-sm shadow-purple-600/20 active:scale-95 transition cursor-pointer shrink-0"
               title="Book your salon appointment with 10% advance deposit"
             >
               <Calendar className="w-3.5 h-3.5 text-white shrink-0" />
-              <span className="whitespace-nowrap font-bold">
-                <span className="inline sm:hidden">Book</span>
-                <span className="hidden sm:inline">Book Appointment</span>
-              </span>
+              <span className="whitespace-nowrap font-bold">Book Appointment</span>
             </button>
           </div>
         </div>
@@ -441,14 +442,14 @@ export const Navbar: React.FC = () => {
 
           </div>
 
-          {/* Mobile Navigation (under md): Clean, responsive row with Home, Rate Card, Reviews, My Visits, and 'More' Option */}
-          <div className="flex md:hidden items-center justify-between gap-1 py-1.5 px-1 text-xs font-semibold">
+          {/* Mobile Navigation (under md): Clean, responsive single-line pill row */}
+          <div className="flex md:hidden items-center justify-between gap-1 py-2 text-[11px] min-[380px]:text-xs font-semibold">
             
             {/* Mobile 1. Home */}
             <button
               id="mobile-header-home"
               onClick={() => handleNav('home')}
-              className={`px-2.5 py-1.5 rounded-xl flex items-center gap-1 transition-colors cursor-pointer text-xs ${
+              className={`px-3 py-1.5 rounded-full flex items-center gap-1 transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                 activeNavTab === 'home' 
                   ? 'bg-purple-600 text-white font-extrabold shadow-sm' 
                   : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200/60 dark:hover:bg-zinc-800'
@@ -461,7 +462,7 @@ export const Navbar: React.FC = () => {
             <button
               id="mobile-header-rate-card"
               onClick={() => handleNav('services')}
-              className={`px-2.5 py-1.5 rounded-xl flex items-center gap-1 transition-colors cursor-pointer text-xs ${
+              className={`px-2 py-1.5 rounded-full flex items-center gap-1 transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                 activeNavTab === 'services' 
                   ? 'bg-purple-600 text-white font-extrabold shadow-sm' 
                   : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200/60 dark:hover:bg-zinc-800'
@@ -474,7 +475,7 @@ export const Navbar: React.FC = () => {
             <button
               id="mobile-header-reviews"
               onClick={() => handleNav('reviews')}
-              className={`px-2 py-1.5 rounded-xl flex items-center gap-1 transition-colors cursor-pointer text-xs ${
+              className={`px-2 py-1.5 rounded-full flex items-center gap-1 transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                 activeNavTab === 'reviews' 
                   ? 'bg-purple-600 text-white font-extrabold shadow-sm' 
                   : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200/60 dark:hover:bg-zinc-800'
@@ -488,7 +489,7 @@ export const Navbar: React.FC = () => {
             <button
               id="mobile-header-visits"
               onClick={() => handleNav('appointments')}
-              className={`px-2 py-1.5 rounded-xl flex items-center gap-1 transition-colors cursor-pointer text-xs ${
+              className={`px-2 py-1.5 rounded-full flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                 activeNavTab === 'appointments' 
                   ? 'bg-purple-600 text-white font-extrabold shadow-sm' 
                   : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200/60 dark:hover:bg-zinc-800'
@@ -504,7 +505,7 @@ export const Navbar: React.FC = () => {
             <button
               id="mobile-header-more-btn"
               onClick={() => setMobileMoreOpen(!mobileMoreOpen)}
-              className={`px-2.5 py-1.5 rounded-xl flex items-center gap-1 transition-colors cursor-pointer text-xs ${
+              className={`px-2.5 py-1.5 rounded-full flex items-center gap-1 transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                 mobileMoreOpen || ['offers', 'gallery', 'about', 'contact', 'terms'].includes(activeNavTab)
                   ? 'bg-amber-500 text-zinc-950 font-bold shadow-sm'
                   : 'bg-zinc-200/80 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-300 dark:hover:bg-zinc-700'

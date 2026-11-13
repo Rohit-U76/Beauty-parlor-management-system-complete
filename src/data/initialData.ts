@@ -1121,7 +1121,12 @@ export const INITIAL_SETTINGS: SalonSettings = {
   staffType: 'Self-Employed (Master Stylist & Founder: Dinesh Ghodake)',
   adminPassword: 'Salon@Owner#2026',
   adminPin: '8104',
-  adminEmails: ['dineshghodake941@gmail.com', 'rohitumdale@gmail.com'],
+  adminEmails: [
+    'dineshghodake941@gmail.com',
+    'rohitumdale@gmail.com',
+    'modernsalon02@gmail.com',
+    'admin@modernsalon.com'
+  ],
   blockedWindows: [],
   isOwnerOnBreakToday: false,
   breakNoticeMessage: 'The salon owner is taking a short break. Booking slots are temporarily unavailable.'

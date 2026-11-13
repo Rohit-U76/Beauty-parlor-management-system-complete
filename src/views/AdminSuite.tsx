@@ -2604,7 +2604,7 @@ export const AdminSuite: React.FC = () => {
                 <div className="flex items-center justify-between border-b border-purple-100 dark:border-zinc-800 pb-3">
                   <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
                     <ShieldCheck className="w-4 h-4 text-purple-600 dark:text-amber-400" />
-                    <span>3. Unique Admin Password &amp; Master Security Credentials</span>
+                    <span>3. Four Admin Emails &amp; Shared Admin Master Password</span>
                   </h3>
                   <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-purple-100 dark:bg-amber-500/10 text-purple-700 dark:text-amber-400 border border-purple-200 dark:border-amber-500/20">
                     Firestore Real-time
@@ -2612,32 +2612,53 @@ export const AdminSuite: React.FC = () => {
                 </div>
 
                 <p className="text-zinc-600 dark:text-zinc-400 text-[11px] leading-relaxed">
-                  Customize the unique credentials required to unlock the Admin Suite. All defaults have been removed—these settings are saved to Firebase Firestore and sync instantly.
+                  Configure up to <strong>4 authorized Admin Email addresses</strong> that all share <strong>one Admin Master Password</strong>. If any email account gets frozen or locked, any of the remaining backup admin emails can immediately sign in with the same shared password or Google Sign-In.
                 </p>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="font-semibold text-zinc-700 dark:text-zinc-300 block mb-1">
-                      Authorized Admin Email *
-                    </label>
-                    <input
-                      type="email"
-                      value={settings.adminEmails?.[0] || 'dineshghodake941@gmail.com'}
-                      onChange={(e) => {
-                        const newEmails = [e.target.value.trim().toLowerCase()];
-                        updateSettings({ adminEmails: newEmails });
-                      }}
-                      className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 text-zinc-900 dark:text-white font-mono focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
-                      placeholder="dineshghodake941@gmail.com"
-                    />
-                    <span className="text-[10px] text-zinc-500 mt-1 block">
-                      Google Sign-In authorized for this email
-                    </span>
-                  </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[
+                    { idx: 0, label: 'Admin Email 1 (Primary Owner) *', placeholder: 'dineshghodake941@gmail.com', defaultVal: 'dineshghodake941@gmail.com' },
+                    { idx: 1, label: 'Admin Email 2 (Backup Admin)', placeholder: 'rohitumdale@gmail.com', defaultVal: 'rohitumdale@gmail.com' },
+                    { idx: 2, label: 'Admin Email 3 (Backup Admin)', placeholder: 'modernsalon02@gmail.com', defaultVal: 'modernsalon02@gmail.com' },
+                    { idx: 3, label: 'Admin Email 4 (Emergency Backup)', placeholder: 'admin@modernsalon.com', defaultVal: 'admin@modernsalon.com' }
+                  ].map((slot) => {
+                    const currentEmails = settings.adminEmails && settings.adminEmails.length > 0
+                      ? settings.adminEmails
+                      : ['dineshghodake941@gmail.com', 'rohitumdale@gmail.com', 'modernsalon02@gmail.com', 'admin@modernsalon.com'];
+                    const value = currentEmails[slot.idx] ?? '';
+                    return (
+                      <div key={slot.idx}>
+                        <label className="font-semibold text-zinc-700 dark:text-zinc-300 block mb-1">
+                          {slot.label}
+                        </label>
+                        <input
+                          type="email"
+                          value={value}
+                          onChange={(e) => {
+                            const next = [
+                              currentEmails[0] ?? 'dineshghodake941@gmail.com',
+                              currentEmails[1] ?? 'rohitumdale@gmail.com',
+                              currentEmails[2] ?? 'modernsalon02@gmail.com',
+                              currentEmails[3] ?? 'admin@modernsalon.com'
+                            ];
+                            next[slot.idx] = e.target.value.trim().toLowerCase();
+                            updateSettings({ adminEmails: next });
+                          }}
+                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 text-zinc-900 dark:text-white font-mono focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
+                          placeholder={slot.placeholder}
+                        />
+                        <span className="text-[10px] text-zinc-500 mt-1 block">
+                          Shared password &amp; Google Sign-In enabled for Slot {slot.idx + 1}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
 
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                   <div>
                     <label className="font-semibold text-zinc-700 dark:text-zinc-300 block mb-1">
-                      Admin Master Password *
+                      Shared Admin Master Password (All 4 Emails) *
                     </label>
                     <input
                       type="text"
@@ -2647,7 +2668,7 @@ export const AdminSuite: React.FC = () => {
                       placeholder="e.g. UniqueOwnerPass#2026"
                     />
                     <span className="text-[10px] text-zinc-500 mt-1 block">
-                      Unique password for Admin login
+                      One shared password for all 4 authorized admin emails
                     </span>
                   </div>
 
@@ -2673,7 +2694,7 @@ export const AdminSuite: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                     <span className="text-[11px] text-zinc-700 dark:text-zinc-300">
-                      Security active: Changes persist to Firebase immediately with zero dummy credentials.
+                      Failover security active: All 4 admin emails share this master password and sync to Firebase &amp; backend immediately.
                     </span>
                   </div>
                 </div>

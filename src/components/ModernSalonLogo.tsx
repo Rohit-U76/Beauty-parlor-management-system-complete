@@ -15,14 +15,14 @@ export const ModernSalonLogo: React.FC<ModernSalonLogoProps> = ({
 }) => {
   const iconSizes = {
     sm: 'w-7 h-7 sm:w-8 sm:h-8',
-    md: 'w-9 h-9 sm:w-11 sm:h-11',
+    md: 'w-7 h-7 min-[380px]:w-8 min-[380px]:h-8 sm:w-11 sm:h-11',
     lg: 'w-12 h-12 sm:w-14 sm:h-14',
     xl: 'w-16 h-16 sm:w-20 sm:h-20'
   };
 
   const titleSizes = {
     sm: 'text-xs sm:text-sm tracking-wider',
-    md: 'text-xs sm:text-base lg:text-lg tracking-wider font-extrabold',
+    md: 'text-[10.5px] min-[380px]:text-[11.5px] sm:text-base lg:text-lg tracking-wide sm:tracking-wider font-extrabold',
     lg: 'text-lg sm:text-2xl lg:text-3xl tracking-widest font-extrabold',
     xl: 'text-2xl sm:text-3xl lg:text-4xl tracking-widest font-extrabold'
   };
@@ -35,7 +35,7 @@ export const ModernSalonLogo: React.FC<ModernSalonLogoProps> = ({
   };
 
   return (
-    <div className={`inline-flex items-center gap-2.5 sm:gap-3 select-none group ${className}`}>
+    <div className={`inline-flex items-center gap-1.5 min-[380px]:gap-2 sm:gap-3 select-none group min-w-0 ${className}`}>
       {/* High-Resolution Vector Emblem with Gold & Red Luxury Accents */}
       <div className={`relative ${iconSizes[size]} shrink-0 flex items-center justify-center filter drop-shadow-md`}>
         <svg
@@ -118,12 +118,12 @@ export const ModernSalonLogo: React.FC<ModernSalonLogoProps> = ({
       </div>
 
       {/* Brand Typography & Tagline */}
-      <div className="flex flex-col text-left leading-tight">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className={`font-serif uppercase font-extrabold text-amber-600 dark:text-amber-400 drop-shadow-sm ${titleSizes[size]}`}>
+      <div className="flex flex-col text-left leading-tight min-w-0">
+        <div className="flex items-center gap-1 sm:gap-1.5 whitespace-nowrap">
+          <span className={`font-serif uppercase font-extrabold text-amber-600 dark:text-amber-400 drop-shadow-sm whitespace-nowrap ${titleSizes[size]}`}>
             MODERN UNISEX SALON
           </span>
-          <span className="inline-block w-2 h-2 rounded-full bg-red-500 shadow-sm shadow-red-500/50 shrink-0" />
+          <span className="inline-block w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-red-500 shadow-sm shadow-red-500/50 shrink-0" />
         </div>
 
         {/* Crisp Slogan Underline & Text */}

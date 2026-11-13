@@ -20,7 +20,10 @@ service cloud.firestore {
         request.auth.token.email == 'dineshghodake941@gmail.com' ||
         request.auth.token.email == 'rohitumdale@gmail.com' ||
         request.auth.token.email == 'modernsalon02@gmail.com' ||
-        request.auth.token.email == 'admin@modernsalon.com'
+        request.auth.token.email == 'admin@modernsalon.com' ||
+        (exists(/databases/$(database)/documents/salon_settings/main) &&
+         get(/databases/$(database)/documents/salon_settings/main).data.adminEmails != null &&
+         request.auth.token.email in get(/databases/$(database)/documents/salon_settings/main).data.adminEmails)
       );
     }
 

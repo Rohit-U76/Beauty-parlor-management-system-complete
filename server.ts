@@ -59,7 +59,15 @@ function initDb() {
         upiQrCodeUrl: '/assets/aistudio/image_2ca5cc29.png',
         secondaryUpiId: '8104026257@axl',
         secondaryAccountHolder: 'DINESH VITTHAL GHODAKE',
-        secondaryUpiQrCodeUrl: '/assets/aistudio/image_fce20bf8.png'
+        secondaryUpiQrCodeUrl: '/assets/aistudio/image_fce20bf8.png',
+        adminPassword: 'Salon@Owner#2026',
+        adminPin: '8104',
+        adminEmails: [
+          'dineshghodake941@gmail.com',
+          'rohitumdale@gmail.com',
+          'modernsalon02@gmail.com',
+          'admin@modernsalon.com'
+        ]
       },
       inquiries: [],
       appointments: [],
@@ -710,33 +718,53 @@ async function startServer() {
       const cleanIdent = identifier.toLowerCase().trim();
       const cleanNum = identifier.replace(/[^0-9]/g, '');
 
-      // Admin Master Password / PIN check against settings (strictly only when role === 'ADMIN')
+      // Admin Master Password / PIN check against settings (shared across all 4 configured admin emails)
       if (role === 'ADMIN') {
         const adminPass = (db.settings && db.settings.adminPassword) || 'Salon@Owner#2026';
         const adminPin = (db.settings && db.settings.adminPin) || '8104';
+        const configuredAdminEmails = Array.isArray(db.settings?.adminEmails)
+          ? db.settings.adminEmails.map((e: string) => (e || '').toLowerCase().trim()).filter(Boolean)
+          : [];
+        const allowedAdminEmails = Array.from(new Set([
+          ...(configuredAdminEmails.length > 0 ? configuredAdminEmails : [
+            'dineshghodake941@gmail.com',
+            'rohitumdale@gmail.com',
+            'modernsalon02@gmail.com',
+            'admin@modernsalon.com'
+          ]),
+          (db.settings?.email || '').toLowerCase().trim()
+        ].filter(Boolean)));
         const isMasterPassMatch = password === adminPass || (adminPin && password === adminPin);
-        const isRecognizedAdminIdent = cleanIdent === 'admin' || cleanIdent === 'owner' || cleanIdent === 'rohitumdale@gmail.com' || cleanIdent === 'dineshghodake941@gmail.com' || cleanNum === '8104026257';
+        const isRecognizedAdminIdent =
+          cleanIdent === 'admin' ||
+          cleanIdent === 'owner' ||
+          allowedAdminEmails.includes(cleanIdent) ||
+          cleanNum === ((db.settings?.phone || '8104026257').replace(/[^0-9]/g, ''));
 
         if (isMasterPassMatch && isRecognizedAdminIdent) {
-          const adminUser = db.users.find((u: any) => u.role === 'ADMIN') || {
+          const matchedEmail = allowedAdminEmails.includes(cleanIdent)
+            ? cleanIdent
+            : (allowedAdminEmails[0] || 'dineshghodake941@gmail.com');
+          const baseAdmin = db.users.find((u: any) => u.role === 'ADMIN') || {
             id: 'usr-admin-owner',
             name: 'Salon Owner',
             username: 'admin',
-            email: 'rohitumdale@gmail.com',
-            phone: '8104026257',
+            email: matchedEmail,
+            phone: db.settings?.phone || '8104026257',
             role: 'ADMIN',
             memberTier: 'Owner Admin',
             memberSince: '2022'
           };
+          const adminUser = { ...baseAdmin, email: matchedEmail };
           return res.json({
             success: true,
             user: adminUser,
-            message: 'Welcome back, Salon Owner! Admin suite unlocked.'
+            message: `Welcome back, Salon Owner (${matchedEmail})! Admin suite unlocked.`
           });
         }
         return res.status(401).json({
           success: false,
-          message: 'Invalid admin credentials. Please check your admin email/username and password or PIN.'
+          message: 'Invalid admin credentials. Please check your authorized admin email/username and shared password or PIN.'
         });
       }
 
