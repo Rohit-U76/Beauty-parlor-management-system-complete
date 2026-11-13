@@ -348,7 +348,7 @@ export const AdminSuite: React.FC = () => {
           const { vpa: extractedVpa, payee: extractedPayee } = decodeUpiPayloadFromImage(img);
 
           // 2. Compress image so it fits reliably under Firestore 1MB limit & db.json
-          const saveMax = 720;
+          const saveMax = 560;
           let sw = img.width;
           let sh = img.height;
           if (sw > saveMax || sh > saveMax) {
@@ -365,7 +365,7 @@ export const AdminSuite: React.FC = () => {
           saveCanvas.height = sh;
           const saveCtx = saveCanvas.getContext('2d');
           const compressedDataUrl = saveCtx
-            ? (saveCtx.drawImage(img, 0, 0, sw, sh), saveCanvas.toDataURL('image/jpeg', 0.84))
+            ? (saveCtx.drawImage(img, 0, 0, sw, sh), saveCanvas.toDataURL('image/jpeg', 0.78))
             : rawDataUrl;
 
           draftEditVersionRef.current += 1;

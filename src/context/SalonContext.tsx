@@ -1059,7 +1059,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // Sync with Backend Database API on mount & periodically (merges cleanly with Firestore instead of clobbering!)
   useEffect(() => {
-    fetch('/api/settings')
+    fetch('/api/settings', { cache: 'no-store' })
       .then(res => res.json())
       .then(data => {
         if (data.success && data.settings) {
@@ -1223,7 +1223,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         })
         .catch(() => {});
 
-      fetch('/api/settings')
+      fetch('/api/settings', { cache: 'no-store' })
         .then(res => res.json())
         .then(data => {
           if (data.success && data.settings) {
