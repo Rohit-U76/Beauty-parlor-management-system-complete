@@ -1028,7 +1028,7 @@ export const BookingModal: React.FC = () => {
                 onClick={handleProceedToPayment}
                 className="px-6 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 dark:bg-gradient-to-r dark:from-amber-500 dark:via-yellow-400 dark:to-amber-500 dark:hover:from-amber-400 dark:hover:to-yellow-300 text-white dark:text-zinc-950 font-extrabold text-xs inline-flex items-center gap-1.5 transition shadow-xl active:scale-95 cursor-pointer"
               >
-                <span>Pay ₹{advanceDeposit} Advance via UPI / Scanner</span>
+                <span>Pay ₹{advanceDeposit} via PhonePe / UPI Apps</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             )}
