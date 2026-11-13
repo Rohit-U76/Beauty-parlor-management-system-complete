@@ -464,7 +464,14 @@ async function startServer() {
   }
 
   const app = express();
-  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+  const portFlagIdx = process.argv.indexOf('--port');
+  const cliPort = portFlagIdx !== -1 && process.argv[portFlagIdx + 1]
+    ? parseInt(process.argv[portFlagIdx + 1], 10)
+    : NaN;
+  const envPort = process.env.PORT && process.env.PORT !== process.env.NGINX_PORT
+    ? parseInt(process.env.PORT, 10)
+    : NaN;
+  const PORT = !Number.isNaN(cliPort) ? cliPort : (!Number.isNaN(envPort) ? envPort : 3000);
 
   // Support video and image file uploads up to 100MB
   app.use(express.json({ limit: '100mb' }));
@@ -2888,10 +2895,12 @@ Return a JSON object with:
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
+    const disableHmr = process.env.DISABLE_HMR === 'true';
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
-        watch: {
+        hmr: disableHmr ? false : undefined,
+        watch: disableHmr ? null : {
           ignored: [
             '**/data/**',
             '**/data/db.json',
@@ -2907,10 +2916,12 @@ Return a JSON object with:
       appType: 'spa',
     });
 
-    // Explicitly unwatch data folder to completely prevent Windows backslash path reload loops
-    const dataDir = path.resolve(process.cwd(), 'data');
-    const dbPath = path.resolve(dataDir, 'db.json');
-    vite.watcher.unwatch([dataDir, dbPath, path.join(dataDir, '**')]);
+    // Explicitly unwatch data folder if watcher is active to prevent reload loops
+    if (vite.watcher && typeof vite.watcher.unwatch === 'function') {
+      const dataDir = path.resolve(process.cwd(), 'data');
+      const dbPath = path.resolve(dataDir, 'db.json');
+      vite.watcher.unwatch([dataDir, dbPath, path.join(dataDir, '**')]);
+    }
 
     app.use(vite.middlewares);
   } else {
@@ -2946,4 +2957,7 @@ Return a JSON object with:
   });
 }
 
-startServer();
+startServer().catch((err) => {
+  console.error('Fatal error starting Modern Unisex Salon server:', err);
+  process.exit(1);
+});

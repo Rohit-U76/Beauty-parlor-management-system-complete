@@ -114,8 +114,7 @@ export const AdminSuite: React.FC = () => {
     addStaffMember,
     updateStaffMember,
     deleteStaffMember,
-    fetchBroadcastLogs,
-    clearAllPastData
+    fetchBroadcastLogs
   } = useSalon();
 
   // Search & Filter
@@ -140,7 +139,6 @@ export const AdminSuite: React.FC = () => {
   const [selectedAppForMessaging, setSelectedAppForMessaging] = useState<Appointment | null>(null);
   const [viewingScreenshotUrl, setViewingScreenshotUrl] = useState<string | null>(null);
   const [showUpcomingAppointmentsModal, setShowUpcomingAppointmentsModal] = useState(false);
-  const [isClearingPastData, setIsClearingPastData] = useState(false);
 
   // Bank & UPI Scanner Settings Draft State (prevents snap-back while typing & syncs cleanly)
   const [scannerDraft, setScannerDraft] = useState({
@@ -3306,36 +3304,6 @@ export const AdminSuite: React.FC = () => {
                 </div>
               </div>
 
-              {/* CARD 4: DASHBOARD DATA MAINTENANCE */}
-              <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 space-y-3 shadow-sm text-xs">
-                <div className="flex items-center justify-between border-b border-purple-100 dark:border-zinc-800 pb-3">
-                  <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                    <Trash2 className="w-4 h-4 text-rose-600 dark:text-rose-400" />
-                    <span>4. Dashboard Data Maintenance</span>
-                  </h3>
-                </div>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                    Clean all past appointments, non-admin users, Customer CRM records, and analytics metrics across dashboards.
-                  </p>
-                  <button
-                    type="button"
-                    disabled={isClearingPastData}
-                    onClick={async () => {
-                      if (!window.confirm('Clear all past appointments, Customer CRM records, and analytics data? This cannot be undone.')) return;
-                      setIsClearingPastData(true);
-                      const res = await clearAllPastData();
-                      setIsClearingPastData(false);
-                      setActionFeedbackToast(res.message);
-                      setTimeout(() => setActionFeedbackToast(null), 4000);
-                    }}
-                    className="px-4 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-600/20 dark:hover:bg-rose-600/30 border border-rose-300 dark:border-rose-500/40 text-rose-700 dark:text-rose-300 font-bold text-xs flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>{isClearingPastData ? 'Cleaning...' : 'Clean All Past Dashboard Data'}</span>
-                  </button>
-                </div>
-              </div>
             </div>
           )}
 

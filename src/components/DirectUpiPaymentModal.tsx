@@ -101,7 +101,7 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
       : selectedOption === 'scanner1'
         ? Boolean(settings.primaryQrCustomOnly || (settings.upiQrCodeUrl && settings.upiQrCodeUrl !== DEFAULT_SCANNER1_IMG))
         : false;
-  const [showPosterStandee, setShowPosterStandee] = useState<boolean>(isSelectedCustomQrOnly);
+  const [showPosterStandee, setShowPosterStandee] = useState<boolean>(false);
   const [dynamicQrDataUrl, setDynamicQrDataUrl] = useState<string>('');
   const [utrNumber, setUtrNumber] = useState<string>('');
   const [screenshotFileName, setScreenshotFileName] = useState<string>('');
@@ -123,9 +123,10 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
 
   useEffect(() => {
     if (isOpen && selectedOption !== 'bank') {
-      setShowPosterStandee(isSelectedCustomQrOnly);
+      // Always default to Auto-Amount Dynamic QR so the advance amount pre-fills automatically when scanned
+      setShowPosterStandee(false);
     }
-  }, [isOpen, selectedOption, isSelectedCustomQrOnly]);
+  }, [isOpen, selectedOption]);
 
   // Compress image via canvas so Firestore fallback never exceeds 1MB doc limit
   const compressImageDataUrl = (dataUrl: string): Promise<string> => {
@@ -252,9 +253,11 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
   // Stable session booking reference code (generated once per modal mount)
   const [sessionRefCode] = useState(() => `MS-${Math.floor(100000 + Math.random() * 900000)}`);
 
-  // Dynamic NPCI UPI QR & deep-link params (strictly %20 space encoding & NO 'tn' message so PhonePe shows no custom note)
+  // Dynamic NPCI UPI QR & deep-link params (includes exact advance 'am' so PhonePe & UPI apps auto-fill amount)
   const cleanUpiId = (currentUpiTarget.upiId || 'ghodakedinesh@ybl').trim();
   const cleanPayeeName = (currentUpiTarget.name || 'MODERN JENTS PARLOUR').trim();
+  const vpaPhoneMatch = cleanUpiId.match(/^([6-9]\d{9})@/);
+  const activePayeeMobile = vpaPhoneMatch ? vpaPhoneMatch[1] : officialMobile;
   const numericAdvance = Number(effectiveAdvance || 0);
   const formattedAdvanceAmount = numericAdvance > 0 ? numericAdvance.toFixed(2) : '';
 
@@ -270,11 +273,6 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
     return parts.join('&');
   }, [cleanUpiId, cleanPayeeName, formattedAdvanceAmount]);
 
-  // Payee-only UPI link without pre-locked 'am' or 'tn' (prevents PhonePe/NPCI P2P "declined for security reasons" error after PIN)
-  const upiNoLockParams = useMemo(() => {
-    return `pa=${encodeURIComponent(cleanUpiId)}&pn=${encodeURIComponent(cleanPayeeName)}&cu=INR`;
-  }, [cleanUpiId, cleanPayeeName]);
-
   const upiQrPayload = useMemo(() => {
     return `upi://pay?${upiQrQueryParams}`;
   }, [upiQrQueryParams]);
@@ -283,18 +281,17 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
   const isIosDevice = useMemo(() => /iPhone|iPad|iPod/i.test(navigator.userAgent), []);
   const isMobileDevice = isAndroidDevice || isIosDevice;
 
-  // Clean custom-scheme UPI links (no 'tn' message, %20 spaces, and clean no-lock payee URI to avoid security declines)
+  // All UPI app links include 'am' so the advance deposit amount auto-fills automatically
   const upiAppLinks = useMemo(() => {
     return {
-      universalUpi: `upi://pay?${upiNoLockParams}`,
-      universalUpiWithAmount: `upi://pay?${upiQrQueryParams}`,
-      phonepePay: `phonepe://pay?${upiNoLockParams}`,
+      universalUpi: `upi://pay?${upiQrQueryParams}`,
+      phonepePay: `phonepe://pay?${upiQrQueryParams}`,
       phonepeLauncher: 'phonepe://',
-      gpay: `tez://upi/pay?${upiNoLockParams}`,
-      paytm: `paytmmp://pay?${upiNoLockParams}`,
-      bhim: `bhim://upi/pay?${upiNoLockParams}`
+      gpay: `tez://upi/pay?${upiQrQueryParams}`,
+      paytm: `paytmmp://pay?${upiQrQueryParams}`,
+      bhim: `bhim://upi/pay?${upiQrQueryParams}`
     };
-  }, [upiNoLockParams, upiQrQueryParams]);
+  }, [upiQrQueryParams]);
 
   // Generate Dynamic QR Code image safely without infinite re-render loops
   useEffect(() => {
@@ -365,22 +362,32 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
   const handleUpiAppAnchorClick = (
     e: React.MouseEvent<HTMLAnchorElement>,
     appLabel: string,
-    mode: 'direct' | 'safe_launcher' | 'copy_mobile' = 'direct'
+    mode: 'direct' | 'safe_launcher' | 'copy_mobile' | 'download_qr_and_open' = 'direct'
   ) => {
     try {
-      const textToCopy = mode === 'copy_mobile' ? officialMobile : cleanUpiId;
+      const textToCopy = mode === 'copy_mobile' ? activePayeeMobile : cleanUpiId;
       navigator.clipboard?.writeText(textToCopy).catch(() => {});
       setCopiedField(mode === 'copy_mobile' ? 'mobile' : 'upi');
       setTimeout(() => setCopiedField(null), 2000);
     } catch {}
 
-    if (mode === 'safe_launcher' || mode === 'copy_mobile') {
+    if (mode === 'download_qr_and_open' && dynamicQrDataUrl) {
+      try {
+        const dlLink = document.createElement('a');
+        dlLink.href = dynamicQrDataUrl;
+        dlLink.download = `Modern-Salon-Pay-Rs${effectiveAdvance}-${sessionRefCode}.png`;
+        document.body.appendChild(dlLink);
+        dlLink.click();
+        document.body.removeChild(dlLink);
+      } catch {}
+    }
+
+    if (mode === 'safe_launcher' || mode === 'copy_mobile' || mode === 'download_qr_and_open') {
       setShowSafePayGuide(true);
     }
 
     if (isMobileDevice) {
       setHasLaunchedUpiApp(true);
-      // If browser stays visible after 1200ms, show fallback guidance & No-Lock UPI option
       setTimeout(() => {
         if (document.visibilityState === 'visible') {
           setShowUpiFallbackBanner(true);
@@ -508,7 +515,7 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                 type="button"
                 onClick={() => {
                   setSelectedOption('scanner1');
-                  setShowPosterStandee(Boolean(settings.primaryQrCustomOnly || (settings.upiQrCodeUrl && settings.upiQrCodeUrl !== DEFAULT_SCANNER1_IMG)));
+                  setShowPosterStandee(false);
                 }}
                 className={`p-2.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
                   selectedOption === 'scanner1'
@@ -527,7 +534,7 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                 type="button"
                 onClick={() => {
                   setSelectedOption('scanner2');
-                  setShowPosterStandee(Boolean(settings.secondaryQrCustomOnly || (settings.secondaryUpiQrCodeUrl && settings.secondaryUpiQrCodeUrl !== DEFAULT_SCANNER2_IMG)));
+                  setShowPosterStandee(false);
                 }}
                 className={`p-2.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
                   selectedOption === 'scanner2'
@@ -564,90 +571,46 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
           {selectedOption !== 'bank' && (
             <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900/90 border border-zinc-200 dark:border-zinc-800 space-y-3.5 text-center">
 
-              {/* Quick Top Pay Bar */}
-              <div className="p-3 rounded-2xl bg-white dark:bg-zinc-950 border border-purple-300 dark:border-amber-500/30 space-y-2 text-left shadow-xs">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <h4 className="font-extrabold text-xs text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
-                      <Zap className="w-3.5 h-3.5 text-purple-600 dark:text-amber-400" />
-                      <span>Pay ₹{effectiveAdvance} Directly via PhonePe / UPI</span>
-                    </h4>
-                    <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-                      Payee: <strong>{cleanPayeeName}</strong> • <span className="font-mono">{cleanUpiId}</span>
-                    </p>
-                  </div>
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 shrink-0">
-                    ₹{effectiveAdvance}
-                  </span>
-                </div>
-
-                <a
-                  href={upiAppLinks.universalUpi}
-                  onClick={(e) => handleUpiAppAnchorClick(e, 'PhonePe / UPI App', 'safe_launcher')}
-                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#5f259f] to-[#7b32c6] hover:from-[#511e8a] hover:to-[#6a29ab] text-white font-extrabold text-xs sm:text-sm flex items-center justify-between gap-2 shadow-md transition cursor-pointer"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-6 h-6 rounded-full bg-white text-[#5f259f] flex items-center justify-center font-black text-xs shrink-0">
-                      पे
-                    </div>
-                    <div className="text-left">
-                      <div className="leading-tight">Open PhonePe / UPI App (Pay ₹{effectiveAdvance})</div>
-                      <div className="text-[10px] font-medium text-purple-100 opacity-90">
-                        Zero-Decline Payee Mode • No payment message • {cleanUpiId}
-                      </div>
-                    </div>
-                  </div>
-                  <ExternalLink className="w-4 h-4 text-purple-100 shrink-0" />
-                </a>
-              </div>
-
-              {/* QR Code Container (Tappable — redirects to PhonePe / UPI App) */}
+              {/* QR Code Container */}
               <div className="flex flex-col items-center justify-center p-3.5 bg-white rounded-2xl border-2 border-dashed border-purple-500/40 shadow-inner">
                 {showPosterStandee ? (
                   <div className="flex flex-col items-center">
                     <div className="mb-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-50 border border-purple-200 text-purple-700 text-[10px] font-extrabold">
                       <QrCode className="w-3 h-3 text-purple-600" />
-                      <span>Active Store Scanner • Pay ₹{effectiveAdvance}</span>
+                      <span>Store Standee QR • Pay ₹{effectiveAdvance}</span>
                     </div>
-                    <a
-                      href={upiAppLinks.universalUpi}
-                      onClick={(e) => handleUpiAppAnchorClick(e, 'PhonePe / UPI App', 'safe_launcher')}
-                      className="group block cursor-pointer"
-                      title="Tap Scanner to Open PhonePe / UPI App"
-                    >
-                      <img
-                        src={currentUpiTarget.posterImage}
-                        alt={currentUpiTarget.name}
-                        className="w-52 sm:w-56 h-auto rounded-xl object-contain shadow-md mx-auto ring-2 ring-transparent group-hover:ring-purple-500 transition"
-                      />
-                    </a>
+                    <img
+                      src={currentUpiTarget.posterImage}
+                      alt={currentUpiTarget.name}
+                      className="w-52 sm:w-56 h-auto rounded-xl object-contain shadow-md mx-auto"
+                    />
                     <div className="text-[11px] text-zinc-800 font-extrabold mt-2 text-center">
                       {cleanPayeeName} • <span className="font-mono text-purple-700">{cleanUpiId}</span>
                     </div>
                     <div className="text-[10px] text-zinc-500 mt-0.5">
-                      Tap the scanner above to open PhonePe, or scan from PhonePe Gallery for ₹{effectiveAdvance}.
+                      Save QR &amp; scan inside PhonePe / GPay / Paytm Gallery for ₹{effectiveAdvance}.
                     </div>
                     <a
                       href={currentUpiTarget.posterImage}
                       download={`Modern-Salon-Store-QR-${currentUpiTarget.id}.png`}
                       className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-800 text-[11px] font-bold transition"
                     >
-                      <span>⬇️ Save Scanner QR to Gallery (Scan in PhonePe / GPay)</span>
+                      <span>⬇️ Save Store QR to Gallery</span>
                     </a>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center">
                     <div className="mb-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-extrabold">
                       <Zap className="w-3 h-3 text-emerald-600" />
-                      <span>Scanner Auto-Detects ₹{effectiveAdvance} Advance</span>
+                      <span>Auto-Amount QR • Pre-fills ₹{effectiveAdvance} Automatically</span>
                     </div>
 
                     {dynamicQrDataUrl ? (
                       <a
                         href={upiAppLinks.universalUpi}
-                        onClick={(e) => handleUpiAppAnchorClick(e, 'PhonePe / UPI App', 'safe_launcher')}
+                        onClick={(e) => handleUpiAppAnchorClick(e, 'UPI App (Auto-Filled ₹' + effectiveAdvance + ')', 'direct')}
                         className="p-2 bg-white rounded-xl shadow-md border border-purple-200 hover:border-purple-500 transition block cursor-pointer"
-                        title="Tap Scanner to Open PhonePe / UPI App"
+                        title={`Scan or tap to pay ₹${effectiveAdvance}`}
                       >
                         <img
                           src={dynamicQrDataUrl}
@@ -669,18 +632,27 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                         {cleanPayeeName} • {cleanUpiId}
                       </div>
                       <div className="text-[10px] text-zinc-600 font-medium mt-0.5">
-                        Tap scanner to open PhonePe, or scan from PhonePe Gallery to auto-fill ₹{effectiveAdvance}.
+                        Scanning this QR auto-fills ₹{effectiveAdvance} in PhonePe, Google Pay, Paytm &amp; any UPI app.
                       </div>
                     </div>
 
                     {dynamicQrDataUrl && (
-                      <a
-                        href={dynamicQrDataUrl}
-                        download={`Modern-Salon-Pay-Rs${effectiveAdvance}-${sessionRefCode}.png`}
-                        className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-800 text-[11px] font-bold transition"
-                      >
-                        <span>⬇️ Save ₹{effectiveAdvance} QR to Gallery (Scan in PhonePe)</span>
-                      </a>
+                      <div className="mt-2.5 flex flex-wrap items-center justify-center gap-2">
+                        <a
+                          href={dynamicQrDataUrl}
+                          download={`Modern-Salon-Pay-Rs${effectiveAdvance}-${sessionRefCode}.png`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-800 text-[11px] font-bold transition"
+                        >
+                          <span>⬇️ Save ₹{effectiveAdvance} QR to Gallery</span>
+                        </a>
+                        <a
+                          href={upiAppLinks.phonepeLauncher}
+                          onClick={(e) => handleUpiAppAnchorClick(e, 'PhonePe App (Scan QR from Gallery)', 'download_qr_and_open')}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#5f259f] hover:bg-[#4e1d84] text-white text-[11px] font-bold transition cursor-pointer"
+                        >
+                          <span>📲 Save QR &amp; Open PhonePe</span>
+                        </a>
+                      </div>
                     )}
                   </div>
                 )}
@@ -695,7 +667,7 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                 </button>
               </div>
 
-              {/* PAYMENT OPTIONS DIRECTLY BELOW THE SCANNER ALSO */}
+              {/* PAYMENT OPTIONS BELOW THE QR CODE */}
               <div className="p-3.5 rounded-2xl bg-white dark:bg-zinc-950 border border-purple-300 dark:border-amber-500/30 space-y-2.5 text-left shadow-xs">
                 <div className="flex items-center justify-between gap-2">
                   <div>
@@ -704,36 +676,57 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                       <span>Pay ₹{effectiveAdvance} With UPI Apps</span>
                     </h4>
                     <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-                      Redirect to PhonePe, Google Pay, Paytm, or BHIM • Enter ₹{effectiveAdvance} &amp; UPI PIN
+                      Advance amount ₹{effectiveAdvance} is pre-filled automatically • Payee: {cleanUpiId}
                     </p>
                   </div>
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-700 dark:text-amber-300 border border-purple-500/30 shrink-0">
-                    No Note Lock
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 shrink-0">
+                    ₹{effectiveAdvance} Auto-Filled
                   </span>
                 </div>
 
-                {/* Featured PhonePe Redirect Button below scanner */}
-                <a
-                  href={upiAppLinks.universalUpi}
-                  onClick={(e) => handleUpiAppAnchorClick(e, 'PhonePe / UPI App', 'safe_launcher')}
-                  className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-[#5f259f] to-[#7b32c6] hover:from-[#511e8a] hover:to-[#6a29ab] text-white font-extrabold text-xs sm:text-sm flex items-center justify-between gap-2 shadow-md transition cursor-pointer"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-6 h-6 rounded-full bg-white text-[#5f259f] flex items-center justify-center font-black text-xs shrink-0">
-                      पे
-                    </div>
-                    <div className="text-left">
-                      <div className="leading-tight">Pay ₹{effectiveAdvance} via PhonePe</div>
-                      <div className="text-[10px] font-medium text-purple-100 opacity-90">
-                        Redirects to PhonePe / UPI • Payee: {cleanUpiId}
+                {/* Primary PhonePe & Other UPI Apps Buttons */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <a
+                    href={upiAppLinks.phonepePay}
+                    onClick={(e) => handleUpiAppAnchorClick(e, 'PhonePe', 'safe_launcher')}
+                    className="w-full py-2.5 px-3.5 rounded-xl bg-gradient-to-r from-[#5f259f] to-[#7b32c6] hover:from-[#511e8a] hover:to-[#6a29ab] text-white font-extrabold text-xs flex items-center justify-between gap-2 shadow-md transition cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-6 h-6 rounded-full bg-white text-[#5f259f] flex items-center justify-center font-black text-xs shrink-0">
+                        पे
+                      </div>
+                      <div className="text-left min-w-0">
+                        <div className="leading-tight truncate">Pay ₹{effectiveAdvance} via PhonePe</div>
+                        <div className="text-[10px] font-medium text-purple-100 opacity-90 truncate">
+                          Auto-fills ₹{effectiveAdvance}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <ExternalLink className="w-4 h-4 text-purple-100 shrink-0" />
-                </a>
+                    <ExternalLink className="w-4 h-4 text-purple-100 shrink-0" />
+                  </a>
 
-                {/* Direct App Options: PhonePe App, Google Pay, Paytm, BHIM */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <a
+                    href={upiAppLinks.universalUpi}
+                    onClick={(e) => handleUpiAppAnchorClick(e, 'Other UPI App', 'safe_launcher')}
+                    className="w-full py-2.5 px-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold text-xs flex items-center justify-between gap-2 shadow-md transition cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-6 h-6 rounded-full bg-white text-emerald-700 flex items-center justify-center font-black text-[11px] shrink-0">
+                        UPI
+                      </div>
+                      <div className="text-left min-w-0">
+                        <div className="leading-tight truncate">Other UPI Apps (Pay ₹{effectiveAdvance})</div>
+                        <div className="text-[10px] font-medium text-emerald-100 opacity-95 truncate">
+                          Choose any installed UPI app
+                        </div>
+                      </div>
+                    </div>
+                    <ExternalLink className="w-4 h-4 text-emerald-100 shrink-0" />
+                  </a>
+                </div>
+
+                {/* Direct App Options: PhonePe, Google Pay, Paytm, BHIM, Other UPI App */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                   <a
                     href={upiAppLinks.phonepePay}
                     onClick={(e) => handleUpiAppAnchorClick(e, 'PhonePe', 'safe_launcher')}
@@ -777,29 +770,50 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                     </span>
                     <span>BHIM UPI</span>
                   </a>
+
+                  <a
+                    href={upiAppLinks.universalUpi}
+                    onClick={(e) => handleUpiAppAnchorClick(e, 'Other UPI App', 'safe_launcher')}
+                    className="col-span-2 sm:col-span-1 p-2.5 rounded-xl bg-zinc-50 hover:bg-emerald-50 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 hover:border-emerald-400 flex items-center justify-center gap-1.5 text-xs font-bold text-zinc-900 dark:text-zinc-100 transition cursor-pointer"
+                  >
+                    <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-black flex items-center justify-center shrink-0">
+                      +
+                    </span>
+                    <span>Other UPI</span>
+                  </a>
                 </div>
 
-                {/* Anti-Security-Decline PhonePe App Launcher + Mobile/UPI Copy */}
-                <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[10px] text-zinc-600 dark:text-zinc-400">
-                  <span>
-                    If PhonePe blocks web intent after PIN, tap to copy mobile <strong>{officialMobile}</strong> &amp; pay in PhonePe:
-                  </span>
-                  <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-                    <a
-                      href={upiAppLinks.universalUpiWithAmount}
-                      onClick={(e) => handleUpiAppAnchorClick(e, 'UPI App (Pre-filled ₹' + effectiveAdvance + ')', 'direct')}
-                      className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30 font-bold cursor-pointer"
-                    >
-                      <Zap className="w-3 h-3" />
-                      <span>Pre-fill ₹{effectiveAdvance}</span>
-                    </a>
+                {/* Anti-Security-Decline PhonePe App Launcher (No Web Intent Block) */}
+                <div className="pt-2.5 border-t border-zinc-200 dark:border-zinc-800 space-y-2 text-[10px] text-zinc-600 dark:text-zinc-400">
+                  <div className="font-semibold text-zinc-800 dark:text-zinc-200">
+                    If PhonePe shows &quot;declined for security reasons&quot; on browser links, use a direct zero-decline method:
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {dynamicQrDataUrl && (
+                      <a
+                        href={upiAppLinks.phonepeLauncher}
+                        onClick={(e) => handleUpiAppAnchorClick(e, 'PhonePe App (Upload QR from Gallery)', 'download_qr_and_open')}
+                        className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30 font-bold cursor-pointer"
+                      >
+                        <QrCode className="w-3 h-3" />
+                        <span>Save ₹{effectiveAdvance} QR &amp; Open PhonePe (Gallery Scan)</span>
+                      </a>
+                    )}
                     <a
                       href={upiAppLinks.phonepeLauncher}
                       onClick={(e) => handleUpiAppAnchorClick(e, 'PhonePe App', 'copy_mobile')}
                       className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-purple-800 dark:text-amber-300 border border-purple-200 dark:border-amber-500/30 font-bold cursor-pointer"
                     >
                       <Copy className="w-3 h-3" />
-                      <span>Open PhonePe &amp; Copy {officialMobile}</span>
+                      <span>Copy {activePayeeMobile} &amp; Open PhonePe</span>
+                    </a>
+                    <a
+                      href={upiAppLinks.phonepeLauncher}
+                      onClick={(e) => handleUpiAppAnchorClick(e, 'PhonePe App', 'safe_launcher')}
+                      className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 border border-zinc-300 dark:border-zinc-700 font-bold cursor-pointer"
+                    >
+                      <Copy className="w-3 h-3" />
+                      <span>Copy {cleanUpiId} &amp; Open PhonePe</span>
                     </a>
                   </div>
                 </div>
@@ -818,7 +832,7 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                     </button>
                   </div>
                   <p className="text-[10px] leading-relaxed">
-                    To avoid PhonePe&apos;s security block on web links: tap <strong>Open PhonePe &amp; Copy {officialMobile}</strong> (pay via To Mobile Number or UPI ID <strong>{cleanUpiId}</strong>), OR tap <strong>Save QR to Gallery</strong> and select it inside PhonePe&apos;s <strong>Scan any QR</strong>.
+                    PhonePe sometimes blocks browser-launched links for personal UPI IDs. Tap <strong>Save ₹{effectiveAdvance} QR &amp; Open PhonePe</strong> and choose <strong>Scan any QR → Gallery</strong> (auto-fills ₹{effectiveAdvance}), OR pay via <strong>To Mobile Number ({activePayeeMobile})</strong> / <strong>UPI ID ({cleanUpiId})</strong>, OR tap <strong>Other UPI Apps</strong>.
                   </p>
                 </div>
               )}
@@ -827,7 +841,7 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
               {showSafePayGuide && (
                 <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-900 dark:text-emerald-200 text-[11px] text-left space-y-1.5">
                   <div className="font-bold flex items-center justify-between">
-                    <span>📲 Opening UPI App (Zero-Decline Mode — No Message)</span>
+                    <span>📲 Pay ₹{effectiveAdvance} to {cleanPayeeName}</span>
                     <button
                       type="button"
                       onClick={() => setShowSafePayGuide(false)}
@@ -837,8 +851,8 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                     </button>
                   </div>
                   <p className="text-[10px] leading-relaxed">
-                    • Pay <strong>₹{effectiveAdvance}</strong> to <strong>{cleanPayeeName}</strong> ({cleanUpiId} / mobile <strong>{officialMobile}</strong>).<br />
-                    • If PhonePe shows a security decline on a web link, pay using <strong>To Mobile Number ({officialMobile})</strong>, <strong>UPI ID ({cleanUpiId})</strong>, or <strong>Scan QR from Gallery</strong>.<br />
+                    • Pay <strong>₹{effectiveAdvance}</strong> to <strong>{cleanPayeeName}</strong> ({cleanUpiId} / mobile <strong>{activePayeeMobile}</strong>).<br />
+                    • If PhonePe shows a security decline on browser redirect, use <strong>Save ₹{effectiveAdvance} QR &amp; Open PhonePe</strong> (Scan from Gallery) or pay inside PhonePe via <strong>To Mobile Number ({activePayeeMobile})</strong> / <strong>To UPI ID ({cleanUpiId})</strong>.<br />
                     • Return here after paying and enter your <strong>12-digit UTR number</strong> below.
                   </p>
                 </div>
@@ -869,11 +883,11 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                   <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-purple-50/70 dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800">
                     <div className="min-w-0">
                       <span className="text-[9px] uppercase text-zinc-500 block font-bold">Mobile Number</span>
-                      <span className="font-mono font-bold text-zinc-900 dark:text-zinc-100 text-[11px]">{officialMobile}</span>
+                      <span className="font-mono font-bold text-zinc-900 dark:text-zinc-100 text-[11px]">{activePayeeMobile}</span>
                     </div>
                     <button
                       type="button"
-                      onClick={() => handleCopy(officialMobile, 'mobile')}
+                      onClick={() => handleCopy(activePayeeMobile, 'mobile')}
                       className="px-2 py-1 rounded-md bg-purple-600 hover:bg-purple-700 dark:bg-amber-500 dark:hover:bg-amber-400 text-white dark:text-zinc-950 text-[10px] font-bold flex items-center gap-1 shrink-0 cursor-pointer"
                     >
                       {copiedField === 'mobile' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}

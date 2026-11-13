@@ -29,9 +29,10 @@ export function isMySQLConnected(): boolean {
 }
 
 export async function initMySQLPool(): Promise<boolean> {
-  if (process.env.USE_MYSQL === 'false') {
+  if (process.env.USE_MYSQL !== 'true' || !process.env.DB_HOST) {
     isConnected = false;
-    console.log('📦 [Database]: Local JSON database active (data/db.json). MySQL is disabled.');
+    pool = null;
+    console.log('📦 [Database]: Local JSON database active (data/db.json).');
     return false;
   }
 
@@ -60,6 +61,10 @@ export async function initMySQLPool(): Promise<boolean> {
     return true;
   } catch (err: any) {
     isConnected = false;
+    if (pool) {
+      await pool.end().catch(() => {});
+      pool = null;
+    }
     console.log(`📦 [Database]: Local JSON database active (data/db.json). (MySQL connection not active: ${err.message})`);
     return false;
   }
