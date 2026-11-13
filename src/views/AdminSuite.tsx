@@ -270,8 +270,9 @@ export const AdminSuite: React.FC = () => {
       sh: number,
       tw: number,
       th: number,
-      highContrast = false
+      threshold: number | null = null
     ) => {
+      if (sw <= 10 || sh <= 10) return null;
       const canvas = document.createElement('canvas');
       canvas.width = tw;
       canvas.height = th;
@@ -281,11 +282,11 @@ export const AdminSuite: React.FC = () => {
       ctx.fillRect(0, 0, tw, th);
       ctx.drawImage(img, sx, sy, sw, sh, 0, 0, tw, th);
       const imgData = ctx.getImageData(0, 0, tw, th);
-      if (highContrast) {
+      if (threshold !== null) {
         const d = imgData.data;
         for (let i = 0; i < d.length; i += 4) {
           const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-          const v = lum < 138 ? 0 : 255;
+          const v = lum < threshold ? 0 : 255;
           d[i] = v;
           d[i + 1] = v;
           d[i + 2] = v;
@@ -313,7 +314,7 @@ export const AdminSuite: React.FC = () => {
       return null;
     };
 
-    const maxDim = 1000;
+    const maxDim = 1600;
     let dw = img.width;
     let dh = img.height;
     if (dw > maxDim || dh > maxDim) {
@@ -326,24 +327,54 @@ export const AdminSuite: React.FC = () => {
       }
     }
 
-    // Pass 1: Full frame
-    const pass1 = tryDecodeCanvas(0, 0, img.width, img.height, dw, dh, false);
-    if (pass1) return pass1;
+    const minDim = Math.min(img.width, img.height);
+    const cropRegions = [
+      { sx: 0, sy: 0, sw: img.width, sh: img.height, tw: dw, th: dh },
+      {
+        sx: Math.max(0, Math.round((img.width - minDim * 0.78) / 2)),
+        sy: Math.max(0, Math.round((img.height - minDim * 0.78) / 2)),
+        sw: Math.round(minDim * 0.78),
+        sh: Math.round(minDim * 0.78),
+        tw: 840,
+        th: 840
+      },
+      {
+        sx: Math.max(0, Math.round((img.width - minDim * 0.6) / 2)),
+        sy: Math.max(0, Math.round((img.height - minDim * 0.6) / 2)),
+        sw: Math.round(minDim * 0.6),
+        sh: Math.round(minDim * 0.6),
+        tw: 760,
+        th: 760
+      },
+      {
+        sx: Math.max(0, Math.round((img.width - minDim * 0.74) / 2)),
+        sy: Math.max(0, Math.round(img.height * 0.14)),
+        sw: Math.round(minDim * 0.74),
+        sh: Math.min(Math.round(minDim * 0.74), Math.max(20, img.height - Math.round(img.height * 0.14))),
+        tw: 780,
+        th: 780
+      },
+      {
+        sx: Math.max(0, Math.round((img.width - minDim * 0.74) / 2)),
+        sy: Math.max(0, Math.round(img.height * 0.3)),
+        sw: Math.round(minDim * 0.74),
+        sh: Math.min(Math.round(minDim * 0.74), Math.max(20, img.height - Math.round(img.height * 0.3))),
+        tw: 780,
+        th: 780
+      }
+    ];
 
-    // Pass 2: Center crop (where PhonePe / GPay / Paytm standee QR square sits)
-    const cropSize = Math.round(Math.min(img.width, img.height) * 0.72);
-    const cropX = Math.max(0, Math.round((img.width - cropSize) / 2));
-    const cropY = Math.max(0, Math.round((img.height - cropSize) / 2));
-    const pass2 = tryDecodeCanvas(cropX, cropY, cropSize, cropSize, 720, 720, false);
-    if (pass2) return pass2;
+    for (const region of cropRegions) {
+      const normalPass = tryDecodeCanvas(region.sx, region.sy, region.sw, region.sh, region.tw, region.th, null);
+      if (normalPass) return normalPass;
+    }
 
-    // Pass 3: High-contrast B&W threshold on center crop
-    const pass3 = tryDecodeCanvas(cropX, cropY, cropSize, cropSize, 720, 720, true);
-    if (pass3) return pass3;
-
-    // Pass 4: High-contrast B&W threshold on full frame
-    const pass4 = tryDecodeCanvas(0, 0, img.width, img.height, dw, dh, true);
-    if (pass4) return pass4;
+    for (const region of cropRegions) {
+      const bwPass1 = tryDecodeCanvas(region.sx, region.sy, region.sw, region.sh, region.tw, region.th, 142);
+      if (bwPass1) return bwPass1;
+      const bwPass2 = tryDecodeCanvas(region.sx, region.sy, region.sw, region.sh, region.tw, region.th, 112);
+      if (bwPass2) return bwPass2;
+    }
 
     return { vpa: '', payee: '', extraParams: '' };
   };
@@ -356,13 +387,20 @@ export const AdminSuite: React.FC = () => {
       if (!rawDataUrl) return;
 
       const img = new Image();
+      img.onerror = () => {
+        setIsSavingScannerSettings(false);
+        setScannerSaveNotice({
+          type: 'error',
+          text: 'Could not read the selected image file. Please try a JPG or PNG QR photo.'
+        });
+      };
       img.onload = async () => {
         try {
           // 1. Multi-pass QR decode before compression
           const { vpa: extractedVpa, payee: extractedPayee, extraParams: extractedExtra } = decodeUpiPayloadFromImage(img);
 
           // 2. Compress image so it fits reliably under Firestore 1MB limit & db.json
-          const saveMax = 560;
+          const saveMax = 640;
           let sw = img.width;
           let sh = img.height;
           if (sw > saveMax || sh > saveMax) {
@@ -379,7 +417,7 @@ export const AdminSuite: React.FC = () => {
           saveCanvas.height = sh;
           const saveCtx = saveCanvas.getContext('2d');
           const compressedDataUrl = saveCtx
-            ? (saveCtx.drawImage(img, 0, 0, sw, sh), saveCanvas.toDataURL('image/jpeg', 0.78))
+            ? (saveCtx.drawImage(img, 0, 0, sw, sh), saveCanvas.toDataURL('image/jpeg', 0.84))
             : rawDataUrl;
 
           // 3. Persist QR photo to server (/public/uploads/qr) so URL stays small & universally viewable
@@ -430,7 +468,7 @@ export const AdminSuite: React.FC = () => {
               type: 'success',
               text: extractedVpa
                 ? `Scanner 1 QR uploaded & auto-detected UPI ID (${extractedVpa}${nextExtra ? ' with merchant params' : ''})! Live on client checkout.`
-                : 'Scanner 1 QR image uploaded & set live on client checkout! (Tip: update the UPI ID field if it changed.)'
+                : 'Scanner 1 QR photo uploaded & set as the default scanner on client checkout! (Update the UPI ID field above too if it changed.)'
             });
           } else {
             const nextVpa = extractedVpa || scannerDraftRef.current.secondaryUpiId;
@@ -459,7 +497,7 @@ export const AdminSuite: React.FC = () => {
               type: 'success',
               text: extractedVpa
                 ? `Scanner 2 QR uploaded & auto-detected UPI ID (${extractedVpa}${nextExtra ? ' with merchant params' : ''})! Live on client checkout.`
-                : 'Scanner 2 QR image uploaded & set live on client checkout! (Tip: update the UPI ID field if it changed.)'
+                : 'Scanner 2 QR photo uploaded & set as the default scanner on client checkout! (Update the Secondary UPI ID field above too if it changed.)'
             });
           }
         } catch (err: any) {
@@ -2904,7 +2942,12 @@ export const AdminSuite: React.FC = () => {
                         value={scannerDraft.merchantUpiId}
                         onChange={(e) => {
                           draftEditVersionRef.current += 1;
-                          setScannerDraft(prev => ({ ...prev, merchantUpiId: e.target.value, primaryQrCustomOnly: false }));
+                          setScannerDraft(prev => ({
+                            ...prev,
+                            merchantUpiId: e.target.value,
+                            primaryQrCustomOnly: false,
+                            primaryUpiExtraParams: ''
+                          }));
                           setHasUnsavedScannerChanges(true);
                           setScannerSaveNotice(null);
                         }}
@@ -2912,7 +2955,9 @@ export const AdminSuite: React.FC = () => {
                         className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-purple-300 dark:border-amber-500/60 text-purple-700 dark:text-amber-400 font-mono text-xs font-bold focus:outline-none focus:border-purple-500 dark:focus:border-amber-400"
                       />
                       <span className="text-[10px] text-zinc-500 block mt-1">
-                        Uploading a QR photo auto-detects its UPI ID, or type a new VPA (auto-saves immediately).
+                        {scannerDraft.primaryQrCustomOnly
+                          ? 'Custom QR photo active on checkout. Type a UPI ID here if you also want Auto-Amount QR enabled.'
+                          : 'Uploading a QR photo auto-detects its UPI ID, or type a new VPA (auto-saves immediately).'}
                       </span>
                     </div>
 
@@ -3027,7 +3072,9 @@ export const AdminSuite: React.FC = () => {
                         className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 text-zinc-900 dark:text-white font-mono text-xs focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
                       />
                       <span className="text-[10px] text-zinc-500 block mt-1">
-                        Secondary backup UPI handle for customer scanning.
+                        {scannerDraft.secondaryQrCustomOnly
+                          ? 'Custom QR photo active on checkout. Type a UPI ID here if you also want Auto-Amount QR enabled.'
+                          : 'Secondary backup UPI handle for customer scanning.'}
                       </span>
                     </div>
 

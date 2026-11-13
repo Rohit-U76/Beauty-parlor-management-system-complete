@@ -304,8 +304,8 @@ const mergeIncomingSettings = (prev: SalonSettings, incomingRaw: any): SalonSett
   const prevPassTs = Number(prev.adminPasswordUpdatedAt || 0);
   const nextPassTs = Number(incomingRaw.adminPasswordUpdatedAt || 0);
 
-  // If local state is strictly newer than incoming snapshot/cache, keep newer local values on top
-  const isLocalNewer = prevUpdated > 0 && prevUpdated > incomingUpdated;
+  // If local state is newer or equal to incoming snapshot/cache, keep local values on top
+  const isLocalNewer = prevUpdated > 0 && prevUpdated >= incomingUpdated;
   const mergedBase = isLocalNewer
     ? { ...incomingRaw, ...prev, settingsUpdatedAt: prevUpdated }
     : { ...prev, ...incomingRaw, settingsUpdatedAt: Math.max(prevUpdated, incomingUpdated) };
@@ -3089,12 +3089,35 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         getDocFromServer(doc(db, 'salon_settings', 'main'))
       ]);
 
+      const apiSettings =
+        apiRes.status === 'fulfilled' && apiRes.value?.success && apiRes.value.settings
+          ? apiRes.value.settings
+          : null;
+      const fsSettings =
+        fsRes.status === 'fulfilled' && fsRes.value?.exists()
+          ? fsRes.value.data()
+          : null;
+
       const incomingCandidates: any[] = [];
-      if (apiRes.status === 'fulfilled' && apiRes.value?.success && apiRes.value.settings) {
-        incomingCandidates.push(apiRes.value.settings);
-      }
-      if (fsRes.status === 'fulfilled' && fsRes.value?.exists()) {
-        incomingCandidates.push(fsRes.value.data());
+      if (apiSettings) incomingCandidates.push(apiSettings);
+      if (fsSettings) incomingCandidates.push(fsSettings);
+
+      // Sort oldest -> newest so the newest settings source always wins cleanly
+      incomingCandidates.sort(
+        (a, b) => Number(a?.settingsUpdatedAt || 0) - Number(b?.settingsUpdatedAt || 0)
+      );
+
+      // If backend API has strictly newer settings than Firestore and a Firebase session is active, sync it up
+      if (
+        apiSettings &&
+        auth.currentUser &&
+        Number(apiSettings.settingsUpdatedAt || 0) > Number(fsSettings?.settingsUpdatedAt || 0)
+      ) {
+        setDoc(
+          doc(db, 'salon_settings', 'main'),
+          cleanFirestoreData(normalizeLegacySettings(apiSettings)),
+          { merge: true }
+        ).catch(() => {});
       }
 
       if (incomingCandidates.length > 0) {
