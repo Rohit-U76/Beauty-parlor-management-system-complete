@@ -319,9 +319,10 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
       pairs.push(['cu', 'INR']);
       pairs.push(['tn', `Modern Salon ${sessionRefCode}`]);
     } else {
-      // Clean static P2P VPA QR: omits un-signed am= & mc=0000 so PhonePe/GPay never throw P2P "declined for security reasons"
-      pairs.push(['cu', 'INR']);
-      pairs.push(['tn', `Modern Salon ${sessionRefCode}`]);
+      // Exact official PhonePe/GPay static P2P QR payload (mc=0000&mode=02&purpose=00, no browser intent tn/am) so scanning never triggers security decline
+      pairs.push(['mc', '0000']);
+      pairs.push(['mode', '02']);
+      pairs.push(['purpose', '00']);
     }
 
     // NPCI UPI Linking Spec expects %20 for spaces, never '+'
@@ -806,23 +807,32 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                     <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">
                       {hasVerifiedBusinessQr
                         ? `One-click redirect to PhonePe or Google Pay with ₹${effectiveAdvance} pre-filled — enter UPI PIN & pay.`
-                        : `One-click redirect directly to PhonePe or Google Pay payment screen — enter UPI PIN & pay ₹${effectiveAdvance}.`}
+                        : `Opens PhonePe or Google Pay safely & auto-copies Mobile ${activePayeeMobile} — tap "To Mobile Number", "To UPI ID", or "Scan QR" to avoid bank security blocks.`}
                     </p>
                   </div>
                   <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 shrink-0">
-                    {hasVerifiedBusinessQr ? '✓ Business QR' : `Pay ₹${effectiveAdvance}`}
+                    {hasVerifiedBusinessQr ? '✓ Business QR' : `Safe Pay ₹${effectiveAdvance}`}
                   </span>
                 </div>
 
-                {/* Strict 2-Option 1-Click Payment Buttons: PhonePe & Google Pay ONLY */}
+                {!hasVerifiedBusinessQr && (
+                  <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 text-[10px] leading-relaxed flex items-start gap-2">
+                    <ShieldCheck className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Zero-Decline Protection:</strong> PhonePe &amp; Google Pay decline browser payment links to personal UPI IDs (<code>@ybl</code> / <code>@axl</code>) for security. Tapping below opens the app safely and copies <strong>{activePayeeMobile}</strong> — pay via <strong>Mobile Number</strong>, <strong>UPI ID ({cleanUpiId})</strong>, or <strong>Save &amp; Scan QR</strong>.
+                    </span>
+                  </div>
+                )}
+
+                {/* Strict 2-Option Payment Buttons: PhonePe & Google Pay ONLY */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <a
-                    href={upiAppLinks.phonepePay}
+                    href={canUseDirectPhonePeIntent ? upiAppLinks.phonepePay : upiAppLinks.phonepeLauncher}
                     onClick={(e) =>
                       handleUpiAppAnchorClick(
                         e,
                         'PhonePe',
-                        'direct'
+                        canUseDirectPhonePeIntent ? 'direct' : 'copy_mobile'
                       )
                     }
                     className="py-3 px-3.5 rounded-xl bg-gradient-to-r from-[#5f259f] to-[#7b32c6] hover:from-[#511e8a] hover:to-[#6a29ab] text-white font-extrabold text-xs flex items-center justify-between gap-2 shadow-md transition cursor-pointer"
@@ -836,7 +846,7 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                         <div className="text-[10px] font-medium text-purple-100 opacity-90 truncate">
                           {canUseDirectPhonePeIntent
                             ? `1-Tap Pay ₹${effectiveAdvance} • PIN`
-                            : `Pay ₹${effectiveAdvance} • Enter UPI PIN`}
+                            : `Open PhonePe • Copy ${activePayeeMobile}`}
                         </div>
                       </div>
                     </div>
@@ -844,12 +854,12 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                   </a>
 
                   <a
-                    href={upiAppLinks.gpayPay}
+                    href={hasVerifiedBusinessQr ? upiAppLinks.gpayPay : upiAppLinks.gpayLauncher}
                     onClick={(e) =>
                       handleUpiAppAnchorClick(
                         e,
                         'Google Pay',
-                        'direct'
+                        hasVerifiedBusinessQr ? 'direct' : 'copy_mobile'
                       )
                     }
                     className="py-3 px-3.5 rounded-xl bg-gradient-to-r from-[#1a73e8] to-[#2b86f5] hover:from-[#1565c0] hover:to-[#1a73e8] text-white font-extrabold text-xs flex items-center justify-between gap-2 shadow-md transition cursor-pointer"
@@ -861,7 +871,9 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                       <div className="text-left min-w-0">
                         <div className="leading-tight truncate">Google Pay</div>
                         <div className="text-[10px] font-medium text-blue-100 opacity-90 truncate">
-                          1-Tap Pay ₹{effectiveAdvance} • Enter UPI PIN
+                          {hasVerifiedBusinessQr
+                            ? `1-Tap Pay ₹${effectiveAdvance} • PIN`
+                            : `Open GPay • Copy ${activePayeeMobile}`}
                         </div>
                       </div>
                     </div>
@@ -913,20 +925,20 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                       </a>
                     )}
                     <a
-                      href={upiAppLinks.phonepePay}
-                      onClick={(e) => handleUpiAppAnchorClick(e, 'PhonePe', 'direct')}
+                      href={canUseDirectPhonePeIntent ? upiAppLinks.phonepePay : upiAppLinks.phonepeLauncher}
+                      onClick={(e) => handleUpiAppAnchorClick(e, 'PhonePe', canUseDirectPhonePeIntent ? 'direct' : 'copy_mobile')}
                       className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-purple-100 hover:bg-purple-200 dark:bg-purple-950/60 dark:hover:bg-purple-900/60 text-purple-900 dark:text-purple-200 border border-purple-300 dark:border-purple-500/30 font-bold cursor-pointer"
                     >
                       <ExternalLink className="w-3 h-3" />
-                      <span>Pay in PhonePe</span>
+                      <span>2. Open PhonePe App</span>
                     </a>
                     <a
-                      href={upiAppLinks.gpayPay}
-                      onClick={(e) => handleUpiAppAnchorClick(e, 'Google Pay', 'direct')}
+                      href={hasVerifiedBusinessQr ? upiAppLinks.gpayPay : upiAppLinks.gpayLauncher}
+                      onClick={(e) => handleUpiAppAnchorClick(e, 'Google Pay', hasVerifiedBusinessQr ? 'direct' : 'copy_mobile')}
                       className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-500/30 font-bold cursor-pointer"
                     >
                       <ExternalLink className="w-3 h-3" />
-                      <span>Pay in GPay</span>
+                      <span>Open GPay App</span>
                     </a>
                     <button
                       type="button"

@@ -29,13 +29,25 @@ export const CustomerOffers: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => openBookingModal()}
-          className="px-6 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white dark:bg-purple-500 dark:hover:bg-purple-600 dark:text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-sm transition shrink-0 cursor-pointer"
-        >
-          <Calendar className="w-4 h-4" />
-          <span>Book Appointment</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          {settings.whatsappCommunityUrl && (
+            <a
+              href={settings.whatsappCommunityUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-sm transition cursor-pointer"
+            >
+              <span>💬 Join WhatsApp Offers Community</span>
+            </a>
+          )}
+          <button
+            onClick={() => openBookingModal()}
+            className="px-6 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white dark:bg-purple-500 dark:hover:bg-purple-600 dark:text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-sm transition cursor-pointer"
+          >
+            <Calendar className="w-4 h-4" />
+            <span>Book Appointment</span>
+          </button>
+        </div>
       </div>
 
       {/* Offers Grid */}

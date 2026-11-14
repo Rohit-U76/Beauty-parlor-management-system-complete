@@ -270,6 +270,8 @@ export interface SalonSettings {
   paymentGatewayMode?: 'live' | 'test';
   bookingAutoConfirm: boolean;
   instagramUrl?: string;
+  whatsappCommunityUrl?: string;
+  whatsappCommunityName?: string;
   mapsUrl?: string;
   gstNumber?: string;
   staffType?: string;

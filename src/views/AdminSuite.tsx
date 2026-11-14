@@ -58,7 +58,8 @@ import {
   Play,
   Upload,
   Film,
-  Bell
+  Bell,
+  Link2
 } from 'lucide-react';
 import { useSalon } from '../context/SalonContext';
 import { ServiceItem, Appointment, GalleryItem, OfferCoupon, AppointmentStatus, StaffMember, WhatsAppBroadcastLog } from '../types';
@@ -154,6 +155,9 @@ export const AdminSuite: React.FC = () => {
   const [broadcastResult, setBroadcastResult] = useState<WhatsAppBroadcastLog | null>(null);
   const [isBroadcastModalOpen, setIsBroadcastModalOpen] = useState(false);
   const [isBroadcastingOffer, setIsBroadcastingOffer] = useState(false);
+  const [waGroupNameDraft, setWaGroupNameDraft] = useState(settings.whatsappCommunityName || 'Modern Unisex Salon VIP Offers Community');
+  const [waGroupUrlDraft, setWaGroupUrlDraft] = useState(settings.whatsappCommunityUrl || '');
+  const [isSavingWaGroup, setIsSavingWaGroup] = useState(false);
   const [showSmsHubModal, setShowSmsHubModal] = useState(false);
   const [selectedAppForMessaging, setSelectedAppForMessaging] = useState<Appointment | null>(null);
   const [viewingScreenshotUrl, setViewingScreenshotUrl] = useState<string | null>(null);
@@ -223,6 +227,11 @@ export const AdminSuite: React.FC = () => {
     settings.bankAccountType,
     settings.settingsUpdatedAt
   ]);
+
+  useEffect(() => {
+    setWaGroupNameDraft(settings.whatsappCommunityName || 'Modern Unisex Salon VIP Offers Community');
+    setWaGroupUrlDraft(settings.whatsappCommunityUrl || '');
+  }, [settings.whatsappCommunityName, settings.whatsappCommunityUrl]);
 
   const persistScannerDraft = async (draftToSave: typeof scannerDraft, isAutoSave = false) => {
     const versionAtStart = draftEditVersionRef.current;
@@ -1027,11 +1036,10 @@ export const AdminSuite: React.FC = () => {
     setNewOfferTitle('');
     setNewOfferDesc('');
 
-    if (res && res.broadcast) {
-      setBroadcastOffer(res.offer || { id: `off-${Date.now()}`, ...offerPayload });
-      setBroadcastResult(res.broadcast);
-      setIsBroadcastModalOpen(true);
-    }
+    const fallbackOffer: OfferCoupon = res?.offer || { id: `off-${Date.now()}`, ...offerPayload };
+    setBroadcastOffer(fallbackOffer);
+    setBroadcastResult(res?.broadcast || null);
+    setIsBroadcastModalOpen(true);
   };
 
   const openEditOfferModal = (offer: OfferCoupon) => {
@@ -1076,12 +1084,24 @@ export const AdminSuite: React.FC = () => {
 
   const handleBroadcastExistingOffer = async (offer: OfferCoupon) => {
     setIsBroadcastingOffer(true);
-    const res = await broadcastOfferWhatsApp(offer.id);
+    const res = await broadcastOfferWhatsApp(offer.id).catch(() => null);
     setIsBroadcastingOffer(false);
-    if (res && res.broadcast) {
-      setBroadcastOffer(offer);
-      setBroadcastResult(res.broadcast);
-      setIsBroadcastModalOpen(true);
+    setBroadcastOffer(offer);
+    setBroadcastResult(res?.broadcast || null);
+    setIsBroadcastModalOpen(true);
+  };
+
+  const handleSaveWhatsAppCommunity = async () => {
+    setIsSavingWaGroup(true);
+    try {
+      await updateSettings({
+        whatsappCommunityName: waGroupNameDraft.trim() || 'Modern Unisex Salon VIP Offers Community',
+        whatsappCommunityUrl: waGroupUrlDraft.trim()
+      });
+      setActionFeedbackToast('Salon WhatsApp Community / Group link saved!');
+      setTimeout(() => setActionFeedbackToast(null), 3500);
+    } finally {
+      setIsSavingWaGroup(false);
     }
   };
 
@@ -1212,15 +1232,15 @@ export const AdminSuite: React.FC = () => {
             </div>
           )}
 
-          {/* Dedicated Sign Out button that returns to Authorization Page */}
+          {/* Dedicated Sign Out button */}
           <button
             id="admin-sidebar-signout-btn"
             onClick={() => logout()}
             className="w-full py-2.5 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer"
-            title="Sign out and return to Authorization Page"
+            title="Sign Out"
           >
             <LogOut className="w-4 h-4" />
-            <span>Sign Out to Authorization Page</span>
+            <span>Sign Out</span>
           </button>
         </div>
       </aside>
@@ -1253,10 +1273,10 @@ export const AdminSuite: React.FC = () => {
             id="admin-mobile-signout-btn"
             onClick={() => logout()}
             className="text-xs text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 font-bold px-3 py-2 rounded-xl bg-rose-50 dark:bg-rose-500/15 border border-rose-200 dark:border-rose-500/30 flex items-center gap-1.5 cursor-pointer active:scale-95"
-            title="Sign out and return to Authorization Page"
+            title="Sign Out"
           >
             <LogOut className="w-3.5 h-3.5" />
-            <span>Exit</span>
+            <span>Sign Out</span>
           </button>
         </div>
       </div>
@@ -1326,9 +1346,10 @@ export const AdminSuite: React.FC = () => {
             <button
               onClick={() => logout()}
               className="w-full min-h-[44px] py-2.5 px-4 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/15 dark:hover:bg-rose-500/25 border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer"
+              title="Sign Out"
             >
               <LogOut className="w-4 h-4" />
-              <span>Sign Out to Authorization Page</span>
+              <span>Sign Out</span>
             </button>
           </div>
         </div>
@@ -1390,7 +1411,7 @@ export const AdminSuite: React.FC = () => {
                 id="admin-topbar-signout-btn"
                 onClick={() => logout()}
                 className="px-3.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/15 dark:hover:bg-rose-500/25 border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
-                title="Sign Out to Authorization Page"
+                title="Sign Out"
                 aria-label="Sign Out"
               >
                 <LogOut className="w-4 h-4" />
@@ -2276,7 +2297,7 @@ export const AdminSuite: React.FC = () => {
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div>
                   <h1 className="font-serif text-2xl font-bold text-zinc-900 dark:text-zinc-100">Promo Offers &amp; Coupons</h1>
-                  <p className="text-xs text-zinc-600 dark:text-zinc-400">Create, edit, toggle, and broadcast coupon codes for client discounts.</p>
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400">Create, edit, toggle, and send offers &amp; coupon codes to your Salon WhatsApp Community / Group at once.</p>
                 </div>
 
                 <button
@@ -2286,6 +2307,62 @@ export const AdminSuite: React.FC = () => {
                   <Plus className="w-4 h-4" />
                   <span>Create Coupon</span>
                 </button>
+              </div>
+
+              {/* Salon WhatsApp Community / Group Quick Setup Card */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-950/60 via-zinc-900 to-teal-950/50 border border-emerald-500/40 space-y-3 shadow-md">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center shrink-0">
+                      <Users className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-zinc-100">
+                        Salon WhatsApp Community / Group (Send Offers to Everyone Together)
+                      </h3>
+                      <p className="text-[11px] text-zinc-400">
+                        Save your WhatsApp Group or Community invite link so clients can join directly and you can post offers &amp; coupons to all members at once.
+                      </p>
+                    </div>
+                  </div>
+                  {waGroupUrlDraft.trim() && (
+                    <a
+                      href={waGroupUrlDraft.trim()}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 font-bold text-xs flex items-center gap-1.5 shrink-0 self-start sm:self-auto"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>Open Group</span>
+                    </a>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 text-xs">
+                  <input
+                    type="text"
+                    value={waGroupNameDraft}
+                    onChange={(e) => setWaGroupNameDraft(e.target.value)}
+                    placeholder="Group / Community Name (e.g. Modern Salon VIP Offers)"
+                    className="sm:col-span-4 px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 focus:outline-none focus:border-emerald-500"
+                  />
+                  <input
+                    type="url"
+                    value={waGroupUrlDraft}
+                    onChange={(e) => setWaGroupUrlDraft(e.target.value)}
+                    placeholder="Paste WhatsApp Invite Link: https://chat.whatsapp.com/..."
+                    className="sm:col-span-6 px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-emerald-300 font-mono focus:outline-none focus:border-emerald-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSaveWhatsAppCommunity}
+                    disabled={isSavingWaGroup}
+                    className="sm:col-span-2 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs cursor-pointer disabled:opacity-50 transition flex items-center justify-center gap-1.5"
+                  >
+                    <Link2 className="w-3.5 h-3.5" />
+                    <span>{isSavingWaGroup ? 'Saving...' : 'Save Group'}</span>
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -2348,7 +2425,7 @@ export const AdminSuite: React.FC = () => {
                         className="w-full py-2 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 hover:text-emerald-300 font-semibold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-sm disabled:opacity-50"
                       >
                         <Send className="w-3.5 h-3.5" />
-                        <span>Broadcast to All via WhatsApp</span>
+                        <span>Send to WhatsApp Group / Community</span>
                       </button>
                     </div>
                   </div>
@@ -3157,7 +3234,7 @@ export const AdminSuite: React.FC = () => {
                       <span>1. Official Salon Bank &amp; UPI Scanners (Confidential)</span>
                     </h3>
                     <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
-                      Edit UPI ID, Payee Name, or upload a new QR photo, then click Save so clients see changes immediately.
+                      Edit UPI ID, Payee Name, or upload a new QR photo, then click Save. Tip: Uploading a <strong>PhonePe Business / GPay for Business QR</strong> enables 1-tap pre-filled checkout, while personal <code>@ybl</code>/<code>@axl</code> QRs automatically use Safe Pay (Mobile / UPI ID / QR Gallery) to avoid bank security declines.
                     </p>
                   </div>
 
@@ -3689,6 +3766,17 @@ export const AdminSuite: React.FC = () => {
                       className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 text-zinc-900 dark:text-white font-mono focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="font-semibold text-zinc-700 dark:text-zinc-300 block mb-1">WhatsApp Offers Community / Group Invite Link</label>
+                  <input
+                    type="url"
+                    placeholder="https://chat.whatsapp.com/..."
+                    value={settings.whatsappCommunityUrl || ''}
+                    onChange={(e) => updateSettings({ whatsappCommunityUrl: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-950 border border-purple-200 dark:border-zinc-800 text-emerald-700 dark:text-emerald-400 font-mono focus:outline-none focus:border-emerald-500"
+                  />
                 </div>
 
                 <div className="p-4 rounded-xl bg-purple-50/60 dark:bg-zinc-950 border border-purple-200 dark:border-amber-500/30 space-y-2">
@@ -4707,14 +4795,14 @@ export const AdminSuite: React.FC = () => {
                 </div>
               </div>
 
-              {/* WhatsApp Broadcast Notice */}
+              {/* WhatsApp Community / Group Notice */}
               <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[11px] space-y-1">
                 <div className="flex items-center gap-1.5 font-bold text-emerald-400">
                   <Send className="w-3.5 h-3.5" />
-                  <span>Dynamic WhatsApp Broadcast</span>
+                  <span>Send to Salon WhatsApp Group / Community</span>
                 </div>
                 <p className="text-zinc-400 leading-relaxed text-[11px]">
-                  When published, personalized WhatsApp promo messages with 1-click booking links are dynamically prepared for all salon clients!
+                  When published, your offer &amp; coupon message is ready to post directly into your WhatsApp Community / Group so all members receive it together!
                 </p>
               </div>
 
@@ -4726,12 +4814,12 @@ export const AdminSuite: React.FC = () => {
                 {isBroadcastingOffer ? (
                   <>
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Publishing & Preparing Broadcast...</span>
+                    <span>Publishing & Preparing Group Message...</span>
                   </>
                 ) : (
                   <>
                     <Send className="w-3.5 h-3.5" />
-                    <span>Publish & Broadcast via WhatsApp</span>
+                    <span>Publish &amp; Send to WhatsApp Group</span>
                   </>
                 )}
               </button>

@@ -69,6 +69,16 @@ export const Footer: React.FC = () => {
                 <Instagram className="w-3.5 h-3.5 text-pink-500 dark:text-pink-400" />
                 <span>Instagram</span>
               </a>
+              {settings.whatsappCommunityUrl && (
+                <a
+                  href={settings.whatsappCommunityUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-300 dark:border-emerald-500/30 hover:border-emerald-500 text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center gap-1.5 transition"
+                >
+                  <span>💬 WhatsApp Offers Group</span>
+                </a>
+              )}
             </div>
           </div>
 

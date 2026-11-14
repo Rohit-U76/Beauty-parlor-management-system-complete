@@ -133,6 +133,8 @@
         "razorpayKeyId": { "type": "string", "maxLength": 100 },
         "bookingAutoConfirm": { "type": "boolean" },
         "instagramUrl": { "type": "string", "maxLength": 250 },
+        "whatsappCommunityUrl": { "type": "string", "maxLength": 300 },
+        "whatsappCommunityName": { "type": "string", "maxLength": 120 },
         "mapsUrl": { "type": "string", "maxLength": 250 },
         "gstNumber": { "type": "string", "maxLength": 100 },
         "staffType": { "type": "string", "maxLength": 100 },
