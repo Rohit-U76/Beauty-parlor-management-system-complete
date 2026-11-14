@@ -134,7 +134,7 @@ export const Navbar: React.FC = () => {
           {/* Logo (single instance — tagline auto-hides on < sm) */}
           <div 
             onClick={() => handleNav('home')}
-            className="cursor-pointer group select-none shrink min-w-0"
+            className="cursor-pointer group select-none flex-1 min-w-0 overflow-hidden"
           >
             <ModernSalonLogo size="md" showTagline={true} />
           </div>

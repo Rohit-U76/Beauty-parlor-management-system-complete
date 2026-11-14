@@ -295,10 +295,10 @@ export const BookingModal: React.FC = () => {
       <div className="relative w-full max-w-2xl bg-white dark:bg-[#141418] border border-purple-200/80 dark:border-zinc-800 rounded-3xl shadow-2xl overflow-hidden text-zinc-900 dark:text-zinc-100 my-auto max-h-[92vh] flex flex-col">
         
         {/* Modal Top Header */}
-        <div className="bg-purple-50/60 dark:bg-[#0e0e11] border-b border-purple-200/80 dark:border-zinc-800 px-4 sm:px-6 py-3.5 sm:py-4 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <ModernSalonLogo size="sm" showTagline={false} />
-            <div className="truncate border-l border-purple-200 dark:border-zinc-800 pl-3">
+        <div className="bg-purple-50/60 dark:bg-[#0e0e11] border-b border-purple-200/80 dark:border-zinc-800 px-4 sm:px-6 py-3 sm:py-4 flex items-start sm:items-center justify-between gap-2 shrink-0">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1.5 sm:gap-3 min-w-0 flex-1 overflow-hidden">
+            <ModernSalonLogo size="sm" showTagline={false} className="shrink-0 max-w-full" />
+            <div className="min-w-0 w-full sm:w-auto sm:flex-1 sm:border-l sm:border-purple-200 dark:sm:border-zinc-800 sm:pl-3 overflow-hidden">
               <h3 className="font-bold text-sm sm:text-base text-zinc-900 dark:text-zinc-100 truncate">
                 {step === 4 ? 'Appointment Confirmation Pass' : 'Schedule Appointment'}
               </h3>
@@ -313,7 +313,8 @@ export const BookingModal: React.FC = () => {
 
           <button
             onClick={closeBookingModal}
-            className="p-1.5 sm:p-2 rounded-xl text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-purple-100 dark:hover:bg-zinc-800 transition shrink-0 ml-2 cursor-pointer"
+            className="p-1.5 sm:p-2 rounded-xl text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-purple-100 dark:hover:bg-zinc-800 transition shrink-0 cursor-pointer"
+            aria-label="Close booking modal"
           >
             <X className="w-5 h-5" />
           </button>

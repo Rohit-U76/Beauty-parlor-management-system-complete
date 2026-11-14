@@ -121,9 +121,9 @@ export const ModernSalonLogo: React.FC<ModernSalonLogoProps> = ({
 
       {/* Brand Typography & Tagline */}
       <div className="flex flex-col text-left leading-tight min-w-0">
-        <div className={`flex items-center gap-1 sm:gap-1.5 ${allowWrap ? 'flex-wrap' : 'whitespace-nowrap'}`}>
+        <div className={`flex items-center gap-1 sm:gap-1.5 min-w-0 ${allowWrap ? 'flex-wrap' : 'whitespace-nowrap'}`}>
           <span className={`font-serif uppercase font-extrabold text-amber-600 dark:text-amber-400 drop-shadow-sm ${
-            allowWrap ? 'whitespace-normal leading-snug tracking-wide text-xs sm:text-sm' : `whitespace-nowrap ${titleSizes[size]}`
+            allowWrap ? 'whitespace-normal leading-snug tracking-wide text-xs sm:text-sm' : `truncate ${titleSizes[size]}`
           }`}>
             MODERN UNISEX SALON
           </span>
