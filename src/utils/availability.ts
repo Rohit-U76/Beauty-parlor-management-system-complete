@@ -288,7 +288,9 @@ export function getSlotAvailability(
     const isSameDate = aptDate === date;
     const aptCanonical = mapToCanonicalSlot(apt.timeSlot);
     const isSameSlot = aptCanonical === canonicalSlot || normalizeTimeSlot(apt.timeSlot) === normSlot;
-    const isActive = apt.bookingStatus === 'PENDING' || apt.bookingStatus === 'CONFIRMED' || apt.status === 'CONFIRMED';
+    const isActive =
+      apt.paymentStatus !== 'FAILED' &&
+      (apt.bookingStatus === 'PENDING' || apt.bookingStatus === 'CONFIRMED' || apt.status === 'CONFIRMED');
     return isSameDate && isSameSlot && isActive;
   });
 
@@ -585,6 +587,7 @@ export function getStaffDynamicStatus(
   const staffDayActive = appointments.filter(apt => {
     const aptDate = (apt.date || '').split('T')[0].trim();
     if (aptDate !== cleanDate) return false;
+    if (apt.paymentStatus === 'FAILED') return false;
     const status = (apt.bookingStatus || apt.status || 'CONFIRMED').toUpperCase();
     if (status !== 'PENDING' && status !== 'CONFIRMED') return false;
     return doesAppointmentMatchStaff(apt, member);
@@ -600,6 +603,7 @@ export function getStaffDynamicStatus(
     const status = (apt.bookingStatus || apt.status || 'CONFIRMED').toUpperCase();
     return (
       aptDate === cleanDate &&
+      apt.paymentStatus !== 'FAILED' &&
       (status === 'PENDING' || status === 'CONFIRMED') &&
       mapToCanonicalSlot(apt.timeSlot) === canonicalSlot
     );

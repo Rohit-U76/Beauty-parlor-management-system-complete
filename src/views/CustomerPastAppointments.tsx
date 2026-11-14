@@ -172,15 +172,24 @@ export const CustomerPastAppointments: React.FC = () => {
   };
 
   const getStatusBadge = (status?: string, aptDate?: string, aptTimeSlot?: string) => {
-    const isUpcoming = aptDate
+    const isUpcoming = aptDate && (status === 'CONFIRMED' || status === 'PENDING')
       ? getAppointmentReminderInfo({ date: aptDate, timeSlot: aptTimeSlot, bookingStatus: status } as any).isUpcoming
       : false;
-    
-    if (isUpcoming) {
+
+    if (status === 'PAYMENT_PENDING') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs font-bold">
+          <AlertCircle className="w-3.5 h-3.5" />
+          <span>Payment Pending</span>
+        </span>
+      );
+    }
+
+    if (isUpcoming && status === 'CONFIRMED') {
       return (
         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-purple-500/15 border border-purple-500/30 text-purple-600 dark:text-purple-400 text-xs font-bold animate-pulse">
           <CalendarCheck className="w-3.5 h-3.5" />
-          <span>Upcoming Slot</span>
+          <span>Upcoming Confirmed</span>
         </span>
       );
     }
@@ -211,7 +220,7 @@ export const CustomerPastAppointments: React.FC = () => {
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-bold">
             <Clock className="w-3.5 h-3.5" />
-            <span>Pending</span>
+            <span>Verification Pending</span>
           </span>
         );
     }
@@ -363,12 +372,34 @@ export const CustomerPastAppointments: React.FC = () => {
                   </div>
 
                   <div className="text-right">
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 text-xs font-bold">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Slot Reserved</span>
-                    </span>
-                    <div className="text-[11px] font-mono font-semibold text-emerald-700 dark:text-emerald-400 mt-1">
-                      ₹{apt.advancePaid} advance paid
+                    {apt.isBankVerified || apt.paymentStatus === 'SUCCESS' || apt.paymentStatus === 'PAID' ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 text-xs font-bold">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Slot Reserved</span>
+                      </span>
+                    ) : apt.paymentStatus === 'FAILED' ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-50 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-400 text-xs font-bold">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        <span>Payment Failed</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs font-bold">
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>Verification Pending</span>
+                      </span>
+                    )}
+                    <div className={`text-[11px] font-mono font-semibold mt-1 ${
+                      apt.isBankVerified || apt.paymentStatus === 'SUCCESS' || apt.paymentStatus === 'PAID'
+                        ? 'text-emerald-700 dark:text-emerald-400'
+                        : apt.paymentStatus === 'FAILED'
+                        ? 'text-rose-700 dark:text-rose-400'
+                        : 'text-amber-700 dark:text-amber-400'
+                    }`}>
+                      {apt.isBankVerified || apt.paymentStatus === 'SUCCESS' || apt.paymentStatus === 'PAID'
+                        ? `₹${apt.advancePaid} advance verified`
+                        : apt.paymentStatus === 'FAILED'
+                        ? `₹${apt.advancePaid} unverified`
+                        : `₹${apt.advancePaid} awaiting verification`}
                     </div>
                   </div>
                 </div>
@@ -399,27 +430,37 @@ export const CustomerPastAppointments: React.FC = () => {
                   </span>
                 </div>
 
-                {/* Real-time UTR & Bank Deposit Verification Status */}
-                {(apt.upiTransactionId || apt.razorpayPaymentId) && (
+                {/* Real-time UTR & Payment Verification Status */}
+                {(apt.upiTransactionId || apt.razorpayPaymentId || apt.paymentStatus === 'FAILED') && (
                   <div className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 ${
-                    apt.isBankVerified
+                    apt.paymentStatus === 'FAILED'
+                      ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-300'
+                      : apt.isBankVerified || apt.paymentStatus === 'SUCCESS' || apt.paymentStatus === 'PAID'
                       ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
                       : 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-300'
                   }`}>
                     <div className="flex items-center gap-1.5 min-w-0">
-                      {apt.isBankVerified ? (
+                      {apt.paymentStatus === 'FAILED' ? (
+                        <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                      ) : apt.isBankVerified || apt.paymentStatus === 'SUCCESS' || apt.paymentStatus === 'PAID' ? (
                         <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
                       ) : (
-                        <Clock className="w-4 h-4 text-amber-500 shrink-0 animate-pulse" />
+                        <Clock className="w-4 h-4 text-amber-500 shrink-0" />
                       )}
                       <span className="truncate">
-                        {apt.isBankVerified
-                          ? `Bank Deposit Confirmed in ${settings?.bankName || 'HDFC Bank'} A/c ${(settings?.bankAccountNumber || '50200072074441').slice(-4)} (UTR: ${apt.upiTransactionId || apt.razorpayPaymentId})`
-                          : `UTR #${apt.upiTransactionId || 'Processing'} — Bank credit confirmation in progress`}
+                        {apt.paymentStatus === 'FAILED'
+                          ? `UTR #${apt.upiTransactionId || 'N/A'} unverified — Contact salon or rebook`
+                          : apt.isBankVerified || apt.paymentStatus === 'SUCCESS' || apt.paymentStatus === 'PAID'
+                          ? `Payment Verified (UTR: ${apt.upiTransactionId || apt.razorpayPaymentId})`
+                          : `UTR #${apt.upiTransactionId || 'Submitted'} — Awaiting Admin Verification`}
                       </span>
                     </div>
                     <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded-full bg-white dark:bg-zinc-900 shadow-sm shrink-0">
-                      {apt.isBankVerified ? '✅ CREDITED' : '⏳ VERIFYING'}
+                      {apt.paymentStatus === 'FAILED'
+                        ? 'FAILED'
+                        : apt.isBankVerified || apt.paymentStatus === 'SUCCESS' || apt.paymentStatus === 'PAID'
+                        ? 'SUCCESS'
+                        : 'PENDING'}
                     </span>
                   </div>
                 )}
@@ -693,9 +734,20 @@ export const CustomerPastAppointments: React.FC = () => {
                           <span>Total Amount:</span>
                           <span className="font-mono font-bold text-zinc-900 dark:text-zinc-100">₹{apt.totalAmount.toLocaleString()}</span>
                         </div>
-                        <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                        <div className={`flex justify-between ${
+                          apt.paymentStatus === 'FAILED'
+                            ? 'text-rose-600 dark:text-rose-400'
+                            : apt.isBankVerified || apt.paymentStatus === 'SUCCESS' || apt.paymentStatus === 'PAID'
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : 'text-amber-600 dark:text-amber-400'
+                        }`}>
                           <span className="flex items-center gap-1">
-                            <ShieldCheck className="w-3 h-3" /> 10% Paid Online:
+                            <ShieldCheck className="w-3 h-3" />{' '}
+                            {apt.paymentStatus === 'FAILED'
+                              ? '10% Unverified:'
+                              : apt.isBankVerified || apt.paymentStatus === 'SUCCESS' || apt.paymentStatus === 'PAID'
+                              ? '10% Verified Online:'
+                              : '10% Advance Pending:'}
                           </span>
                           <span className="font-mono font-bold">₹{apt.advancePaid.toLocaleString()}</span>
                         </div>
@@ -712,27 +764,37 @@ export const CustomerPastAppointments: React.FC = () => {
                       </div>
                     )}
 
-                    {/* Real-time UTR & Bank Deposit Verification Status */}
-                    {(apt.upiTransactionId || apt.razorpayPaymentId) && (
+                    {/* Real-time UTR & Payment Verification Status */}
+                    {(apt.upiTransactionId || apt.razorpayPaymentId || apt.paymentStatus === 'FAILED') && (
                       <div className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 ${
-                        apt.isBankVerified
+                        apt.paymentStatus === 'FAILED'
+                          ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-300'
+                          : apt.isBankVerified || apt.paymentStatus === 'SUCCESS' || apt.paymentStatus === 'PAID'
                           ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
                           : 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-300'
                       }`}>
                         <div className="flex items-center gap-1.5 min-w-0">
-                          {apt.isBankVerified ? (
+                          {apt.paymentStatus === 'FAILED' ? (
+                            <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                          ) : apt.isBankVerified || apt.paymentStatus === 'SUCCESS' || apt.paymentStatus === 'PAID' ? (
                             <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
                           ) : (
-                            <Clock className="w-4 h-4 text-amber-500 shrink-0 animate-pulse" />
+                            <Clock className="w-4 h-4 text-amber-500 shrink-0" />
                           )}
                           <span className="truncate">
-                            {apt.isBankVerified
-                              ? `Bank Deposit Confirmed in ${settings?.bankName || 'HDFC Bank'} A/c ${(settings?.bankAccountNumber || '50200072074441').slice(-4)} (UTR: ${apt.upiTransactionId || apt.razorpayPaymentId})`
-                              : `UTR #${apt.upiTransactionId || 'Processing'} — Bank credit verification pending`}
+                            {apt.paymentStatus === 'FAILED'
+                              ? `UTR #${apt.upiTransactionId || 'N/A'} unverified — Booking marked PAYMENT_PENDING`
+                              : apt.isBankVerified || apt.paymentStatus === 'SUCCESS' || apt.paymentStatus === 'PAID'
+                              ? `Payment Verified (UTR: ${apt.upiTransactionId || apt.razorpayPaymentId})`
+                              : `UTR #${apt.upiTransactionId || 'Submitted'} — Awaiting Admin Verification`}
                           </span>
                         </div>
                         <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded-full bg-white dark:bg-zinc-900 shadow-sm shrink-0">
-                          {apt.isBankVerified ? '✅ CREDITED' : '⏳ VERIFYING'}
+                          {apt.paymentStatus === 'FAILED'
+                            ? 'FAILED'
+                            : apt.isBankVerified || apt.paymentStatus === 'SUCCESS' || apt.paymentStatus === 'PAID'
+                            ? 'SUCCESS'
+                            : 'PENDING'}
                         </span>
                       </div>
                     )}

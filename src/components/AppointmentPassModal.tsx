@@ -40,6 +40,8 @@ export const AppointmentPassModal: React.FC<AppointmentPassModalProps> = ({
 
   const reminderInfo = getAppointmentReminderInfo(appointment);
   const googleCalUrl = generateGoogleCalendarUrl(appointment, settings.address);
+  const isVerified = Boolean(appointment.isBankVerified || appointment.paymentStatus === 'SUCCESS' || appointment.paymentStatus === 'PAID');
+  const isFailed = appointment.paymentStatus === 'FAILED';
 
   const handleCopyRef = () => {
     navigator.clipboard.writeText(appointment.bookingRef);
@@ -48,7 +50,8 @@ export const AppointmentPassModal: React.FC<AppointmentPassModalProps> = ({
   };
 
   const handleShare = () => {
-    const text = `Modern Unisex Salon Mohol Appointment Confirmed!\nBooking Ref: ${appointment.bookingRef}\nService: ${appointment.serviceName}\nDate & Time: ${appointment.date} at ${appointment.timeSlot}\nStylist: ${appointment.stylistName}\nVenue: ${settings.address || 'B.N. Gund Complex, Near ICICI Bank, Mohol - 413213'}`;
+    const statusText = isFailed ? 'Payment Pending' : isVerified ? 'Confirmed' : 'Verification Pending';
+    const text = `Modern Unisex Salon Mohol Appointment (${statusText})!\nBooking Ref: ${appointment.bookingRef}\nService: ${appointment.serviceName}\nDate & Time: ${appointment.date} at ${appointment.timeSlot}\nStylist: ${appointment.stylistName}\nVenue: ${settings.address || 'B.N. Gund Complex, Near ICICI Bank, Mohol - 413213'}`;
     if (navigator.share) {
       navigator.share({
         title: 'Modern Unisex Salon Booking Pass',
@@ -56,7 +59,8 @@ export const AppointmentPassModal: React.FC<AppointmentPassModalProps> = ({
       }).catch(() => {});
     } else {
       navigator.clipboard.writeText(text);
-      alert('Booking pass details copied to clipboard!');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
     }
   };
 
@@ -64,7 +68,8 @@ export const AppointmentPassModal: React.FC<AppointmentPassModalProps> = ({
   const handleSendWhatsApp = () => {
     const cleanPhone = (appointment.clientPhone || '').replace(/[^0-9]/g, '');
     const phone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
-    const msg = `🌟 *MODERN UNISEX SALON APPOINTMENT CONFIRMED* 🌟\n\n📌 *Booking Ref:* ${appointment.bookingRef}\n👤 *Client:* ${appointment.clientName}\n💇 *Service:* ${appointment.serviceName}\n📅 *Date:* ${appointment.date}\n⏰ *Time Slot:* ${appointment.timeSlot}\n✂️ *Stylist:* ${appointment.stylistName}\n\n💳 *10% Advance Paid:* ₹${appointment.advancePaid} (Confirmed)\n💰 *Remaining at Salon:* ₹${appointment.balanceDue}\n📍 *Address:* ${settings.address || 'B.N. Gund Complex, Near ICICI Bank, Mohol'}\n\nPlease present this booking pass reference upon arrival. Thank you!`;
+    const payLabel = isFailed ? 'Unverified / Failed' : isVerified ? 'Verified' : 'Verification Pending';
+    const msg = `🌟 *MODERN UNISEX SALON APPOINTMENT* 🌟\n\n📌 *Booking Ref:* ${appointment.bookingRef}\n👤 *Client:* ${appointment.clientName}\n💇 *Service:* ${appointment.serviceName}\n📅 *Date:* ${appointment.date}\n⏰ *Time Slot:* ${appointment.timeSlot}\n✂️ *Stylist:* ${appointment.stylistName}\n\n💳 *10% Advance Deposit:* ₹${appointment.advancePaid} (${payLabel})\n💰 *Remaining at Salon:* ₹${appointment.balanceDue}\n📍 *Address:* ${settings.address || 'B.N. Gund Complex, Near ICICI Bank, Mohol'}\n\nPlease present this booking pass reference upon arrival. Thank you!`;
     const waUrl = `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(msg)}`;
     window.open(waUrl, '_blank');
   };
@@ -84,7 +89,7 @@ export const AppointmentPassModal: React.FC<AppointmentPassModalProps> = ({
               Appointment Boarding Pass
             </h3>
             <p className="text-xs text-zinc-600 dark:text-zinc-400">
-              Modern Unisex Salon • 10% Advance Deposit Verified
+              Modern Unisex Salon • {isFailed ? 'Payment Pending' : isVerified ? '10% Advance Deposit Verified' : 'Payment Verification Pending'}
             </p>
           </div>
 
@@ -123,18 +128,32 @@ export const AppointmentPassModal: React.FC<AppointmentPassModalProps> = ({
             </div>
           </div>
 
-          {/* Verified Reservation Pass Section */}
+          {/* Reservation Pass Section */}
           <div className="flex flex-col sm:flex-row items-center gap-4 bg-gradient-to-br from-purple-50 via-white to-emerald-50/70 dark:from-purple-950/40 dark:via-[#13101d] dark:to-[#0e0e11] p-4 rounded-2xl border border-purple-200 dark:border-purple-500/30 shadow-sm">
             <div className="p-3 rounded-2xl bg-purple-100 dark:bg-purple-600/20 border border-purple-300 dark:border-purple-500/30 shrink-0 flex flex-col items-center justify-center text-center w-24 h-24">
-              <ShieldCheck className="w-8 h-8 text-emerald-600 dark:text-emerald-400 mb-1" />
+              <ShieldCheck className={`w-8 h-8 mb-1 ${
+                isFailed ? 'text-rose-500' : isVerified ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-500'
+              }`} />
               <span className="text-[10px] font-mono font-bold text-purple-950 dark:text-white">10% DEPOSIT</span>
-              <span className="text-[9px] font-extrabold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">CONFIRMED</span>
+              <span className={`text-[9px] font-extrabold uppercase tracking-wider ${
+                isFailed ? 'text-rose-600 dark:text-rose-400' : isVerified ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'
+              }`}>
+                {isFailed ? 'FAILED' : isVerified ? 'CONFIRMED' : 'PENDING'}
+              </span>
             </div>
 
             <div className="space-y-2 text-center sm:text-left flex-1">
               <div className="flex items-center justify-center sm:justify-start gap-1.5 text-xs font-bold text-purple-800 dark:text-purple-300">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                <span>Verified Salon Booking Pass</span>
+                <CheckCircle2 className={`w-4 h-4 ${
+                  isFailed ? 'text-rose-500' : isVerified ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-500'
+                }`} />
+                <span>
+                  {isFailed
+                    ? 'Payment Pending / Unverified Pass'
+                    : isVerified
+                    ? 'Verified Salon Booking Pass'
+                    : 'Booking Pass (Awaiting Payment Verification)'}
+                </span>
               </div>
               <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed">
                 Provide your booking reference <strong className="text-zinc-900 dark:text-white">#{appointment.bookingRef}</strong> or phone number at salon reception for express priority booth entry.
@@ -163,9 +182,15 @@ export const AppointmentPassModal: React.FC<AppointmentPassModalProps> = ({
                 </h4>
                 <div className="text-xs text-zinc-600 dark:text-zinc-400">{appointment.category}</div>
               </div>
-              <span className="px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-500/10 border border-emerald-300 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-[11px] font-bold flex items-center gap-1 shrink-0">
+              <span className={`px-2.5 py-1 rounded-full border text-[11px] font-bold flex items-center gap-1 shrink-0 ${
+                isFailed
+                  ? 'bg-rose-100 dark:bg-rose-500/10 border-rose-300 dark:border-rose-500/20 text-rose-700 dark:text-rose-400'
+                  : isVerified
+                  ? 'bg-emerald-100 dark:bg-emerald-500/10 border-emerald-300 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+                  : 'bg-amber-100 dark:bg-amber-500/10 border-amber-300 dark:border-amber-500/20 text-amber-700 dark:text-amber-400'
+              }`}>
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Confirmed</span>
+                <span>{isFailed ? 'Payment Pending' : isVerified ? 'Confirmed' : 'Pending Verification'}</span>
               </span>
             </div>
 
@@ -206,9 +231,21 @@ export const AppointmentPassModal: React.FC<AppointmentPassModalProps> = ({
 
             {/* Payment & Deposit Breakdown */}
             <div className="pt-3 border-t border-purple-200/80 dark:border-zinc-800 grid grid-cols-2 gap-3 text-xs">
-              <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-xl p-2.5">
-                <div className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase">10% Advance Deposit</div>
-                <div className="font-mono font-bold text-sm text-emerald-700 dark:text-emerald-400">₹{appointment.advancePaid} (Paid)</div>
+              <div className={`border rounded-xl p-2.5 ${
+                isFailed
+                  ? 'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/20'
+                  : isVerified
+                  ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20'
+                  : 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20'
+              }`}>
+                <div className={`text-[10px] font-bold uppercase ${
+                  isFailed ? 'text-rose-700 dark:text-rose-400' : isVerified ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'
+                }`}>10% Advance Deposit</div>
+                <div className={`font-mono font-bold text-sm ${
+                  isFailed ? 'text-rose-700 dark:text-rose-400' : isVerified ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'
+                }`}>
+                  ₹{appointment.advancePaid} ({isFailed ? 'Unverified' : isVerified ? 'Verified' : 'Pending Verification'})
+                </div>
               </div>
 
               <div className="bg-white dark:bg-zinc-800/80 border border-purple-200 dark:border-zinc-700/60 rounded-xl p-2.5">

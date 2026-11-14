@@ -26,6 +26,7 @@ import {
   UserCheck,
   TrendingUp,
   X,
+  XCircle,
   RefreshCw,
   Sun,
   Moon,
@@ -880,27 +881,43 @@ export const AdminSuite: React.FC = () => {
     }
   };
 
+  const [pendingRejectAppId, setPendingRejectAppId] = useState<string | null>(null);
+
   const handleConfirmBankCredit = (app: Appointment) => {
+    const advPct = Number(settings.advancePercentage) || 10;
+    const total = Number(app.totalAmount) || 0;
+    const adv = Number(app.advancePaid) || (total > 0 ? Math.max(1, Math.round((total * advPct) / 100)) : 0);
+    const bal = Math.max(0, total - adv);
+
+    fetch(`/api/appointments/${app.id}/verify-manually`, { method: 'POST' }).catch(() => {});
     updateAppointmentStatus(app.id, 'CONFIRMED', {
       isBankVerified: true,
       bankVerifiedSource: 'ADMIN_MANUAL',
+      bankVerifiedAt: new Date().toISOString(),
       verifiedBankName: `${settings.bankName || 'HDFC Bank'} (A/c ${(settings.bankAccountNumber || '50200072074441').slice(-4)})`,
-      paymentStatus: 'PAID'
+      paymentStatus: 'SUCCESS',
+      advancePaid: adv,
+      balanceDue: bal
     });
-    setActionFeedbackToast(`✅ Confirmed ₹${app.advancePaid} deposit credit for ${app.clientName}! (UTR: ${app.upiTransactionId || 'Manual Verified'})`);
+    setPendingRejectAppId(null);
+    setActionFeedbackToast(`Verified ₹${adv} payment for ${app.clientName} (${app.bookingRef}) — Status: SUCCESS / CONFIRMED.`);
     setTimeout(() => setActionFeedbackToast(null), 4000);
   };
 
   const handleRejectUtrDeposit = (app: Appointment) => {
-    if (!window.confirm(`Are you sure you want to mark UTR "${app.upiTransactionId}" as unverified/fake for ${app.clientName}? This will cancel the booking.`)) {
-      return;
-    }
-    updateAppointmentStatus(app.id, 'CANCELLED', {
+    fetch(`/api/appointments/${app.id}/reject-payment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: 'Unverified / Invalid UTR number' })
+    }).catch(() => {});
+
+    updateAppointmentStatus(app.id, 'PAYMENT_PENDING', {
       isBankVerified: false,
       paymentStatus: 'FAILED',
-      cancelReason: 'Unverified / Fake UTR number'
+      cancelReason: 'Unverified / Invalid UTR number'
     });
-    setActionFeedbackToast(`Booking #${app.bookingRef} cancelled due to unverified UTR.`);
+    setPendingRejectAppId(null);
+    setActionFeedbackToast(`Payment marked FAILED & booking #${app.bookingRef} moved to PAYMENT_PENDING.`);
     setTimeout(() => setActionFeedbackToast(null), 3500);
   };
 
@@ -917,14 +934,28 @@ export const AdminSuite: React.FC = () => {
     const val = (a.bookingStatus || a.status || 'CONFIRMED').toUpperCase();
     if (val === 'COMPLETED' || val === 'DONE') return 'COMPLETED';
     if (val === 'CANCELLED' || val === 'CANCELED') return 'CANCELLED';
+    if (val === 'PAYMENT_PENDING') return 'PAYMENT_PENDING';
     if (val === 'PENDING') return 'PENDING';
     return 'CONFIRMED';
   };
 
+  const getPaymentStatusLabel = (a: Appointment): 'SUCCESS' | 'FAILED' | 'PAYMENT_VERIFICATION_PENDING' => {
+    if (a.paymentStatus === 'FAILED') return 'FAILED';
+    if (a.isBankVerified || a.paymentStatus === 'SUCCESS' || a.paymentStatus === 'PAID') return 'SUCCESS';
+    return 'PAYMENT_VERIFICATION_PENDING';
+  };
+
   // Metrics
-  const totalRevenue = appointments.reduce((acc, a) => acc + (getAppStatus(a) !== 'CANCELLED' ? (a.totalAmount || 0) : 0), 0);
-  const totalAdvanceCollected = appointments.reduce((acc, a) => acc + (getAppStatus(a) !== 'CANCELLED' ? (a.advancePaid || 0) : 0), 0);
+  const totalRevenue = appointments.reduce((acc, a) => {
+    const st = getAppStatus(a);
+    return acc + (st !== 'CANCELLED' && st !== 'PAYMENT_PENDING' && a.paymentStatus !== 'FAILED' ? (a.totalAmount || 0) : 0);
+  }, 0);
+  const totalAdvanceCollected = appointments.reduce((acc, a) => {
+    const st = getAppStatus(a);
+    return acc + (st !== 'CANCELLED' && st !== 'PAYMENT_PENDING' && a.paymentStatus !== 'FAILED' ? (a.advancePaid || 0) : 0);
+  }, 0);
   const confirmedCount = appointments.filter(a => getAppStatus(a) === 'CONFIRMED').length;
+  const pendingVerificationCount = appointments.filter(a => getPaymentStatusLabel(a) === 'PAYMENT_VERIFICATION_PENDING' && getAppStatus(a) !== 'CANCELLED').length;
   const upcomingAppointments = appointments
     .filter(a => getAppStatus(a) === 'CONFIRMED' || getAppStatus(a) === 'PENDING')
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -1119,11 +1150,14 @@ export const AdminSuite: React.FC = () => {
       clientPhone.includes(query);
 
     const aStatus = getAppStatus(a);
+    const payStatus = getPaymentStatusLabel(a);
     let matchStatus = true;
     if (appointmentFilter === 'all') {
       matchStatus = true;
     } else if (appointmentFilter === 'upcoming') {
       matchStatus = (aStatus === 'CONFIRMED' || aStatus === 'PENDING');
+    } else if (appointmentFilter === 'pending') {
+      matchStatus = payStatus === 'PAYMENT_VERIFICATION_PENDING' || payStatus === 'FAILED' || aStatus === 'PENDING' || aStatus === 'PAYMENT_PENDING';
     } else {
       matchStatus = aStatus.toLowerCase() === appointmentFilter.toLowerCase();
     }
@@ -1560,7 +1594,7 @@ export const AdminSuite: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  {['all', 'upcoming', 'confirmed', 'completed', 'cancelled'].map(st => (
+                  {['all', 'upcoming', 'pending', 'confirmed', 'completed', 'cancelled'].map(st => (
                     <button
                       key={st}
                       onClick={() => setAppointmentFilter(st)}
@@ -1570,12 +1604,19 @@ export const AdminSuite: React.FC = () => {
                           : 'bg-purple-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-white border border-purple-200 dark:border-transparent'
                       }`}
                     >
-                      <span>{st === 'all' ? 'All' : st === 'upcoming' ? 'Upcoming' : st}</span>
+                      <span>{st === 'all' ? 'All' : st === 'upcoming' ? 'Upcoming' : st === 'pending' ? 'Verify UPI' : st}</span>
                       {st === 'upcoming' && (
                         <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
                           appointmentFilter === 'upcoming' ? 'bg-white/20 text-white dark:bg-zinc-950 dark:text-amber-400' : 'bg-purple-200/80 text-purple-800 dark:bg-amber-500/20 dark:text-amber-400'
                         }`}>
                           {upcomingCount}
+                        </span>
+                      )}
+                      {st === 'pending' && pendingVerificationCount > 0 && (
+                        <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
+                          appointmentFilter === 'pending' ? 'bg-white/20 text-white dark:bg-zinc-950 dark:text-amber-400' : 'bg-amber-200 text-amber-900 dark:bg-amber-500/20 dark:text-amber-400'
+                        }`}>
+                          {pendingVerificationCount}
                         </span>
                       )}
                     </button>
@@ -1634,15 +1675,20 @@ export const AdminSuite: React.FC = () => {
                             </div>
                           )}
                           <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-                            {app.isBankVerified ? (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/40">
+                            {getPaymentStatusLabel(app) === 'SUCCESS' ? (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/40">
                                 <ShieldCheck className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
-                                <span>Bank Credited</span>
+                                <span>SUCCESS</span>
+                              </span>
+                            ) : getPaymentStatusLabel(app) === 'FAILED' ? (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-500/40">
+                                <XCircle className="w-2.5 h-2.5 text-rose-600 dark:text-rose-400" />
+                                <span>FAILED</span>
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30">
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30">
                                 <Clock className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
-                                <span>Pending Bank Credit</span>
+                                <span>PAYMENT_VERIFICATION_PENDING</span>
                               </span>
                             )}
                           </div>
@@ -1670,6 +1716,8 @@ export const AdminSuite: React.FC = () => {
                               ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
                               : getAppStatus(app) === 'COMPLETED'
                               ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400'
+                              : getAppStatus(app) === 'PENDING' || getAppStatus(app) === 'PAYMENT_PENDING'
+                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300'
                               : 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400'
                           }`}>
                             {getAppStatus(app)}
@@ -1677,28 +1725,47 @@ export const AdminSuite: React.FC = () => {
                         </td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                            {/* Bank Credit Verification Quick Actions */}
-                            {!app.isBankVerified && getAppStatus(app) !== 'CANCELLED' && (
+                            {/* Payment Verification Quick Actions */}
+                            {getPaymentStatusLabel(app) !== 'SUCCESS' && getAppStatus(app) !== 'CANCELLED' && (
                               <button
                                 type="button"
                                 onClick={() => handleConfirmBankCredit(app)}
                                 className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer transition shadow-sm"
-                                title={`Confirm that ₹${app.advancePaid} is credited in your ${settings.bankName || 'HDFC Bank'} account`}
+                                title={`Verify ₹${app.advancePaid} payment & confirm booking`}
                               >
                                 <CheckCircle2 className="w-3.5 h-3.5" />
-                                <span>Confirm Credit</span>
+                                <span>Verify Payment</span>
                               </button>
                             )}
 
-                            {!app.isBankVerified && (app.upiTransactionId) && getAppStatus(app) !== 'CANCELLED' && (
-                              <button
-                                type="button"
-                                onClick={() => handleRejectUtrDeposit(app)}
-                                className="px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/60 dark:hover:bg-red-900 border border-red-300 dark:border-red-500/30 text-red-700 dark:text-red-400 text-[10px] font-semibold transition cursor-pointer"
-                                title="Reject fake/invalid UTR and cancel booking"
-                              >
-                                <span>Reject Fake</span>
-                              </button>
+                            {getPaymentStatusLabel(app) !== 'SUCCESS' && getPaymentStatusLabel(app) !== 'FAILED' && getAppStatus(app) !== 'CANCELLED' && (
+                              pendingRejectAppId === app.id ? (
+                                <div className="inline-flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRejectUtrDeposit(app)}
+                                    className="px-2 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-bold transition cursor-pointer"
+                                  >
+                                    Confirm Reject
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setPendingRejectAppId(null)}
+                                    className="px-2 py-1 rounded-lg bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-[10px] font-semibold transition cursor-pointer"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setPendingRejectAppId(app.id)}
+                                  className="px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/60 dark:hover:bg-red-900 border border-red-300 dark:border-red-500/30 text-red-700 dark:text-red-400 text-[10px] font-semibold transition cursor-pointer"
+                                  title="Reject unverified UTR & mark payment FAILED"
+                                >
+                                  <span>Reject Payment</span>
+                                </button>
+                              )
                             )}
                             <button
                               type="button"
@@ -1813,19 +1880,26 @@ export const AdminSuite: React.FC = () => {
                                   ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
                                   : status === 'COMPLETED'
                                   ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400'
+                                  : status === 'PENDING' || status === 'PAYMENT_PENDING'
+                                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300'
                                   : 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400'
                               }`}>
                                 {status}
                               </span>
-                              {app.isBankVerified ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/40">
+                              {getPaymentStatusLabel(app) === 'SUCCESS' ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/40">
                                   <ShieldCheck className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
-                                  <span>Bank Credited</span>
+                                  <span>SUCCESS</span>
+                                </span>
+                              ) : getPaymentStatusLabel(app) === 'FAILED' ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-500/40">
+                                  <XCircle className="w-2.5 h-2.5 text-rose-600 dark:text-rose-400" />
+                                  <span>FAILED</span>
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30">
                                   <Clock className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
-                                  <span>Pending Bank Credit</span>
+                                  <span>PAYMENT_VERIFICATION_PENDING</span>
                                 </span>
                               )}
                             </div>
@@ -1895,28 +1969,47 @@ export const AdminSuite: React.FC = () => {
                           )}
                         </div>
 
-                        {/* Mobile Bank Credit Confirmation Actions */}
-                        {!app.isBankVerified && status !== 'CANCELLED' && (
-                          <div className="flex items-center gap-2">
+                        {/* Mobile Payment Verification Actions */}
+                        {getPaymentStatusLabel(app) !== 'SUCCESS' && status !== 'CANCELLED' && (
+                          <div className="flex items-center gap-2 flex-wrap">
                             <button
                               type="button"
                               onClick={() => handleConfirmBankCredit(app)}
                               className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 min-h-[42px] cursor-pointer transition shadow-sm"
-                              title={`Confirm that ₹${app.advancePaid} is credited in your ${settings.bankName || 'HDFC Bank'} account`}
+                              title={`Verify ₹${app.advancePaid} payment & confirm booking`}
                             >
                               <CheckCircle2 className="w-4 h-4" />
-                              <span>Confirm Credit (₹{app.advancePaid})</span>
+                              <span>Verify Payment (₹{app.advancePaid})</span>
                             </button>
 
-                            {app.upiTransactionId && (
-                              <button
-                                type="button"
-                                onClick={() => handleRejectUtrDeposit(app)}
-                                className="py-2.5 px-3 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/60 dark:hover:bg-red-900 border border-red-300 dark:border-red-500/30 text-red-700 dark:text-red-400 text-xs font-bold min-h-[42px] cursor-pointer transition"
-                                title="Reject fake/invalid UTR and cancel booking"
-                              >
-                                Reject Fake
-                              </button>
+                            {getPaymentStatusLabel(app) !== 'FAILED' && (
+                              pendingRejectAppId === app.id ? (
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRejectUtrDeposit(app)}
+                                    className="py-2.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold min-h-[42px] cursor-pointer transition"
+                                  >
+                                    Confirm Reject
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setPendingRejectAppId(null)}
+                                    className="py-2.5 px-3 rounded-xl bg-zinc-200 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 text-xs font-semibold min-h-[42px] cursor-pointer transition"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setPendingRejectAppId(app.id)}
+                                  className="py-2.5 px-3 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/60 dark:hover:bg-red-900 border border-red-300 dark:border-red-500/30 text-red-700 dark:text-red-400 text-xs font-bold min-h-[42px] cursor-pointer transition"
+                                  title="Reject unverified UTR & mark payment FAILED"
+                                >
+                                  Reject Payment
+                                </button>
+                              )
                             )}
                           </div>
                         )}

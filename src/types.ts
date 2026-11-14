@@ -37,8 +37,8 @@ export interface ServiceItem {
   benefits: string[];
 }
 
-export type AppointmentStatus = 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
-export type PaymentStatus = 'PAID' | 'PENDING' | 'REFUNDED';
+export type AppointmentStatus = 'PENDING' | 'PAYMENT_PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
+export type PaymentStatus = 'PAYMENT_VERIFICATION_PENDING' | 'SUCCESS' | 'FAILED' | 'PAID' | 'PENDING' | 'REFUNDED';
 
 export interface VerifiedBankDeposit {
   id: string;

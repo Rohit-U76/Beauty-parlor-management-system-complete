@@ -21,6 +21,7 @@ import {
   saveInquiryToMySQL,
   deleteInquiryFromMySQL
 } from './src/db/mysql';
+import { INITIAL_SERVICES } from './src/data/initialData';
 
 // Relational Database Store Helper (MySQL Primary with Resilient Local Snapshot)
 const DB_DIR = path.join(process.cwd(), 'data');
@@ -1850,17 +1851,19 @@ async function startServer() {
     }
   });
 
-  // Dynamic UPI Payment QR Code Generator
+  // Dynamic UPI Payment QR Code Generator (Standard NPCI URI - pa, pn, am, cu only)
   app.post('/api/qr/generate-upi', (req, res) => {
     try {
-      const { amount, payeeName, upiId, bookingRef, note } = req.body;
-      const vpa = upiId || 'modernunisexsalon@icici';
-      const name = payeeName || 'Modern Unisex Salon';
+      const { amount, payeeName, upiId } = req.body;
+      const vpa = (upiId || 'ghodakedinesh@ybl').toString().trim();
+      const name = (payeeName || 'MODERN JENTS PARLOUR').toString().trim();
       const parsedAmount = parseFloat(amount) || 0;
-      const refNote = note || `Modern Salon Advance ${bookingRef || 'Booking'}`;
+      const formattedAm = parsedAmount > 0
+        ? (Number.isInteger(parsedAmount) ? String(parsedAmount) : parsedAmount.toFixed(2))
+        : '0';
 
-      // Standard NPCI UPI URI Scheme
-      const upiUrl = `upi://pay?pa=${encodeURIComponent(vpa)}&pn=${encodeURIComponent(name)}&am=${parsedAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(refNote)}`;
+      // Standard NPCI UPI URI Scheme (strictly required params only: pa, pn, am, cu)
+      const upiUrl = `upi://pay?pa=${encodeURIComponent(vpa).replace(/%40/g, '@')}&pn=${encodeURIComponent(name)}&am=${encodeURIComponent(formattedAm)}&cu=INR`;
 
       res.json({
         success: true,
@@ -1870,7 +1873,7 @@ async function startServer() {
         amount: parsedAmount,
         currency: 'INR',
         qrData: upiUrl,
-        supportedApps: ['PhonePe', 'Google Pay']
+        supportedApps: ['PhonePe', 'Google Pay', 'Paytm', 'BHIM']
       });
     } catch (err: any) {
       console.error('Error creating UPI QR data:', err);
@@ -2000,9 +2003,10 @@ async function startServer() {
         if (requiredAdv > 0 && parsed.amount < requiredAdv) {
           console.warn(`[SMS Underpayment Alert]: Received ₹${parsed.amount} but required ₹${requiredAdv} for appointment ${waitingApt.bookingRef}`);
         } else {
-          waitingApt.paymentStatus = 'PAID';
+          waitingApt.paymentStatus = 'SUCCESS';
           waitingApt.bookingStatus = 'CONFIRMED';
           waitingApt.status = 'CONFIRMED';
+          waitingApt.isBankVerified = true;
           waitingApt.bankVerifiedAt = new Date().toISOString();
           waitingApt.bankVerifiedSource = 'SMS_WEBHOOK';
           waitingApt.bankName = parsed.bankName;
@@ -2096,9 +2100,10 @@ async function startServer() {
 
       let matched = false;
       if (waitingApt) {
-        waitingApt.paymentStatus = 'PAID';
+        waitingApt.paymentStatus = 'SUCCESS';
         waitingApt.bookingStatus = 'CONFIRMED';
         waitingApt.status = 'CONFIRMED';
+        waitingApt.isBankVerified = true;
         waitingApt.bankVerifiedAt = new Date().toISOString();
         waitingApt.bankVerifiedSource = 'SIMULATOR';
         waitingApt.bankName = parsed.bankName;
@@ -2164,14 +2169,14 @@ async function startServer() {
       );
 
       const isVerified = Boolean(
-        deposit || (appointment && (appointment.paymentStatus === 'PAID' || appointment.bookingStatus === 'CONFIRMED'))
+        deposit || (appointment && (appointment.paymentStatus === 'SUCCESS' || appointment.paymentStatus === 'PAID' || appointment.bookingStatus === 'CONFIRMED'))
       );
 
       res.json({
         success: true,
         utr: cleanUtr,
         isVerified,
-        status: isVerified ? 'PAID' : 'PENDING_BANK_SMS',
+        status: isVerified ? 'SUCCESS' : 'PAYMENT_VERIFICATION_PENDING',
         deposit: deposit || null,
         appointment: appointment || null
       });
@@ -2180,11 +2185,49 @@ async function startServer() {
     }
   });
 
+  // Server-side helper to compute canonical pricing and advance deposit (never blind-trust client totals)
+  function computeCanonicalPricing(db: any, payload: any) {
+    const advancePercentage = Number(db.settings?.advancePercentage) || 10;
+    const allServices = [...INITIAL_SERVICES, ...(Array.isArray(db.services) ? db.services : [])];
+    const matchedService = allServices.find((s: any) => s.id === payload?.serviceId);
+
+    let baseTotal = Number(payload?.totalAmount) || 0;
+    if (matchedService) {
+      baseTotal = Number(matchedService.price) || baseTotal;
+      if (Array.isArray(matchedService.tierOptions) && matchedService.tierOptions.length > 0 && payload?.serviceName) {
+        const matchedTier = matchedService.tierOptions.find((t: any) =>
+          String(payload.serviceName).includes(`(${t.label})`) || String(payload.serviceName).includes(t.label)
+        );
+        if (matchedTier) {
+          baseTotal = Number(matchedTier.price) || baseTotal;
+        }
+      }
+    }
+
+    // Apply validated active offer coupon discount if applicable
+    if (payload?.couponCode && Array.isArray(db.offers)) {
+      const coupon = db.offers.find((o: any) =>
+        o.active && String(o.code || '').toUpperCase() === String(payload.couponCode || '').trim().toUpperCase()
+      );
+      if (coupon && baseTotal >= (Number(coupon.minBookingAmount) || 0)) {
+        const disc = coupon.discountPercent
+          ? Math.round((baseTotal * Number(coupon.discountPercent)) / 100)
+          : (Number(coupon.discountAmount) || 0);
+        baseTotal = Math.max(10, baseTotal - disc);
+      }
+    }
+
+    const totalAmount = Math.max(0, Math.round(baseTotal));
+    const advancePaid = totalAmount > 0 ? Math.max(1, Math.round((totalAmount * advancePercentage) / 100)) : 0;
+    const balanceDue = Math.max(0, totalAmount - advancePaid);
+    return { totalAmount, advancePaid, balanceDue, advancePercentage };
+  }
+
   // --- DIRECT BANK UPI & SCANNER ADVANCE DEPOSIT API ---
-  // Real Bank Verification: checks against db.verifiedDeposits from forwarded SMS
+  // Real Bank Verification: checks against db.verifiedDeposits from forwarded SMS; defaults to PAYMENT_VERIFICATION_PENDING
   app.post('/api/payment/verify-upi', (req, res) => {
     try {
-      const { utr, advanceAmount, totalAmount, scannerUsed, customerName, serviceName, paymentScreenshotUrl } = req.body;
+      const { utr, serviceId, serviceName, couponCode, scannerUsed, paymentScreenshotUrl } = req.body;
       const cleanUtr = (utr || '').toString().trim().replace(/\s+/g, '');
 
       const hasValidRef = /^[A-Za-z0-9\-_]{6,40}$/.test(cleanUtr);
@@ -2199,13 +2242,14 @@ async function startServer() {
       const db = readDb();
       const existingAppointments = db.appointments || [];
 
-      // Anti-Cheating & Duplicate UTR Prevention (already matched to a completed or confirmed appointment)
+      // Anti-Cheating & Duplicate UTR Prevention (already matched to an active/confirmed appointment)
       const duplicate = effectiveRef.startsWith('SCR-')
         ? null
         : existingAppointments.find((apt: any) =>
             ((apt.upiTransactionId && apt.upiTransactionId.trim().toLowerCase() === effectiveRef.toLowerCase()) ||
             (apt.razorpayPaymentId && apt.razorpayPaymentId.trim().toLowerCase() === effectiveRef.toLowerCase())) &&
-            apt.bookingStatus !== 'CANCELLED'
+            apt.bookingStatus !== 'CANCELLED' &&
+            apt.paymentStatus !== 'FAILED'
           );
 
       if (duplicate) {
@@ -2215,60 +2259,66 @@ async function startServer() {
         });
       }
 
+      const pricing = computeCanonicalPricing(db, {
+        serviceId,
+        serviceName,
+        couponCode,
+        totalAmount: req.body?.totalAmount
+      });
+      const effectiveTotal = pricing.totalAmount || Number(req.body?.totalAmount) || 0;
+      const effectiveAdvance = pricing.advancePaid || Number(req.body?.advanceAmount) || 0;
+      const effectiveBalance = Math.max(0, effectiveTotal - effectiveAdvance);
+
       // Check if bank credit SMS has ALREADY arrived in db.verifiedDeposits
       const verifiedDeposit = (db.verifiedDeposits || []).find((d: any) => d.utr === effectiveRef);
-
       const bookingRef = `MS-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
 
       if (verifiedDeposit) {
-        const requiredAdv = parseFloat(advanceAmount) || 0;
-        if (requiredAdv > 0 && verifiedDeposit.amount < requiredAdv) {
+        if (effectiveAdvance > 0 && verifiedDeposit.amount < effectiveAdvance) {
           return res.status(400).json({
             success: false,
-            error: `Advance Amount Mismatch: Bank SMS shows ₹${verifiedDeposit.amount} credited, but this service requires a minimum ₹${requiredAdv} advance deposit. Please complete the remaining payment.`
+            error: `Advance Amount Mismatch: Bank SMS shows ₹${verifiedDeposit.amount} credited, but this service requires a minimum ₹${effectiveAdvance} advance deposit.`
           });
         }
 
-        // Authentic Bank SMS already received on owner phone!
         verifiedDeposit.status = 'MATCHED';
         verifiedDeposit.matchedBookingRef = bookingRef;
-
         writeDb(db);
 
         return res.json({
           success: true,
           verified: true,
-          status: 'PAID',
+          status: 'SUCCESS',
           upiTransactionId: effectiveRef,
           paymentId: `upi_${effectiveRef}`,
           bookingRef,
-          scannerUsed: verifiedDeposit.bankName || scannerUsed || 'MODERN JENTS PARLOUR (HDFC Bank)',
-          advancePaid: advanceAmount,
-          totalAmount,
-          balanceDue: (totalAmount || 0) - (advanceAmount || 0),
+          scannerUsed: verifiedDeposit.bankName || scannerUsed || 'MODERN JENTS PARLOUR (ghodakedinesh@ybl)',
+          advancePaid: effectiveAdvance,
+          totalAmount: effectiveTotal,
+          balanceDue: effectiveBalance,
           paidAt: verifiedDeposit.receivedAt || new Date().toISOString(),
-          paymentMethod: 'PhonePe / Google Pay UPI',
+          paymentMethod: 'Direct UPI (UPI App / QR)',
           bankVerifiedSource: 'SMS_WEBHOOK',
           bankName: verifiedDeposit.bankName,
           message: `Official Bank SMS Verified! ₹${verifiedDeposit.amount} deposit confirmed in ${verifiedDeposit.bankName}.`
         });
       }
 
-      // Bank SMS hasn't arrived yet (telecom latency or customer submitted right after paying)
+      // Bank credit has NOT been verified yet -> ALWAYS stay PAYMENT_VERIFICATION_PENDING
       res.json({
         success: true,
         verified: false,
-        status: 'AWAITING_BANK_SMS',
+        status: 'PAYMENT_VERIFICATION_PENDING',
         upiTransactionId: effectiveRef,
         paymentId: `upi_${effectiveRef}`,
         bookingRef,
-        scannerUsed: scannerUsed || 'MODERN JENTS PARLOUR (HDFC Bank)',
-        advancePaid: advanceAmount,
-        totalAmount,
-        balanceDue: (totalAmount || 0) - (advanceAmount || 0),
+        scannerUsed: scannerUsed || 'MODERN JENTS PARLOUR (ghodakedinesh@ybl)',
+        advancePaid: effectiveAdvance,
+        totalAmount: effectiveTotal,
+        balanceDue: effectiveBalance,
         paidAt: new Date().toISOString(),
-        paymentMethod: 'PhonePe / Google Pay UPI',
-        message: 'Payment reference recorded! Proceeding to confirm your booking.'
+        paymentMethod: 'Direct UPI (UPI App / QR)',
+        message: 'UTR recorded! Payment verification is pending admin confirmation.'
       });
     } catch (err: any) {
       console.error('Error verifying UPI payment:', err);
@@ -2276,7 +2326,7 @@ async function startServer() {
     }
   });
 
-  // Admin Manual Verification Action
+  // Admin Verify Payment Action -> paymentStatus = SUCCESS, bookingStatus = CONFIRMED
   app.post('/api/appointments/:id/verify-manually', (req, res) => {
     try {
       const { id } = req.params;
@@ -2287,18 +2337,26 @@ async function startServer() {
         return res.status(404).json({ success: false, error: 'Appointment not found' });
       }
 
-      apt.paymentStatus = 'PAID';
+      const advancePercentage = Number(db.settings?.advancePercentage) || 10;
+      const totalAmount = Number(apt.totalAmount) || 0;
+      const advancePaid = Number(apt.advancePaid) || (totalAmount > 0 ? Math.max(1, Math.round((totalAmount * advancePercentage) / 100)) : 0);
+      const balanceDue = Math.max(0, totalAmount - advancePaid);
+
+      apt.advancePaid = advancePaid;
+      apt.balanceDue = balanceDue;
+      apt.paymentStatus = 'SUCCESS';
       apt.bookingStatus = 'CONFIRMED';
       apt.status = 'CONFIRMED';
+      apt.isBankVerified = true;
       apt.bankVerifiedAt = new Date().toISOString();
       apt.bankVerifiedSource = 'ADMIN_MANUAL';
 
       if (!db.notifications) db.notifications = [];
       db.notifications.unshift({
         id: `notif-${Date.now()}`,
-        title: 'Appointment Manually Verified',
-        message: `Admin manually verified deposit for ${apt.clientName} (${apt.bookingRef}).`,
-        type: 'booking',
+        title: 'UPI Payment Verified by Admin',
+        message: `Admin verified ₹${advancePaid} advance deposit (UTR: ${apt.upiTransactionId || 'Manual'}) for ${apt.clientName} (${apt.bookingRef}).`,
+        type: 'payment',
         timestamp: 'Just now',
         read: false,
         bookingRef: apt.bookingRef,
@@ -2306,17 +2364,17 @@ async function startServer() {
       });
 
       writeDb(db);
-      res.json({ success: true, message: 'Deposit verified and appointment confirmed.', appointment: apt });
+      res.json({ success: true, message: 'Payment verified and appointment confirmed.', appointment: apt });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
     }
   });
 
-  // Admin Reject Fake UTR & Release Chair Action
-  app.post('/api/appointments/:id/reject-fake', (req, res) => {
+  // Admin Reject Payment Action -> paymentStatus = FAILED, bookingStatus = PAYMENT_PENDING
+  const handleRejectPaymentEndpoint = (req: any, res: any) => {
     try {
       const { id } = req.params;
-      const { reason } = req.body;
+      const { reason } = req.body || {};
       const db = readDb();
       const apt = (db.appointments || []).find((a: any) => a.id === id || a.bookingRef === id);
 
@@ -2324,17 +2382,19 @@ async function startServer() {
         return res.status(404).json({ success: false, error: 'Appointment not found' });
       }
 
-      apt.bookingStatus = 'CANCELLED';
-      apt.status = 'CANCELLED';
-      apt.paymentStatus = 'REFUNDED';
-      apt.notes = `${apt.notes || ''} [REJECTED: ${reason || 'Fake or unverified UTR provided.'}]`.trim();
+      apt.bookingStatus = 'PAYMENT_PENDING';
+      apt.status = 'PAYMENT_PENDING';
+      apt.paymentStatus = 'FAILED';
+      apt.isBankVerified = false;
+      apt.cancelReason = reason || 'Payment could not be verified / invalid UTR';
+      apt.notes = `${apt.notes || ''} [PAYMENT REJECTED: ${apt.cancelReason}]`.trim();
 
       if (!db.notifications) db.notifications = [];
       db.notifications.unshift({
         id: `notif-${Date.now()}`,
-        title: '⚠️ Fake Deposit Rejected & Slot Released',
-        message: `Appointment ${apt.bookingRef} (${apt.clientName}) cancelled due to invalid/fake UTR (${apt.upiTransactionId}). Chair released.`,
-        type: 'alert',
+        title: '⚠️ UPI Payment Rejected (Pending Repayment)',
+        message: `Appointment ${apt.bookingRef} (${apt.clientName}) payment marked FAILED (UTR: ${apt.upiTransactionId || 'N/A'}). Booking set to PAYMENT_PENDING.`,
+        type: 'payment',
         timestamp: 'Just now',
         read: false,
         bookingRef: apt.bookingRef,
@@ -2342,11 +2402,14 @@ async function startServer() {
       });
 
       writeDb(db);
-      res.json({ success: true, message: 'Appointment rejected and slot released back for booking.', appointment: apt });
+      res.json({ success: true, message: 'Payment marked as FAILED and booking set to PAYMENT_PENDING.', appointment: apt });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
     }
-  });
+  };
+
+  app.post('/api/appointments/:id/reject-payment', handleRejectPaymentEndpoint);
+  app.post('/api/appointments/:id/reject-fake', handleRejectPaymentEndpoint);
 
   // Direct Bank UPI Order Initialization (Replaces old Razorpay order creation)
   app.post('/api/payment/create-order', async (req, res) => {
@@ -2578,10 +2641,30 @@ async function startServer() {
       const cleanClientPhone = (payload.clientPhone || '').replace(/[^0-9]/g, '');
       const formattedClientPhone = cleanClientPhone.length === 10 ? `91${cleanClientPhone}` : cleanClientPhone;
 
-      const utr = payload.upiTransactionId || payload.razorpayPaymentId || `UTR-${Date.now().toString().slice(-8)}`;
-      const scannerUsed = payload.scannerUsed || 'MODERN JENTS PARLOUR (HDFC Bank)';
+      const utr = (payload.upiTransactionId || payload.razorpayPaymentId || `UTR-${Date.now().toString().slice(-8)}`).toString().trim();
+      const scannerUsed = payload.scannerUsed || 'MODERN JENTS PARLOUR (ghodakedinesh@ybl)';
 
-      const waText = `✨ *NEW APPOINTMENT CONFIRMED* ✨\n*Modern Unisex Salon, Mohol*\n` +
+      // Compute authoritative pricing & advance deposit server-side (never blind-trust browser paymentStatus/advance)
+      const pricing = computeCanonicalPricing(db, payload);
+      const serverTotal = pricing.totalAmount;
+      const serverAdvance = pricing.advancePaid;
+      const serverBalance = pricing.balanceDue;
+
+      // Only mark SUCCESS / CONFIRMED automatically if a real SMS webhook deposit exists for this UTR
+      const matchedDeposit = (db.verifiedDeposits || []).find(
+        (d: any) => d.utr && d.utr.trim().toLowerCase() === utr.toLowerCase() && (serverAdvance <= 0 || Number(d.amount) >= serverAdvance)
+      );
+
+      const isSmsVerified = Boolean(matchedDeposit);
+      const resolvedPaymentStatus = isSmsVerified ? 'SUCCESS' : 'PAYMENT_VERIFICATION_PENDING';
+      const resolvedBookingStatus = isSmsVerified ? 'CONFIRMED' : 'PENDING';
+
+      if (matchedDeposit) {
+        matchedDeposit.status = 'MATCHED';
+        matchedDeposit.matchedBookingRef = bookingRef;
+      }
+
+      const waText = `✨ *NEW APPOINTMENT ${isSmsVerified ? 'CONFIRMED' : 'BOOKED (PAYMENT VERIFICATION PENDING)'}* ✨\n*Modern Unisex Salon, Mohol*\n` +
         `────────────────────\n` +
         `📋 *Booking Ref:* ${bookingRef}\n` +
         `👤 *Client Name:* ${payload.clientName}\n` +
@@ -2589,11 +2672,11 @@ async function startServer() {
         `💇‍♀️ *Service:* ${payload.serviceName}\n` +
         `📅 *Date & Slot:* ${payload.date} at ${payload.timeSlot}\n` +
         `✂️ *Stylist:* ${payload.stylistName || 'Master Stylist'}\n` +
-        `💰 *Total Bill:* ₹${payload.totalAmount}\n` +
-        `✅ *10% Advance Deposit Paid:* ₹${payload.advancePaid || payload.advanceAmount} (Verified Direct Bank UPI)\n` +
+        `💰 *Total Bill:* ₹${serverTotal}\n` +
+        `💳 *${pricing.advancePercentage}% Advance Deposit:* ₹${serverAdvance} (${isSmsVerified ? 'Bank SMS Verified' : 'Pending Admin Verification'})\n` +
         `🔢 *UPI Ref / UTR No:* ${utr}\n` +
         `🏦 *Account:* ${scannerUsed}\n` +
-        `💵 *Balance at Salon Counter:* ₹${payload.balanceDue}\n` +
+        `💵 *Balance at Salon Counter:* ₹${serverBalance}\n` +
         `────────────────────\n` +
         `📍 *Salon Address:* B.N. Gund Complex, Near Kanya Prashala & ICICI Bank, Mohol (413213)\n` +
         `📞 *Salon Helpline:* +91 81040 26257`;
@@ -2617,18 +2700,19 @@ async function startServer() {
         date: payload.date,
         timeSlot: payload.timeSlot,
         stylistName: payload.stylistName || 'Master Stylist',
-        totalAmount: Number(payload.totalAmount) || 0,
-        advancePaid: Number(payload.advancePaid || payload.advanceAmount) || 0,
-        balanceDue: Number(payload.balanceDue) || 0,
-        paymentStatus: payload.paymentStatus || 'PAID',
-        bookingStatus: payload.bookingStatus || 'CONFIRMED',
-        status: payload.status || payload.bookingStatus || 'CONFIRMED',
-        bankVerifiedAt: payload.bankVerifiedAt,
-        bankVerifiedSource: payload.bankVerifiedSource,
-        bankName: payload.bankName,
-        holdExpiresAt: payload.holdExpiresAt,
+        totalAmount: serverTotal,
+        advancePaid: serverAdvance,
+        balanceDue: serverBalance,
+        paymentStatus: resolvedPaymentStatus,
+        bookingStatus: resolvedBookingStatus,
+        status: resolvedBookingStatus,
+        isBankVerified: isSmsVerified,
+        bankVerifiedAt: isSmsVerified ? (matchedDeposit.receivedAt || new Date().toISOString()) : undefined,
+        bankVerifiedSource: isSmsVerified ? 'SMS_WEBHOOK' : undefined,
+        bankName: isSmsVerified ? matchedDeposit.bankName : payload.bankName,
+        holdExpiresAt: !isSmsVerified ? (payload.holdExpiresAt || new Date(Date.now() + 15 * 60 * 1000).toISOString()) : undefined,
         upiTransactionId: utr,
-        paymentMethod: payload.paymentMethod || 'Direct Bank UPI / Scanner',
+        paymentMethod: payload.paymentMethod || 'Direct UPI (UPI App / QR)',
         scannerUsed,
         paymentScreenshotUrl: payload.paymentScreenshotUrl || '',
         razorpayPaymentId: utr,
@@ -2646,8 +2730,10 @@ async function startServer() {
       // Create Admin Real-Time Notification
       const adminNotification = {
         id: `notif-${Date.now()}`,
-        title: 'New Online Reservation & 10% Deposit',
-        message: `${newAppointment.clientName} booked ${newAppointment.serviceName} for ${newAppointment.date} at ${newAppointment.timeSlot}. Advance deposit ₹${newAppointment.advancePaid} verified via Direct Bank UPI (UTR: ${utr}).`,
+        title: isSmsVerified
+          ? 'New Reservation & Verified UPI Deposit'
+          : 'New Booking — UPI Verification Pending',
+        message: `${newAppointment.clientName} booked ${newAppointment.serviceName} for ${newAppointment.date} at ${newAppointment.timeSlot}. Advance ₹${newAppointment.advancePaid} (UTR: ${utr}) — ${resolvedPaymentStatus}.`,
         type: 'booking',
         timestamp: 'Just now',
         read: false,
@@ -2658,14 +2744,16 @@ async function startServer() {
 
       writeDb(db);
 
-      console.log(`[Real-Time Booking Logged]: Ref: ${newAppointment.bookingRef} | Client: ${newAppointment.clientName} | Owner WhatsApp Dispatched to +91 ${ownerPhone}`);
+      console.log(`[Real-Time Booking Logged]: Ref: ${newAppointment.bookingRef} | Client: ${newAppointment.clientName} | Status: ${resolvedPaymentStatus}`);
 
       res.json({
         success: true,
         appointment: newAppointment,
         notification: adminNotification,
         ownerWhatsappUrl,
-        message: 'Appointment booked successfully and synchronized to Admin Dashboard in real time.'
+        message: isSmsVerified
+          ? 'Appointment booked and deposit verified in real time.'
+          : 'Appointment recorded! Payment verification pending admin review.'
       });
     } catch (err: any) {
       console.error('Error creating real-time appointment:', err);

@@ -11,6 +11,7 @@ import {
   SalonSettings,
   SalonPolicyItem,
   AppointmentStatus,
+  PaymentStatus,
   InquiryStatus,
   ThemeMode,
   User,
@@ -84,9 +85,10 @@ interface BookingPayload {
   scannerUsed?: string;
   razorpayPaymentId?: string;
   razorpayOrderId?: string;
-  paymentStatus?: 'PAID' | 'PENDING' | 'REFUNDED';
-  bookingStatus?: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
-  status?: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
+  paymentStatus?: PaymentStatus;
+  bookingStatus?: AppointmentStatus;
+  status?: AppointmentStatus;
+  isBankVerified?: boolean;
   bankVerifiedAt?: string;
   bankVerifiedSource?: 'SMS_WEBHOOK' | 'ADMIN_MANUAL' | 'SIMULATOR';
   bankName?: string;
@@ -726,6 +728,10 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         // Keep CANCELLED unless prev/next has explicit newer reopen
         merged.bookingStatus = 'CANCELLED';
         merged.status = 'CANCELLED';
+      } else if (prevStatus === 'PAYMENT_PENDING' && !next.isBankVerified) {
+        merged.bookingStatus = 'PAYMENT_PENDING';
+        merged.status = 'PAYMENT_PENDING';
+        merged.paymentStatus = 'FAILED';
       } else if (prevStatus === 'COMPLETED' && nextStatus === 'CONFIRMED') {
         merged.bookingStatus = 'COMPLETED';
         merged.status = 'COMPLETED';
@@ -2320,7 +2326,8 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const utr = payload.upiTransactionId || `UTR-${Date.now().toString().slice(-8)}`;
     const scannerUsed = payload.scannerUsed || 'MODERN JENTS PARLOUR (HDFC Bank)';
     
-    const waText = `✨ *NEW APPOINTMENT CONFIRMED* ✨\n*Modern Unisex Salon, Mohol*\n` +
+    const isInitiallyVerified = Boolean(payload.isBankVerified);
+    const waText = `✨ *NEW APPOINTMENT ${isInitiallyVerified ? 'CONFIRMED' : 'PENDING VERIFICATION'}* ✨\n*Modern Unisex Salon, Mohol*\n` +
       `────────────────────\n` +
       `📋 *Booking Ref:* ${bookingRef}\n` +
       `👤 *Client Name:* ${payload.clientName}\n` +
@@ -2329,7 +2336,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       `📅 *Date & Slot:* ${payload.date} at ${payload.timeSlot}\n` +
       `✂️ *Stylist:* ${payload.stylistName || 'Master Stylist (Dinesh Ghodake)'}\n` +
       `💰 *Total Bill:* ₹${payload.totalAmount}\n` +
-      `✅ *10% Advance Deposit Paid:* ₹${payload.advanceAmount} (Verified Direct Bank UPI)\n` +
+      `💳 *Advance Deposit:* ₹${payload.advanceAmount} (${isInitiallyVerified ? 'Bank Verified' : 'Payment Verification Pending'})\n` +
       `🔢 *UPI Ref / UTR No:* ${utr}\n` +
       `🏦 *Payment Destination:* ${scannerUsed}\n` +
       `💵 *Balance at Salon Counter:* ₹${payload.balanceDue}\n` +
@@ -2343,7 +2350,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       ? `https://api.whatsapp.com/send?phone=${formattedClientPhone}&text=${encodedWaText}` 
       : `https://api.whatsapp.com/send?text=${encodedWaText}`;
 
-    const newAppointment: Appointment = {
+    let newAppointment: Appointment = {
       id: `apt-${Date.now()}`,
       userId: currentUser?.id,
       bookingRef,
@@ -2359,11 +2366,12 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       totalAmount: payload.totalAmount,
       advancePaid: payload.advanceAmount,
       balanceDue: payload.balanceDue,
-      paymentStatus: payload.paymentStatus || 'PAID',
-      bookingStatus: payload.bookingStatus || 'CONFIRMED',
-      status: payload.status || payload.bookingStatus || 'CONFIRMED',
+      paymentStatus: payload.paymentStatus || (isInitiallyVerified ? 'SUCCESS' : 'PAYMENT_VERIFICATION_PENDING'),
+      bookingStatus: payload.bookingStatus || (isInitiallyVerified ? 'CONFIRMED' : 'PENDING'),
+      status: payload.status || payload.bookingStatus || (isInitiallyVerified ? 'CONFIRMED' : 'PENDING'),
+      isBankVerified: isInitiallyVerified,
       upiTransactionId: utr,
-      paymentMethod: payload.paymentMethod || 'Direct Bank UPI / Scanner',
+      paymentMethod: payload.paymentMethod || 'Direct UPI (UPI App / QR)',
       scannerUsed,
       razorpayPaymentId: payload.razorpayPaymentId || utr,
       razorpayOrderId: payload.razorpayOrderId || `upi_${Date.now()}`,
@@ -2379,6 +2387,23 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       ownerWhatsappUrl: ownerWhatsappUrl
     };
 
+    // Persist real-time appointment to backend first so server-side pricing & PAYMENT_VERIFICATION_PENDING are authoritative
+    try {
+      const apiRes = await fetch('/api/appointments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...newAppointment, couponCode: payload.couponCode })
+      });
+      if (apiRes.ok) {
+        const apiData = await apiRes.json().catch(() => null);
+        if (apiData?.appointment) {
+          newAppointment = { ...newAppointment, ...apiData.appointment };
+        }
+      }
+    } catch {
+      // Fallback safe if offline
+    }
+
     // Persist real-time appointment directly to Firestore cloud database
     try {
       setDoc(doc(db, 'appointments', newAppointment.id), cleanFirestoreData(newAppointment)).catch(err => {
@@ -2388,17 +2413,6 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       console.warn('Firestore appointment direct save note:', fsErr);
     }
 
-    // Persist real-time appointment and notify admin suite & WhatsApp in database
-    try {
-      fetch('/api/appointments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newAppointment)
-      }).catch(err => console.log('Appointment background sync notice:', err));
-    } catch {
-      // Fallback safe
-    }
-
     // Trigger Automated WhatsApp dispatch to server API
     try {
       fetch('/api/notifications/send-whatsapp', {
@@ -2406,16 +2420,16 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           phone: ownerPhone,
-          clientName: payload.clientName,
-          clientPhone: payload.clientPhone,
-          serviceName: payload.serviceName,
-          date: payload.date,
-          timeSlot: payload.timeSlot,
-          bookingRef,
-          advancePaid: payload.advanceAmount,
-          balanceDue: payload.balanceDue,
-          totalAmount: payload.totalAmount,
-          stylistName: payload.stylistName
+          clientName: newAppointment.clientName,
+          clientPhone: newAppointment.clientPhone,
+          serviceName: newAppointment.serviceName,
+          date: newAppointment.date,
+          timeSlot: newAppointment.timeSlot,
+          bookingRef: newAppointment.bookingRef,
+          advancePaid: newAppointment.advancePaid,
+          balanceDue: newAppointment.balanceDue,
+          totalAmount: newAppointment.totalAmount,
+          stylistName: newAppointment.stylistName
         })
       }).catch(err => console.log('WhatsApp notification dispatched background:', err));
     } catch {
@@ -2475,8 +2489,10 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     // Add admin notification
     const newNotif: NotificationItem = {
       id: `notif-${Date.now()}`,
-      title: 'New Online Reservation & 10% Deposit',
-      message: `${payload.clientName} booked ${payload.serviceName} for ${payload.date} at ${payload.timeSlot}. Advance deposit ₹${payload.advanceAmount} verified via UPI.`,
+      title: newAppointment.isBankVerified
+        ? 'New Reservation & Verified Deposit'
+        : 'New Booking — UPI Verification Pending',
+      message: `${newAppointment.clientName} booked ${newAppointment.serviceName} for ${newAppointment.date} at ${newAppointment.timeSlot}. Advance ₹${newAppointment.advancePaid} (UTR: ${newAppointment.upiTransactionId}) — ${newAppointment.paymentStatus}.`,
       type: 'booking',
       timestamp: 'Just now',
       read: false
@@ -3477,7 +3493,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   // Financial & Operational Stat calculations
   const totalRevenue = appointments.reduce((sum, apt) => {
     const st = (apt.bookingStatus || apt.status || 'CONFIRMED').toUpperCase();
-    if (st !== 'CANCELLED') {
+    if (st !== 'CANCELLED' && st !== 'PAYMENT_PENDING' && apt.paymentStatus !== 'FAILED') {
       return sum + (Number(apt.totalAmount) || 0);
     }
     return sum;
@@ -3485,7 +3501,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const advanceDepositTotal = appointments.reduce((sum, apt) => {
     const st = (apt.bookingStatus || apt.status || 'CONFIRMED').toUpperCase();
-    if (st !== 'CANCELLED') {
+    if (st !== 'CANCELLED' && st !== 'PAYMENT_PENDING' && apt.paymentStatus !== 'FAILED') {
       return sum + (Number(apt.advancePaid) || 0);
     }
     return sum;

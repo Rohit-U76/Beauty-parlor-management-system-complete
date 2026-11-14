@@ -239,8 +239,8 @@ export const BookingModal: React.FC = () => {
     paymentId: string,
     utr: string,
     scannerUsed?: string,
-    isBankVerified: boolean = true,
-    bankVerifiedSource: 'SMS_WEBHOOK' | 'ADMIN_MANUAL' | 'NONE' = 'SMS_WEBHOOK',
+    isBankVerified: boolean = false,
+    bankVerifiedSource: 'SMS_WEBHOOK' | 'ADMIN_MANUAL' | 'NONE' = 'NONE',
     bankName?: string,
     paymentScreenshotUrl?: string
   ) => {
@@ -268,22 +268,23 @@ export const BookingModal: React.FC = () => {
         advanceAmount: advanceDeposit,
         balanceDue: balanceAtSalon,
         upiTransactionId: utr,
-        paymentMethod: 'PhonePe / Google Pay UPI',
-        scannerUsed: scannerUsed || 'MODERN JENTS PARLOUR',
+        paymentMethod: 'Direct UPI (UPI App / QR)',
+        scannerUsed: scannerUsed || 'MODERN JENTS PARLOUR (ghodakedinesh@ybl)',
         razorpayPaymentId: utr,
         razorpayOrderId: paymentId,
-        paymentStatus: isBankVerified ? 'PAID' : 'PENDING',
+        paymentStatus: isBankVerified ? 'SUCCESS' : 'PAYMENT_VERIFICATION_PENDING',
         bookingStatus: isBankVerified ? 'CONFIRMED' : 'PENDING',
         status: isBankVerified ? 'CONFIRMED' : 'PENDING',
+        isBankVerified,
         bankVerifiedAt: isBankVerified ? new Date().toISOString() : undefined,
-        bankVerifiedSource: isBankVerified ? bankVerifiedSource : undefined,
+        bankVerifiedSource: isBankVerified && bankVerifiedSource !== 'NONE' ? bankVerifiedSource : undefined,
         bankName,
         paymentScreenshotUrl,
         holdExpiresAt: !isBankVerified ? new Date(Date.now() + 15 * 60 * 1000).toISOString() : undefined
       });
 
       setConfirmedBooking(created);
-      setShowPassModal(true);
+      setShowPassModal(isBankVerified);
       setStep(4);
     } catch (e) {
       console.error(e);
@@ -303,9 +304,11 @@ export const BookingModal: React.FC = () => {
                 {step === 4 ? 'Appointment Confirmation Pass' : 'Schedule Appointment'}
               </h3>
               <p className="text-[11px] text-zinc-600 dark:text-zinc-400 truncate">
-                {step === 4 
-                  ? `${advancePercentage}% Advance Deposit Verified • Digital Pass Ready`
-                  : `${advancePercentage}% Online Deposit via Direct UPI (PhonePe / GPay) • ${100 - advancePercentage}% Balance at Counter`
+                {step === 4
+                  ? (confirmedBooking?.paymentStatus === 'SUCCESS' || confirmedBooking?.paymentStatus === 'PAID' || confirmedBooking?.isBankVerified)
+                    ? `${advancePercentage}% Advance Deposit Verified • Digital Pass Ready`
+                    : `${advancePercentage}% Advance UTR Recorded • Payment Verification Pending`
+                  : `${advancePercentage}% Online Deposit via Direct UPI • ${100 - advancePercentage}% Balance at Counter`
                 }
               </p>
             </div>
@@ -883,10 +886,14 @@ export const BookingModal: React.FC = () => {
 
               <div className="space-y-1">
                 <h3 className="text-xl font-extrabold text-zinc-900 dark:text-white">
-                  Appointment Confirmed!
+                  {confirmedBooking.paymentStatus === 'SUCCESS' || confirmedBooking.paymentStatus === 'PAID' || confirmedBooking.isBankVerified
+                    ? 'Appointment Confirmed!'
+                    : 'Booking Submitted — Verification Pending'}
                 </h3>
                 <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                  Your slot has been secured with a {advancePercentage}% online advance deposit.
+                  {confirmedBooking.paymentStatus === 'SUCCESS' || confirmedBooking.paymentStatus === 'PAID' || confirmedBooking.isBankVerified
+                    ? `Your slot has been secured with a ${advancePercentage}% online advance deposit.`
+                    : `Your UTR (${confirmedBooking.upiTransactionId || 'submitted'}) is recorded. Salon admin will verify your ₹${confirmedBooking.advancePaid} UPI payment shortly.`}
                 </p>
               </div>
 
@@ -899,13 +906,13 @@ export const BookingModal: React.FC = () => {
                       {confirmedBooking.bookingRef}
                     </div>
                   </div>
-                  {confirmedBooking.paymentStatus === 'PAID' ? (
+                  {(confirmedBooking.paymentStatus === 'SUCCESS' || confirmedBooking.paymentStatus === 'PAID' || confirmedBooking.isBankVerified) ? (
                     <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                      BANK DEPOSIT VERIFIED
+                      PAYMENT VERIFIED (SUCCESS)
                     </span>
                   ) : (
                     <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30">
-                      CONFIRMED • ADVANCE RECORDED
+                      PAYMENT VERIFICATION PENDING
                     </span>
                   )}
                 </div>
@@ -1082,7 +1089,7 @@ export const BookingModal: React.FC = () => {
                 onClick={handleProceedToPayment}
                 className="px-6 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 dark:bg-gradient-to-r dark:from-amber-500 dark:via-yellow-400 dark:to-amber-500 dark:hover:from-amber-400 dark:hover:to-yellow-300 text-white dark:text-zinc-950 font-extrabold text-xs inline-flex items-center gap-1.5 transition shadow-xl active:scale-95 cursor-pointer"
               >
-                <span>Pay ₹{advanceDeposit} via PhonePe / UPI Apps</span>
+                <span>Pay ₹{advanceDeposit} via UPI</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             )}
@@ -1099,6 +1106,8 @@ export const BookingModal: React.FC = () => {
           onSuccess={handlePaymentSuccess}
           advanceAmount={advanceDeposit}
           totalAmount={netTotal}
+          serviceId={selectedService.id}
+          couponCode={appliedCoupon?.code}
           serviceName={selectedTier ? `${selectedService.name} (${selectedTier.label})` : selectedService.name}
           clientName={clientName.trim()}
           clientEmail={clientEmail.trim()}

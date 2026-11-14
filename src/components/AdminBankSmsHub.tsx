@@ -103,6 +103,8 @@ export const AdminBankSmsHub: React.FC<AdminBankSmsHubProps> = ({ onShowToast })
     }
   };
 
+  const [pendingRejectId, setPendingRejectId] = useState<string | null>(null);
+
   const handleManualVerify = async (apt: Appointment) => {
     try {
       const res = await fetch(`/api/appointments/${apt.id}/verify-manually`, {
@@ -110,41 +112,56 @@ export const AdminBankSmsHub: React.FC<AdminBankSmsHubProps> = ({ onShowToast })
       });
       const data = await res.json();
       if (data.success) {
-        updateAppointmentStatus(apt.id, 'CONFIRMED');
-        onShowToast(`Deposit verified for ${apt.clientName} (${apt.bookingRef}). Chair confirmed!`);
+        updateAppointmentStatus(apt.id, 'CONFIRMED', {
+          isBankVerified: true,
+          paymentStatus: 'SUCCESS',
+          bankVerifiedSource: 'ADMIN_MANUAL',
+          bankVerifiedAt: new Date().toISOString(),
+          advancePaid: data.appointment?.advancePaid ?? apt.advancePaid,
+          balanceDue: data.appointment?.balanceDue ?? apt.balanceDue
+        });
+        setPendingRejectId(null);
+        onShowToast(`Payment verified for ${apt.clientName} (${apt.bookingRef}). Status: SUCCESS / CONFIRMED!`);
         fetchDeposits();
       }
     } catch {
-      onShowToast('Failed to verify appointment');
+      onShowToast('Failed to verify payment');
     }
   };
 
   const handleRejectFake = async (apt: Appointment) => {
-    if (!window.confirm(`Are you sure you want to reject UTR "${apt.upiTransactionId}" for ${apt.clientName}? This will cancel the booking and release the chair back to other clients.`)) {
-      return;
-    }
-
     try {
-      const res = await fetch(`/api/appointments/${apt.id}/reject-fake`, {
+      const res = await fetch(`/api/appointments/${apt.id}/reject-payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: 'Fake / unverified UTR provided by customer' })
+        body: JSON.stringify({ reason: 'Unverified / Invalid UTR provided by customer' })
       });
       const data = await res.json();
       if (data.success) {
-        updateAppointmentStatus(apt.id, 'CANCELLED');
-        onShowToast(`Appointment rejected & slot released back to open chairs.`);
+        updateAppointmentStatus(apt.id, 'PAYMENT_PENDING', {
+          isBankVerified: false,
+          paymentStatus: 'FAILED',
+          cancelReason: 'Unverified / Invalid UTR provided by customer'
+        });
+        setPendingRejectId(null);
+        onShowToast(`Payment marked FAILED & booking moved to PAYMENT_PENDING.`);
         fetchDeposits();
       }
     } catch {
-      onShowToast('Failed to reject appointment');
+      onShowToast('Failed to reject payment');
     }
   };
 
   // Pending Review queue
-  const pendingAppointments = appointments.filter(a => 
-    (a.bookingStatus === 'PENDING' || a.paymentStatus === 'PENDING') &&
-    a.bookingStatus !== 'CANCELLED'
+  const pendingAppointments = appointments.filter(a =>
+    (a.bookingStatus === 'PENDING' ||
+      a.bookingStatus === 'PAYMENT_PENDING' ||
+      a.paymentStatus === 'PAYMENT_VERIFICATION_PENDING' ||
+      a.paymentStatus === 'PENDING') &&
+    a.bookingStatus !== 'CANCELLED' &&
+    !a.isBankVerified &&
+    a.paymentStatus !== 'SUCCESS' &&
+    a.paymentStatus !== 'PAID'
   );
 
   const totalBankDepositAmount = deposits.reduce((acc, d) => acc + (Number(d.amount) || 0), 0);
@@ -373,15 +390,15 @@ export const AdminBankSmsHub: React.FC<AdminBankSmsHubProps> = ({ onShowToast })
         )}
       </div>
 
-      {/* Pending Appointments Queue (Held chairs needing confirmation or review) */}
+      {/* Pending Appointments Queue awaiting Admin payment verification */}
       {pendingAppointments.length > 0 && (
         <div className="p-5 rounded-3xl bg-zinc-900 border border-purple-500/30 space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
             <h3 className="font-serif text-sm font-bold text-purple-300 flex items-center gap-2">
               <Clock className="w-4 h-4 text-purple-400" />
-              <span>Pending Customer Claims Awaiting Bank Clearance ({pendingAppointments.length})</span>
+              <span>Pending Customer Claims Awaiting Verification ({pendingAppointments.length})</span>
             </h3>
-            <span className="text-[11px] text-zinc-400">15-minute chair hold active</span>
+            <span className="text-[11px] text-zinc-400">Verify UTR against bank SMS / statement before confirming</span>
           </div>
 
           <div className="overflow-x-auto">
@@ -392,54 +409,86 @@ export const AdminBankSmsHub: React.FC<AdminBankSmsHubProps> = ({ onShowToast })
                   <th className="py-2.5 px-3">Client</th>
                   <th className="py-2.5 px-3">Service &amp; Slot</th>
                   <th className="py-2.5 px-3">Claimed UTR</th>
+                  <th className="py-2.5 px-3">Payment Status</th>
                   <th className="py-2.5 px-3">Deposit Due</th>
                   <th className="py-2.5 px-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800">
-                {pendingAppointments.map(apt => (
-                  <tr key={apt.id} className="hover:bg-zinc-800/40">
-                    <td className="py-3 px-3 font-mono font-bold text-amber-400">
-                      {apt.bookingRef}
-                    </td>
-                    <td className="py-3 px-3">
-                      <div className="font-semibold text-zinc-200">{apt.clientName}</div>
-                      <div className="text-zinc-400 text-[11px]">{apt.clientPhone}</div>
-                    </td>
-                    <td className="py-3 px-3">
-                      <div className="text-zinc-200 font-medium">{apt.serviceName}</div>
-                      <div className="text-zinc-400 text-[11px]">{apt.date} • {apt.timeSlot}</div>
-                    </td>
-                    <td className="py-3 px-3">
-                      <span className="font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 font-bold">
-                        {apt.upiTransactionId || 'No UTR'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 font-mono font-bold text-emerald-400">
-                      ₹{apt.advancePaid}
-                    </td>
-                    <td className="py-3 px-3 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => handleManualVerify(apt)}
-                          className="px-2.5 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition"
-                          title="Verify Bank SMS & Confirm Appointment"
-                        >
-                          <Check className="w-3 h-3" />
-                          <span>Verify Deposit</span>
-                        </button>
-                        <button
-                          onClick={() => handleRejectFake(apt)}
-                          className="px-2.5 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition"
-                          title="Reject Fake UTR & Free Slot"
-                        >
-                          <XCircle className="w-3 h-3" />
-                          <span>Reject Fake</span>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {pendingAppointments.map(apt => {
+                  const isFailed = apt.paymentStatus === 'FAILED';
+                  const payLabel = isFailed ? 'FAILED' : 'PAYMENT_VERIFICATION_PENDING';
+                  const isConfirmingReject = pendingRejectId === apt.id;
+                  return (
+                    <tr key={apt.id} className="hover:bg-zinc-800/40">
+                      <td className="py-3 px-3 font-mono font-bold text-amber-400">
+                        {apt.bookingRef}
+                      </td>
+                      <td className="py-3 px-3">
+                        <div className="font-semibold text-zinc-200">{apt.clientName}</div>
+                        <div className="text-zinc-400 text-[11px]">{apt.clientPhone}</div>
+                      </td>
+                      <td className="py-3 px-3">
+                        <div className="text-zinc-200 font-medium">{apt.serviceName}</div>
+                        <div className="text-zinc-400 text-[11px]">{apt.date} • {apt.timeSlot}</div>
+                      </td>
+                      <td className="py-3 px-3">
+                        <span className="font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 font-bold">
+                          {apt.upiTransactionId || 'No UTR'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
+                          isFailed
+                            ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                            : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                        }`}>
+                          {payLabel}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 font-mono font-bold text-emerald-400">
+                        ₹{apt.advancePaid}
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => handleManualVerify(apt)}
+                            className="px-2.5 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition"
+                            title="Verify Payment & Confirm Appointment"
+                          >
+                            <Check className="w-3 h-3" />
+                            <span>Verify Payment</span>
+                          </button>
+                          {isConfirmingReject ? (
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleRejectFake(apt)}
+                                className="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-bold cursor-pointer transition"
+                              >
+                                Confirm Reject
+                              </button>
+                              <button
+                                onClick={() => setPendingRejectId(null)}
+                                className="px-2 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] font-semibold cursor-pointer transition"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setPendingRejectId(apt.id)}
+                              className="px-2.5 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition"
+                              title="Mark Payment FAILED & Set PAYMENT_PENDING"
+                            >
+                              <XCircle className="w-3 h-3" />
+                              <span>Reject Payment</span>
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
