@@ -1,4 +1,4 @@
-import { Appointment, BlockedSlotWindow } from '../types';
+import { Appointment, BlockedSlotWindow, StaffMember } from '../types';
 
 /**
  * Salon 3-Hour / 4-Hour Standard Time Slots (9:00 AM to 10:00 PM)
@@ -500,5 +500,133 @@ export function getServiceAvailabilityInsight(
     highlightText: '🟢 All slots open for advance booking (9 AM - 10 PM)',
     recommendedSlot: SALON_TIME_SLOTS[0],
     isUrgent: false
+  };
+}
+
+/**
+ * Returns the canonical salon time slot matching the current wall-clock time (or next upcoming slot).
+ */
+export function getCurrentSalonSlot(now: Date = new Date()): string {
+  const hour = now.getHours();
+  if (hour < 12) return SALON_TIME_SLOTS[0]; // 09:00 AM - 12:00 PM
+  if (hour < 15) return SALON_TIME_SLOTS[1]; // 12:00 PM - 03:00 PM
+  if (hour < 18) return SALON_TIME_SLOTS[2]; // 03:00 PM - 06:00 PM
+  return SALON_TIME_SLOTS[3]; // 06:00 PM - 10:00 PM
+}
+
+export interface StaffDynamicAvailability {
+  status: 'Busy' | 'Active' | 'On Leave';
+  label: string;
+  activeBookings: Appointment[];
+  nextAvailableSlot: string;
+  slotsBookedCount: number;
+}
+
+const doesAppointmentMatchStaff = (apt: Appointment, member: StaffMember): boolean => {
+  const stylistRaw = (apt.stylistName || '').trim().toLowerCase();
+  const memberName = (member.name || '').trim().toLowerCase();
+  if (!memberName) return false;
+  if (!stylistRaw) return false;
+
+  if (stylistRaw === memberName || stylistRaw.includes(memberName) || memberName.includes(stylistRaw)) {
+    return true;
+  }
+
+  // Match by meaningful first/last name tokens
+  const memberTokens = memberName.split(/\s+/).filter(t => t.length >= 3);
+  if (memberTokens.some(token => stylistRaw.includes(token))) {
+    return true;
+  }
+
+  // Founder / Owner fallback when booking uses "Self-Employed" or "Owner"
+  const isFounder =
+    member.id === 'staff-1' ||
+    member.role.toLowerCase().includes('founder') ||
+    member.role.toLowerCase().includes('director');
+  if (
+    isFounder &&
+    (stylistRaw.includes('self-employed') ||
+      stylistRaw.includes('self employed') ||
+      stylistRaw.includes('owner') ||
+      stylistRaw.includes('dinesh'))
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
+/**
+ * Computes real-time Busy vs Active vs On Leave status for a specialist at a given date & slot.
+ */
+export function getStaffDynamicStatus(
+  member: StaffMember,
+  appointments: Appointment[],
+  date: string,
+  timeSlot: string,
+  blockedWindows?: BlockedSlotWindow[],
+  isOwnerOnBreakToday?: boolean
+): StaffDynamicAvailability {
+  const cleanDate = (date || getLocalDateString()).split('T')[0].trim();
+  const canonicalSlot = mapToCanonicalSlot(timeSlot || getCurrentSalonSlot());
+
+  const adminBlock = isSlotBlockedByAdmin(canonicalSlot, cleanDate, blockedWindows, isOwnerOnBreakToday);
+  if (member.status === 'On Leave' || adminBlock.isBlocked) {
+    const nextOpen = SALON_TIME_SLOTS.find(s => !isSlotBlockedByAdmin(s, cleanDate, blockedWindows, isOwnerOnBreakToday).isBlocked);
+    return {
+      status: 'On Leave',
+      label: adminBlock.isBlocked ? 'Salon Closed / Break' : 'On Leave',
+      activeBookings: [],
+      nextAvailableSlot: member.status === 'On Leave' ? 'Next Working Day' : (nextOpen || 'Tomorrow'),
+      slotsBookedCount: 0
+    };
+  }
+
+  const staffDayActive = appointments.filter(apt => {
+    const aptDate = (apt.date || '').split('T')[0].trim();
+    if (aptDate !== cleanDate) return false;
+    const status = (apt.bookingStatus || apt.status || 'CONFIRMED').toUpperCase();
+    if (status !== 'PENDING' && status !== 'CONFIRMED') return false;
+    return doesAppointmentMatchStaff(apt, member);
+  });
+
+  const activeBookings = staffDayActive.filter(
+    apt => mapToCanonicalSlot(apt.timeSlot) === canonicalSlot
+  );
+
+  // Also detect if all 3 chairs in this slot are full and staff has no explicit exclusion
+  const slotTotalBookings = appointments.filter(apt => {
+    const aptDate = (apt.date || '').split('T')[0].trim();
+    const status = (apt.bookingStatus || apt.status || 'CONFIRMED').toUpperCase();
+    return (
+      aptDate === cleanDate &&
+      (status === 'PENDING' || status === 'CONFIRMED') &&
+      mapToCanonicalSlot(apt.timeSlot) === canonicalSlot
+    );
+  });
+
+  const nextAvailableSlot =
+    SALON_TIME_SLOTS.find(s => {
+      if (isSlotBlockedByAdmin(s, cleanDate, blockedWindows, isOwnerOnBreakToday).isBlocked) return false;
+      const busyInSlot = staffDayActive.some(a => mapToCanonicalSlot(a.timeSlot) === s);
+      return !busyInSlot;
+    }) || 'Tomorrow 09:00 AM';
+
+  if (activeBookings.length > 0 || slotTotalBookings.length >= MAX_PARALLEL_CHAIRS) {
+    return {
+      status: 'Busy',
+      label: activeBookings.length > 0 ? `Busy (${activeBookings.length} client in slot)` : 'Busy (Slot Full)',
+      activeBookings,
+      nextAvailableSlot,
+      slotsBookedCount: staffDayActive.length
+    };
+  }
+
+  return {
+    status: 'Active',
+    label: 'Active',
+    activeBookings: [],
+    nextAvailableSlot: canonicalSlot,
+    slotsBookedCount: staffDayActive.length
   };
 }

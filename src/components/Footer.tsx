@@ -32,7 +32,7 @@ export const Footer: React.FC = () => {
             </div>
             <div>
               <div className="text-zinc-900 dark:text-zinc-100 font-bold text-sm">UPI &amp; Digital Payments</div>
-              <div className="text-zinc-600 dark:text-zinc-400 text-xs">Instant confirmation via Google Pay, PhonePe, Paytm, and NetBanking.</div>
+              <div className="text-zinc-600 dark:text-zinc-400 text-xs">Instant confirmation via Google Pay and PhonePe.</div>
             </div>
           </div>
 
@@ -52,9 +52,9 @@ export const Footer: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           {/* Col 1: Brand */}
-          <div className="space-y-4">
-            <div className="cursor-pointer" onClick={() => handleNav('home')}>
-              <ModernSalonLogo size="md" showTagline={true} />
+          <div className="space-y-4 min-w-0">
+            <div className="cursor-pointer max-w-full overflow-hidden" onClick={() => handleNav('home')}>
+              <ModernSalonLogo size="sm" showTagline={true} allowWrap={true} />
             </div>
             <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
               Modern Unisex Salon in Mohol. Specialized in HD Bridal Makeup, Hydrafacials, Hair Chemical Straightening/Keratin, and Executive Grooming.
@@ -73,7 +73,7 @@ export const Footer: React.FC = () => {
           </div>
 
           {/* Col 2: Services Categories */}
-          <div>
+          <div className="min-w-0">
             <h4 className="font-bold text-xs tracking-wider uppercase font-mono mb-4 text-purple-700 dark:text-amber-500">
               Service Price List
             </h4>
@@ -112,7 +112,7 @@ export const Footer: React.FC = () => {
           </div>
 
           {/* Col 3: Quick Navigation & Terms */}
-          <div>
+          <div className="min-w-0">
             <h4 className="font-bold text-xs tracking-wider uppercase font-mono mb-4 text-purple-700 dark:text-amber-500">
               Quick Navigation
             </h4>
@@ -152,7 +152,7 @@ export const Footer: React.FC = () => {
           </div>
 
           {/* Col 4: Salon Hours & Exact Location */}
-          <div className="space-y-3">
+          <div className="space-y-3 min-w-0">
             <h4 className="font-bold text-xs tracking-wider uppercase font-mono mb-4 text-purple-700 dark:text-amber-500">
               Modern Salon Mohol
             </h4>

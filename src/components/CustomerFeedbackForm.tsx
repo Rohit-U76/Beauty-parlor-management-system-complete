@@ -39,9 +39,10 @@ export const CustomerFeedbackForm: React.FC<CustomerFeedbackFormProps> = ({
   title = "Share Your Salon Experience",
   subtitle = "Your real-time rating and feedback help us maintain 5-star styling standards in Mohol."
 }) => {
-  const { services, addReview, openBookingModal } = useSalon();
+  const { services, staffMembers, addReview, openBookingModal } = useSalon();
 
   // Form State
+  const [reviewFocus, setReviewFocus] = useState<'BOTH' | 'SALON' | 'STAFF'>('BOTH');
   const [clientName, setClientName] = useState(initialAppointment?.clientName || '');
   const [clientPhone, setClientPhone] = useState(initialAppointment?.clientPhone || '');
   const [clientEmail, setClientEmail] = useState(initialAppointment?.clientEmail || '');
@@ -49,9 +50,19 @@ export const CustomerFeedbackForm: React.FC<CustomerFeedbackFormProps> = ({
     initialAppointment?.serviceName || services[0]?.name || 'O3 Prof. Facial'
   );
   const [bookingRef, setBookingRef] = useState(initialAppointment?.bookingRef || '');
-  const [stylistName, setStylistName] = useState(
-    initialAppointment?.stylistName || 'Self-Employed (Master Stylist)'
+  const matchedInitialStaff = staffMembers.find(
+    m =>
+      initialAppointment?.stylistName &&
+      (m.name.toLowerCase().includes(initialAppointment.stylistName.toLowerCase()) ||
+        initialAppointment.stylistName.toLowerCase().includes(m.name.toLowerCase()))
   );
+  const [selectedStaffId, setSelectedStaffId] = useState<string>(
+    matchedInitialStaff?.id || staffMembers[0]?.id || ''
+  );
+  const [stylistName, setStylistName] = useState(
+    matchedInitialStaff?.name || initialAppointment?.stylistName || staffMembers[0]?.name || 'Self-Employed (Master Stylist)'
+  );
+  const [staffRating, setStaffRating] = useState<number>(5);
 
   // Ratings
   const [rating, setRating] = useState<number>(5);
@@ -126,28 +137,35 @@ export const CustomerFeedbackForm: React.FC<CustomerFeedbackFormProps> = ({
     const matchedSrv = services.find(s => s.name === selectedService);
     const category = matchedSrv?.category || 'Hair & Skin Care';
 
+    const chosenStaff = staffMembers.find(s => s.id === selectedStaffId);
+    const resolvedStaffName = chosenStaff?.name || stylistName;
+
     // Submit review to global context (triggers real-time broadcast and admin notification)
     setTimeout(() => {
       addReview({
         clientName: clientName.trim(),
         clientPhone: clientPhone.trim() || undefined,
         clientEmail: clientEmail.trim() || undefined,
-        rating,
+        rating: reviewFocus === 'STAFF' ? staffRating : rating,
         serviceName: selectedService,
         category: typeof category === 'string' ? category : undefined,
         comment: comment.trim() || 'Wonderful salon experience at Modern Unisex Salon Mohol. Highly recommended!',
         verifiedBooking,
         avatarUrl,
         bookingRef: bookingRef.trim() || undefined,
-        stylistName,
+        reviewType: reviewFocus === 'STAFF' ? 'STAFF' : 'SALON',
+        staffId: chosenStaff?.id || undefined,
+        staffName: resolvedStaffName,
+        staffRating: chosenStaff ? staffRating : undefined,
+        stylistName: resolvedStaffName,
         hygieneRating,
-        stylistSkillRating,
+        stylistSkillRating: chosenStaff ? staffRating : stylistSkillRating,
         punctualityRating,
         valueRating,
         recommend,
         npsScore,
         tags: selectedTags,
-        sentiment: rating >= 4 ? 'positive' : rating === 3 ? 'neutral' : 'critical',
+        sentiment: (reviewFocus === 'STAFF' ? staffRating : rating) >= 4 ? 'positive' : rating === 3 ? 'neutral' : 'critical',
         status: 'published'
       });
 
@@ -238,10 +256,32 @@ export const CustomerFeedbackForm: React.FC<CustomerFeedbackFormProps> = ({
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Review Focus Switcher */}
+        <div className="grid grid-cols-3 gap-2 p-1 rounded-2xl bg-zinc-950 border border-zinc-800 text-xs font-bold">
+          {[
+            { id: 'BOTH', label: 'Salon & Staff' },
+            { id: 'SALON', label: 'Salon Review' },
+            { id: 'STAFF', label: 'Staff Review Only' }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setReviewFocus(tab.id as any)}
+              className={`py-2 rounded-xl transition cursor-pointer ${
+                reviewFocus === tab.id
+                  ? 'bg-amber-500 text-zinc-950 shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
         {/* Main 5-Star Experience Rating */}
         <div className="p-5 rounded-2xl bg-zinc-950/80 border border-zinc-800 text-center space-y-3">
           <label className="text-xs font-bold uppercase tracking-wider text-zinc-300 block">
-            Overall Salon Experience Rating *
+            {reviewFocus === 'STAFF' ? 'Overall Staff Rating *' : 'Overall Salon Experience Rating *'}
           </label>
 
           <div className="flex items-center justify-center gap-2 sm:gap-3 py-2">
@@ -437,8 +477,8 @@ export const CustomerFeedbackForm: React.FC<CustomerFeedbackFormProps> = ({
           </div>
         </div>
 
-        {/* Optional Booking Ref & Stylist */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Optional Booking Ref, Staff Selector & Dedicated Staff Rating */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label className="text-[11px] font-bold text-zinc-300 block mb-1">
               Booking Reference (Optional)
@@ -454,14 +494,49 @@ export const CustomerFeedbackForm: React.FC<CustomerFeedbackFormProps> = ({
 
           <div>
             <label className="text-[11px] font-bold text-zinc-300 block mb-1">
-              Stylist / Specialist
+              Staff Member / Stylist
             </label>
-            <input
-              type="text"
-              value={stylistName}
-              onChange={(e) => setStylistName(e.target.value)}
+            <select
+              value={selectedStaffId}
+              onChange={(e) => {
+                const id = e.target.value;
+                setSelectedStaffId(id);
+                const found = staffMembers.find(s => s.id === id);
+                if (found) setStylistName(found.name);
+              }}
               className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-700 text-xs text-zinc-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
-            />
+            >
+              {staffMembers.map(m => (
+                <option key={m.id} value={m.id}>
+                  {m.name} ({m.role})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-[11px] font-bold text-zinc-300 block mb-1">
+              Individual Staff Rating ({staffRating}★)
+            </label>
+            <div className="px-3 py-1.5 rounded-xl bg-zinc-950 border border-zinc-700 flex items-center justify-between">
+              <div className="flex items-center gap-1">
+                {[1, 2, 3, 4, 5].map(s => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setStaffRating(s)}
+                    className="p-0.5 cursor-pointer"
+                  >
+                    <Star
+                      className={`w-4 h-4 ${
+                        staffRating >= s ? 'fill-purple-400 text-purple-400' : 'text-zinc-700'
+                      }`}
+                    />
+                  </button>
+                ))}
+              </div>
+              <span className="text-xs font-bold text-purple-400 font-mono">{staffRating}.0★</span>
+            </div>
           </div>
         </div>
 

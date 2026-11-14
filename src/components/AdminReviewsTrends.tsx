@@ -24,17 +24,20 @@ import {
   Check,
   RefreshCw,
   Plus,
-  X
+  X,
+  UserCheck
 } from 'lucide-react';
 import { useSalon } from '../context/SalonContext';
 import { Review } from '../types';
 
 export const AdminReviewsTrends: React.FC = () => {
-  const { reviews, addReview, updateReview, deleteReview, services, appointments } = useSalon();
+  const { reviews, addReview, updateReview, deleteReview, staffMembers } = useSalon();
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
   const [ratingFilter, setRatingFilter] = useState<'ALL' | '5' | '4' | '3' | 'CRITICAL' | 'NEEDS_REPLY' | 'FEATURED'>('ALL');
+  const [reviewScopeFilter, setReviewScopeFilter] = useState<'ALL' | 'SALON' | 'STAFF'>('ALL');
+  const [staffMemberFilter, setStaffMemberFilter] = useState<string>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [replyingReviewId, setReplyingReviewId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
@@ -130,14 +133,45 @@ export const AdminReviewsTrends: React.FC = () => {
     return (nps >= 0 ? `+${nps}` : `${nps}`);
   }, [reviews, totalReviews]);
 
+  const matchesStaffMember = (r: Review, staffId: string, staffName: string) => {
+    if (r.staffId && r.staffId === staffId) return true;
+    const revStaff = (r.staffName || r.stylistName || '').toLowerCase().trim();
+    const target = staffName.toLowerCase().trim();
+    return Boolean(revStaff && target && (revStaff === target || revStaff.includes(target) || target.includes(revStaff)));
+  };
+
+  // Staff Ratings Leaderboard
+  const staffLeaderboard = useMemo(() => {
+    return staffMembers.map(member => {
+      const matched = reviews.filter(r => matchesStaffMember(r, member.id, member.name));
+      const avgStaffRating = matched.length > 0
+        ? (matched.reduce((sum, r) => sum + (r.staffRating || r.stylistSkillRating || r.rating || 5), 0) / matched.length).toFixed(1)
+        : (member.rating || 4.9).toFixed(1);
+      return {
+        ...member,
+        matchedCount: matched.length,
+        avgStaffRating
+      };
+    });
+  }, [staffMembers, reviews]);
+
   // Filtered Reviews
   const filteredReviews = useMemo(() => {
     return reviews.filter(r => {
+      if (reviewScopeFilter === 'SALON' && r.reviewType === 'STAFF') return false;
+      if (reviewScopeFilter === 'STAFF' && r.reviewType !== 'STAFF' && !r.staffId && !r.staffName) return false;
+
+      if (staffMemberFilter !== 'ALL') {
+        const chosen = staffMembers.find(s => s.id === staffMemberFilter);
+        if (chosen && !matchesStaffMember(r, chosen.id, chosen.name)) return false;
+      }
+
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
         !q ||
         r.clientName.toLowerCase().includes(q) ||
         r.serviceName.toLowerCase().includes(q) ||
+        (r.staffName || r.stylistName || '').toLowerCase().includes(q) ||
         r.comment.toLowerCase().includes(q) ||
         (r.bookingRef && r.bookingRef.toLowerCase().includes(q)) ||
         (r.clientPhone && r.clientPhone.includes(q));
@@ -156,7 +190,7 @@ export const AdminReviewsTrends: React.FC = () => {
 
       return matchesSearch && matchesRating && matchesCat;
     });
-  }, [reviews, searchQuery, ratingFilter, categoryFilter]);
+  }, [reviews, reviewScopeFilter, staffMemberFilter, staffMembers, searchQuery, ratingFilter, categoryFilter]);
 
   // Handle Owner Reply
   const handleSaveReply = (reviewId: string) => {
@@ -179,9 +213,9 @@ export const AdminReviewsTrends: React.FC = () => {
 
   // Export to CSV
   const handleExportCSV = () => {
-    const headers = 'ID,Date,Client Name,Phone,Service,Rating,Hygiene,Stylist,Punctuality,Value,Comment,Owner Reply\n';
-    const rows = reviews.map(r => 
-      `"${r.id}","${r.date}","${r.clientName.replace(/"/g, '""')}","${r.clientPhone || ''}","${r.serviceName.replace(/"/g, '""')}",${r.rating},${r.hygieneRating || 5},${r.stylistSkillRating || 5},${r.punctualityRating || 5},${r.valueRating || 5},"${r.comment.replace(/"/g, '""')}","${(r.ownerReply || '').replace(/"/g, '""')}"`
+    const headers = 'ID,Date,Review Type,Staff Name,Staff Rating,Client Name,Phone,Service,Rating,Hygiene,Stylist,Punctuality,Value,Comment,Owner Reply\n';
+    const rows = filteredReviews.map(r => 
+      `"${r.id}","${r.date}","${r.reviewType || 'SALON'}","${(r.staffName || r.stylistName || '').replace(/"/g, '""')}",${r.staffRating || r.stylistSkillRating || r.rating},"${r.clientName.replace(/"/g, '""')}","${r.clientPhone || ''}","${r.serviceName.replace(/"/g, '""')}",${r.rating},${r.hygieneRating || 5},${r.stylistSkillRating || 5},${r.punctualityRating || 5},${r.valueRating || 5},"${r.comment.replace(/"/g, '""')}","${(r.ownerReply || '').replace(/"/g, '""')}"`
     ).join('\n');
 
     const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8;' });
@@ -192,7 +226,7 @@ export const AdminReviewsTrends: React.FC = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    showToast('Exported CSAT & Feedback report successfully.');
+    showToast('Exported CSAT & Staff Feedback report successfully.');
   };
 
   return (
@@ -486,15 +520,122 @@ export const AdminReviewsTrends: React.FC = () => {
         </div>
       </div>
 
+      {/* SEPARATE STAFF RATINGS & SPECIALIST SCORECARD */}
+      <div className="p-6 rounded-3xl bg-[#141418] border border-zinc-800 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800/80 pb-3">
+          <div>
+            <h3 className="font-serif text-lg font-bold text-zinc-100 flex items-center gap-2">
+              <UserCheck className="w-5 h-5 text-purple-400" />
+              <span>Individual Staff Ratings &amp; Review Leaderboard</span>
+            </h3>
+            <p className="text-xs text-zinc-400">
+              Separate staff performance tracked from dedicated client staff ratings. Click any specialist to filter their reviews.
+            </p>
+          </div>
+          {staffMemberFilter !== 'ALL' && (
+            <button
+              type="button"
+              onClick={() => setStaffMemberFilter('ALL')}
+              className="text-xs font-bold text-yellow-400 hover:underline self-start sm:self-auto cursor-pointer"
+            >
+              Reset Staff Filter
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+          {staffLeaderboard.map(member => {
+            const isSelected = staffMemberFilter === member.id;
+            return (
+              <button
+                key={member.id}
+                type="button"
+                onClick={() => {
+                  if (isSelected) {
+                    setStaffMemberFilter('ALL');
+                  } else {
+                    setStaffMemberFilter(member.id);
+                    setReviewScopeFilter('STAFF');
+                  }
+                }}
+                className={`p-3.5 rounded-2xl border text-left transition flex items-center justify-between gap-3 cursor-pointer ${
+                  isSelected
+                    ? 'border-purple-500 bg-purple-500/15 ring-1 ring-purple-500/40'
+                    : 'border-zinc-800 bg-zinc-950/70 hover:border-zinc-700'
+                }`}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <img
+                    src={member.image}
+                    alt={member.name}
+                    className="w-10 h-10 rounded-xl object-cover border border-zinc-700 shrink-0"
+                  />
+                  <div className="min-w-0">
+                    <div className="font-bold text-xs text-zinc-100 truncate">{member.name}</div>
+                    <div className="text-[11px] text-zinc-400 truncate">{member.role}</div>
+                    <div className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                      {member.matchedCount} live review{member.matchedCount === 1 ? '' : 's'}
+                    </div>
+                  </div>
+                </div>
+                <div className="px-2.5 py-1 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center gap-1 shrink-0">
+                  <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
+                  <span className="text-xs font-bold text-yellow-400 font-mono">{member.avgStaffRating}</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Filter & Search Bar */}
       <div className="p-4 rounded-2xl bg-[#141418] border border-zinc-800 space-y-3.5 shadow-xl">
+        {/* Salon vs Staff Scope Filter Row */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-800/80">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {[
+              { id: 'ALL', label: `All Reviews (${reviews.length})` },
+              { id: 'SALON', label: `Salon & Service (${reviews.filter(r => r.reviewType !== 'STAFF').length})` },
+              { id: 'STAFF', label: `Staff Reviews (${reviews.filter(r => r.reviewType === 'STAFF' || Boolean(r.staffId || r.staffName)).length})` }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => {
+                  setReviewScopeFilter(tab.id as any);
+                  if (tab.id === 'SALON') setStaffMemberFilter('ALL');
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  reviewScopeFilter === tab.id
+                    ? 'bg-purple-600 text-white shadow-sm'
+                    : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <select
+            value={staffMemberFilter}
+            onChange={(e) => setStaffMemberFilter(e.target.value)}
+            aria-label="Filter reviews by staff member"
+            className="px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-700 text-xs text-zinc-200 font-semibold focus:outline-none focus:border-purple-500"
+          >
+            <option value="ALL">All Staff Members</option>
+            {staffMembers.map(m => (
+              <option key={m.id} value={m.id}>{m.name} ({m.role})</option>
+            ))}
+          </select>
+        </div>
+
         <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
           {/* Search Box */}
           <div className="relative flex-1">
             <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search feedback by client name, phone, service, comments, or booking ref..."
+              placeholder="Search feedback by client name, staff member, phone, service, comments, or ref..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs sm:text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/40"
@@ -578,6 +719,12 @@ export const AdminReviewsTrends: React.FC = () => {
                         <span className="font-serif text-base font-bold text-zinc-100">
                           {rev.clientName}
                         </span>
+                        {rev.reviewType === 'STAFF' && (
+                          <span className="px-2 py-0.5 rounded-full bg-purple-500/20 border border-purple-500/40 text-purple-300 text-[10px] font-bold inline-flex items-center gap-1">
+                            <UserCheck className="w-3 h-3" />
+                            <span>Staff Review</span>
+                          </span>
+                        )}
                         {rev.verifiedBooking && (
                           <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold inline-flex items-center gap-1">
                             <ShieldCheck className="w-3 h-3" />
@@ -594,6 +741,15 @@ export const AdminReviewsTrends: React.FC = () => {
 
                       <div className="flex items-center gap-3 text-[11px] text-zinc-400 mt-0.5 flex-wrap">
                         <span className="font-semibold text-yellow-400">{rev.serviceName}</span>
+                        {(rev.staffName || rev.stylistName) && (
+                          <>
+                            <span>•</span>
+                            <span className="font-semibold text-purple-300 inline-flex items-center gap-1">
+                              <UserCheck className="w-3 h-3" />
+                              Staff: {rev.staffName || rev.stylistName} ({rev.staffRating || rev.stylistSkillRating || rev.rating}★)
+                            </span>
+                          </>
+                        )}
                         <span>•</span>
                         <span>{rev.date}</span>
                         {rev.bookingRef && (

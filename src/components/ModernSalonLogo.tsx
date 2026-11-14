@@ -5,13 +5,15 @@ interface ModernSalonLogoProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
   showTagline?: boolean;
   inverted?: boolean;
+  allowWrap?: boolean;
 }
 
 export const ModernSalonLogo: React.FC<ModernSalonLogoProps> = ({
   className = '',
   size = 'md',
   showTagline = true,
-  inverted = false
+  inverted = false,
+  allowWrap = false
 }) => {
   const iconSizes = {
     sm: 'w-7 h-7 sm:w-8 sm:h-8',
@@ -119,8 +121,10 @@ export const ModernSalonLogo: React.FC<ModernSalonLogoProps> = ({
 
       {/* Brand Typography & Tagline */}
       <div className="flex flex-col text-left leading-tight min-w-0">
-        <div className="flex items-center gap-1 sm:gap-1.5 whitespace-nowrap">
-          <span className={`font-serif uppercase font-extrabold text-amber-600 dark:text-amber-400 drop-shadow-sm whitespace-nowrap ${titleSizes[size]}`}>
+        <div className={`flex items-center gap-1 sm:gap-1.5 ${allowWrap ? 'flex-wrap' : 'whitespace-nowrap'}`}>
+          <span className={`font-serif uppercase font-extrabold text-amber-600 dark:text-amber-400 drop-shadow-sm ${
+            allowWrap ? 'whitespace-normal leading-snug tracking-wide text-xs sm:text-sm' : `whitespace-nowrap ${titleSizes[size]}`
+          }`}>
             MODERN UNISEX SALON
           </span>
           <span className="inline-block w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-red-500 shadow-sm shadow-red-500/50 shrink-0" />

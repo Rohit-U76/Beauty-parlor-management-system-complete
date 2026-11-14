@@ -56,7 +56,7 @@ function initDb() {
         bankAccountType: 'Current Account',
         merchantUpiId: 'ghodakedinesh@ybl',
         upiId: 'ghodakedinesh@ybl',
-        upiQrCodeUrl: '/assets/aistudio/image_d8a337a6.png',
+        upiQrCodeUrl: '',
         secondaryUpiId: '8104026257@axl',
         secondaryAccountHolder: 'DINESH VITTHAL GHODAKE',
         secondaryUpiQrCodeUrl: '/assets/aistudio/image_0e674b10.png',
@@ -1445,6 +1445,37 @@ async function startServer() {
     }
   });
 
+  // Update offer
+  app.put('/api/offers/:id', (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body || {};
+      const db = readDb();
+      let updatedOffer: any = null;
+      db.offers = (db.offers || []).map((o: any) => {
+        if (o.id === id) {
+          updatedOffer = {
+            ...o,
+            ...updates,
+            id,
+            code: updates.code ? String(updates.code).toUpperCase().trim() : o.code
+          };
+          return updatedOffer;
+        }
+        return o;
+      });
+
+      if (!updatedOffer) {
+        return res.status(404).json({ success: false, message: 'Offer not found' });
+      }
+
+      writeDb(db);
+      res.json({ success: true, offer: updatedOffer });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // Delete offer
   app.delete('/api/offers/:id', (req, res) => {
     try {
@@ -1724,7 +1755,7 @@ async function startServer() {
           `📅 *Date & Slot:* ${date || 'Upcoming'} at ${timeSlot || 'Scheduled Time'}\n` +
           `✂️ *Stylist:* ${stylistName || 'Master Stylist'}\n` +
           `💰 *Total Bill:* ₹${totalAmount || '0'}\n` +
-          `✅ *10% Advance Paid:* ₹${advancePaid || 'Deposit'} (Verified via Razorpay)\n` +
+          `✅ *10% Advance Paid:* ₹${advancePaid || 'Deposit'} (Verified via Direct UPI)\n` +
           `💵 *Balance at Salon Counter:* ₹${balanceDue || '0'}\n` +
           `────────────────────\n` +
           `📍 *Salon Address:* B.N. Gund Complex, Near Kanya Prashala & ICICI Bank, Mohol (413213)\n` +
@@ -1839,7 +1870,7 @@ async function startServer() {
         amount: parsedAmount,
         currency: 'INR',
         qrData: upiUrl,
-        supportedApps: ['Google Pay', 'PhonePe', 'Paytm', 'BHIM', 'Amazon Pay', 'Any UPI App']
+        supportedApps: ['PhonePe', 'Google Pay']
       });
     } catch (err: any) {
       console.error('Error creating UPI QR data:', err);
@@ -2153,35 +2184,39 @@ async function startServer() {
   // Real Bank Verification: checks against db.verifiedDeposits from forwarded SMS
   app.post('/api/payment/verify-upi', (req, res) => {
     try {
-      const { utr, advanceAmount, totalAmount, scannerUsed, customerName, serviceName } = req.body;
-      const cleanUtr = (utr || '').toString().trim();
+      const { utr, advanceAmount, totalAmount, scannerUsed, customerName, serviceName, paymentScreenshotUrl } = req.body;
+      const cleanUtr = (utr || '').toString().trim().replace(/\s+/g, '');
 
-      if (!cleanUtr || !/^\d{12}$/.test(cleanUtr)) {
+      const hasValidRef = /^[A-Za-z0-9\-_]{6,40}$/.test(cleanUtr);
+      if (!hasValidRef && !paymentScreenshotUrl) {
         return res.status(400).json({
           success: false,
-          error: 'Invalid UPI Reference / UTR Number. Must be exactly 12 numeric digits from your PhonePe/GPay/Bank SMS.'
+          error: 'Please enter a valid 12-digit UTR or PhonePe/Google Pay Transaction ID (min 6 characters), or upload a payment screenshot.'
         });
       }
+      const effectiveRef = hasValidRef ? cleanUtr : `SCR-${Date.now().toString().slice(-8)}`;
 
       const db = readDb();
       const existingAppointments = db.appointments || [];
 
       // Anti-Cheating & Duplicate UTR Prevention (already matched to a completed or confirmed appointment)
-      const duplicate = existingAppointments.find((apt: any) => 
-        ((apt.upiTransactionId && apt.upiTransactionId.trim() === cleanUtr) ||
-        (apt.razorpayPaymentId && apt.razorpayPaymentId.trim() === cleanUtr)) &&
-        apt.bookingStatus !== 'CANCELLED'
-      );
+      const duplicate = effectiveRef.startsWith('SCR-')
+        ? null
+        : existingAppointments.find((apt: any) =>
+            ((apt.upiTransactionId && apt.upiTransactionId.trim().toLowerCase() === effectiveRef.toLowerCase()) ||
+            (apt.razorpayPaymentId && apt.razorpayPaymentId.trim().toLowerCase() === effectiveRef.toLowerCase())) &&
+            apt.bookingStatus !== 'CANCELLED'
+          );
 
       if (duplicate) {
         return res.status(400).json({
           success: false,
-          error: `Duplicate Transaction ID: UTR "${cleanUtr}" has already been used for appointment ${duplicate.bookingRef}. Each booking requires a fresh, authentic UPI payment.`
+          error: `Duplicate Transaction ID: Ref "${effectiveRef}" has already been used for appointment ${duplicate.bookingRef}. Each booking requires a fresh UPI payment.`
         });
       }
 
       // Check if bank credit SMS has ALREADY arrived in db.verifiedDeposits
-      const verifiedDeposit = (db.verifiedDeposits || []).find((d: any) => d.utr === cleanUtr);
+      const verifiedDeposit = (db.verifiedDeposits || []).find((d: any) => d.utr === effectiveRef);
 
       const bookingRef = `MS-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
 
@@ -2204,15 +2239,15 @@ async function startServer() {
           success: true,
           verified: true,
           status: 'PAID',
-          upiTransactionId: cleanUtr,
-          paymentId: `upi_${cleanUtr}`,
+          upiTransactionId: effectiveRef,
+          paymentId: `upi_${effectiveRef}`,
           bookingRef,
           scannerUsed: verifiedDeposit.bankName || scannerUsed || 'MODERN JENTS PARLOUR (HDFC Bank)',
           advancePaid: advanceAmount,
           totalAmount,
           balanceDue: (totalAmount || 0) - (advanceAmount || 0),
           paidAt: verifiedDeposit.receivedAt || new Date().toISOString(),
-          paymentMethod: 'Direct Bank UPI / Scanner',
+          paymentMethod: 'PhonePe / Google Pay UPI',
           bankVerifiedSource: 'SMS_WEBHOOK',
           bankName: verifiedDeposit.bankName,
           message: `Official Bank SMS Verified! ₹${verifiedDeposit.amount} deposit confirmed in ${verifiedDeposit.bankName}.`
@@ -2224,16 +2259,16 @@ async function startServer() {
         success: true,
         verified: false,
         status: 'AWAITING_BANK_SMS',
-        upiTransactionId: cleanUtr,
-        paymentId: `upi_${cleanUtr}`,
+        upiTransactionId: effectiveRef,
+        paymentId: `upi_${effectiveRef}`,
         bookingRef,
         scannerUsed: scannerUsed || 'MODERN JENTS PARLOUR (HDFC Bank)',
         advancePaid: advanceAmount,
         totalAmount,
         balanceDue: (totalAmount || 0) - (advanceAmount || 0),
         paidAt: new Date().toISOString(),
-        paymentMethod: 'Direct Bank UPI / Scanner',
-        message: 'Awaiting Bank SMS confirmation. Starting real-time verification listener...'
+        paymentMethod: 'PhonePe / Google Pay UPI',
+        message: 'Payment reference recorded! Proceeding to confirm your booking.'
       });
     } catch (err: any) {
       console.error('Error verifying UPI payment:', err);
@@ -2752,7 +2787,7 @@ Owner & Master Stylist: Dinesh Ghodake (Phone: +91 8104026257, Email: dineshghod
 Salon Highlights:
 - Services: Women's Hair (Layered haircut, Keratin, Highlights), Men's Grooming (Executive Hair & Beard Styling, Charcoal detox), Skin & Facial (Radiance Facial Therapy, Hydra-glow, De-tan), Bridal & Pre-Bridal Makeovers (HD Airbrush, Mehendi, Sangeet styling), Nail Art, Body Spa & Massages.
 - Location & Hours: Open Daily (Mon-Sun): 09:00 AM - 10:00 PM.
-- Pricing & Deposit: We collect only a ${advPercentage}% Advance Deposit online via Direct Bank UPI QR Scanner (PhonePe, GPay, Paytm) to reserve appointments, and the remaining balance is paid conveniently at the salon reception counter after your service.
+- Pricing & Deposit: We collect only a ${advPercentage}% Advance Deposit online via PhonePe or Google Pay UPI QR Scanner to reserve appointments, and the remaining balance is paid conveniently at the salon reception counter after your service.
 - Offers: Apply available discount coupons during online booking.
 
 FORMATTING REQUIREMENTS:
@@ -2785,7 +2820,7 @@ FORMATTING REQUIREMENTS:
       let fallbackReply = `✨ **Welcome to Modern Unisex Salon!**\nHere is how we can style you today:\n• **Women's Hair & Styling:** Layered cuts, Balayage, Keratin treatments\n• **Skin & Glow:** Radiance Facials, Hydra-Glow, Instant De-Tan\n• **Men's Executive Care:** Sharp fades, Beard contouring, Charcoal detan\n• **Online Booking:** Reserve any 3-hour slot between 9:00 AM - 10:00 PM with just a **${advPercentage}% Advance Deposit** via Direct Bank UPI QR Scanner!`;
 
       if (lower.includes('price') || lower.includes('cost') || lower.includes('rate') || lower.includes('payment') || lower.includes('advance') || lower.includes('deposit') || lower.includes('10%')) {
-        fallbackReply = `💳 **Transparent Booking & Payment Policy:**\n• **Online Reservation:** Pay only **${advPercentage}% Advance Deposit** via Direct Bank UPI / Scanner (PhonePe, GPay, Paytm) straight to our HDFC Bank account.\n• **Balance Amount:** The remaining ${100 - Number(advPercentage)}% is payable at our salon reception after your treatment.\n• **Zero Convenience Fee:** Direct bank transfer saves you all platform charges!`;
+        fallbackReply = `💳 **Transparent Booking & Payment Policy:**\n• **Online Reservation:** Pay only **${advPercentage}% Advance Deposit** via PhonePe or Google Pay UPI QR Scanner straight to our bank account.\n• **Balance Amount:** The remaining ${100 - Number(advPercentage)}% is payable at our salon reception after your treatment.\n• **Zero Convenience Fee:** Direct UPI transfer saves you all platform charges!`;
       } else if (lower.includes('facial') || lower.includes('skin') || lower.includes('glow') || lower.includes('dull')) {
         fallbackReply = `🌸 **Recommended Facial Therapies for Glowing Skin:**\n• **Radiance Facial Therapy:** Deep hydration & barrier nourishment (₹1,800)\n• **Hydra-Glow Deep Pore Cleansing:** Extraction, fruit acid peel & galvanic infusion (₹2,500)\n• **Instant De-Tan & Glow Ritual:** Removes stubborn sun tanning in 45 mins (₹1,200)\n• **Special Offer:** Use code **GLOW20** to get **20% OFF** when booking today!`;
       } else if (lower.includes('hair') || lower.includes('cut') || lower.includes('keratin') || lower.includes('style') || lower.includes('beard') || lower.includes('men')) {
@@ -2800,7 +2835,7 @@ FORMATTING REQUIREMENTS:
     } catch (err: any) {
       console.warn('AI Chat fallback triggered:', err?.message);
       res.json({
-        reply: "Smart Salon is delighted to assist you! Feel free to explore our treatment catalog or book your slot with our secure 10% advance deposit via Razorpay."
+        reply: "Smart Salon is delighted to assist you! Feel free to explore our treatment catalog or book your slot with our secure 10% advance deposit via Direct UPI & QR."
       });
     }
   });

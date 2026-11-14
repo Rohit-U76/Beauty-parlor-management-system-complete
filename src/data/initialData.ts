@@ -50,7 +50,7 @@ export const SALON_TERMS_AND_POLICIES: SalonPolicyItem[] = [
     points: [
       'A 10% advance deposit secures your appointment slot instantly.',
       'All services must be paid in full immediately after service completion at the salon desk.',
-      'We accept Cash, UPI (Google Pay, PhonePe, Paytm), and other digital payment methods.',
+      'We accept Cash and UPI (PhonePe and Google Pay).',
       'Prices are transparent and subject to change without prior notice for special customizations.'
     ]
   },
@@ -1110,7 +1110,7 @@ export const INITIAL_SETTINGS: SalonSettings = {
   bankAccountType: 'Current Account',
   merchantUpiId: 'ghodakedinesh@ybl',
   upiId: 'ghodakedinesh@ybl',
-  upiQrCodeUrl: '/assets/aistudio/image_d8a337a6.png',
+  upiQrCodeUrl: '',
   secondaryUpiId: '8104026257@axl',
   secondaryAccountHolder: 'DINESH VITTHAL GHODAKE',
   secondaryUpiQrCodeUrl: '/assets/aistudio/image_0e674b10.png',

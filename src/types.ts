@@ -148,6 +148,10 @@ export interface Review {
   sentiment?: 'positive' | 'neutral' | 'critical';
   status?: 'published' | 'under_review' | 'resolved';
   helpfulCount?: number;
+  reviewType?: 'SALON' | 'STAFF';
+  staffId?: string;
+  staffName?: string;
+  staffRating?: number;
 }
 
 export interface OfferCoupon {

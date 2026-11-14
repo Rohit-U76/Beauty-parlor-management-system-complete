@@ -107,7 +107,7 @@ export const AiAssistantWidget: React.FC = () => {
   const getInstantExpertAnswer = (query: string): string | null => {
     const lower = query.toLowerCase();
     if (lower.includes('price') || lower.includes('cost') || lower.includes('rate') || lower.includes('advance') || lower.includes('deposit') || lower.includes('10%')) {
-      return `💳 **Transparent Booking & Payment:**\n• **Online Reservation:** Pay only **${advPct}% Advance Deposit** via Direct Bank UPI QR Scanner (PhonePe, GPay, Paytm) straight to our bank account.\n• **Balance Amount:** The remaining ${100 - Number(advPct)}% is paid at salon reception after your service.\n• **Zero Convenience Fee:** Direct bank transfer saves all third-party charges!`;
+      return `💳 **Transparent Booking & Payment:**\n• **Online Reservation:** Pay only **${advPct}% Advance Deposit** via PhonePe or Google Pay UPI QR Scanner straight to our bank account.\n• **Balance Amount:** The remaining ${100 - Number(advPct)}% is paid at salon reception after your service.\n• **Zero Convenience Fee:** Direct UPI transfer saves all third-party charges!`;
     }
     if (lower.includes('timing') || lower.includes('hour') || lower.includes('time') || lower.includes('open') || lower.includes('close')) {
       return `⏰ **Salon Timings & Schedule:**\n• **Operating Hours:** Open Daily from **09:00 AM to 10:00 PM**\n• **Location:** Mohol, B.N. Gund Complex, Kurul Road\n• **Stylist & Founder:** Dinesh Ghodake\n• **Bookings:** Reserve your preferred 3-4 hour slot online!`;

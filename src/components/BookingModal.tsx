@@ -28,7 +28,7 @@ import { useSalon } from '../context/SalonContext';
 import { DirectUpiPaymentModal } from './DirectUpiPaymentModal';
 import { ServiceItem, Appointment, PriceTierVariant } from '../types';
 import { ModernSalonLogo } from './ModernSalonLogo';
-import { SALON_TIME_SLOTS, SALON_SLOT_DETAILS, getSlotAvailability, getDayAvailabilitySummary, isSlotAvailableForDate, getLocalDateString } from '../utils/availability';
+import { SALON_TIME_SLOTS, SALON_SLOT_DETAILS, getSlotAvailability, getDayAvailabilitySummary, isSlotAvailableForDate, getLocalDateString, getStaffDynamicStatus, getCurrentSalonSlot } from '../utils/availability';
 import { printSalonReceipt, downloadReceiptFile } from '../utils/receiptPrinter';
 import { ReceiptModal } from './ReceiptModal';
 import { AppointmentPassModal } from './AppointmentPassModal';
@@ -45,6 +45,8 @@ export const BookingModal: React.FC = () => {
     refreshSettings,
     currentUser,
     appointments,
+    staffMembers,
+    reviews,
     isOwnerOnBreakToday,
     blockedWindows
   } = useSalon();
@@ -53,9 +55,9 @@ export const BookingModal: React.FC = () => {
   const [step, setStep] = useState<number>(1);
   const [selectedService, setSelectedService] = useState<ServiceItem | null>(null);
   const [selectedTier, setSelectedTier] = useState<PriceTierVariant | null>(null);
-  const [selectedStylist, setSelectedStylist] = useState<string>('Self-Employed (Master Stylist & Founder)');
+  const [selectedStylist, setSelectedStylist] = useState<string>(staffMembers[0]?.name || 'Self-Employed (Master Stylist & Founder)');
   const [selectedDate, setSelectedDate] = useState<string>('');
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>(SALON_TIME_SLOTS[0]);
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>(getCurrentSalonSlot());
   
   // Client details
   const [clientName, setClientName] = useState<string>('');
@@ -75,18 +77,42 @@ export const BookingModal: React.FC = () => {
   const [showReceiptModal, setShowReceiptModal] = useState<boolean>(false);
   const [showPassModal, setShowPassModal] = useState<boolean>(false);
 
-  // Stylists list - "Self Employed" default
-  const stylists = [
-    'Self-Employed (Master Stylist & Founder)',
-    'Senior Beauty & Skin Specialist',
-    'Certified Hair & Chemical Treatment Expert'
-  ];
+  // Compute dynamic Busy/Active/On Leave status and live review rating per staff member
+  const effectiveCheckDate = selectedDate || getLocalDateString();
+  const effectiveCheckSlot = selectedTimeSlot || getCurrentSalonSlot();
+
+  const staffOptionsWithStatus = staffMembers.map(member => {
+    const dyn = getStaffDynamicStatus(
+      member,
+      appointments,
+      effectiveCheckDate,
+      effectiveCheckSlot,
+      blockedWindows,
+      isOwnerOnBreakToday
+    );
+    const staffRevs = reviews.filter(r => {
+      if (r.staffId && r.staffId === member.id) return true;
+      const rn = (r.staffName || r.stylistName || '').toLowerCase().trim();
+      const mn = member.name.toLowerCase().trim();
+      return Boolean(rn && mn && (rn === mn || rn.includes(mn) || mn.includes(rn)));
+    });
+    const avgRating = staffRevs.length > 0
+      ? (staffRevs.reduce((s, r) => s + (r.staffRating || r.stylistSkillRating || r.rating || 5), 0) / staffRevs.length).toFixed(1)
+      : (member.rating || 4.9).toFixed(1);
+    return {
+      member,
+      dyn,
+      avgRating,
+      reviewCount: staffRevs.length > 0 ? staffRevs.length : (member.reviewsCount || 0)
+    };
+  });
 
   const resetBookingForm = (targetService?: ServiceItem | null) => {
     const dateStr = getLocalDateString();
     setSelectedDate(dateStr);
-    setSelectedTimeSlot(SALON_TIME_SLOTS[0]);
-    setSelectedStylist('Self-Employed (Master Stylist & Founder)');
+    const defaultSlot = SALON_TIME_SLOTS.find(s => isSlotAvailableForDate(s, dateStr, blockedWindows, isOwnerOnBreakToday)) || SALON_TIME_SLOTS[0];
+    setSelectedTimeSlot(defaultSlot);
+    setSelectedStylist(staffMembers[0]?.name || 'Self-Employed (Master Stylist & Founder)');
     const srv = targetService !== undefined ? targetService : (selectedServiceForBooking || services[0] || null);
     setSelectedService(srv);
     if (srv && srv.tierOptions && srv.tierOptions.length > 0) {
@@ -242,7 +268,7 @@ export const BookingModal: React.FC = () => {
         advanceAmount: advanceDeposit,
         balanceDue: balanceAtSalon,
         upiTransactionId: utr,
-        paymentMethod: 'Direct Bank UPI / Scanner',
+        paymentMethod: 'PhonePe / Google Pay UPI',
         scannerUsed: scannerUsed || 'MODERN JENTS PARLOUR',
         razorpayPaymentId: utr,
         razorpayOrderId: paymentId,
@@ -279,7 +305,7 @@ export const BookingModal: React.FC = () => {
               <p className="text-[11px] text-zinc-600 dark:text-zinc-400 truncate">
                 {step === 4 
                   ? `${advancePercentage}% Advance Deposit Verified • Digital Pass Ready`
-                  : `${advancePercentage}% Online Deposit via UPI / Razorpay • ${100 - advancePercentage}% Balance at Counter`
+                  : `${advancePercentage}% Online Deposit via Direct UPI (PhonePe / GPay) • ${100 - advancePercentage}% Balance at Counter`
                 }
               </p>
             </div>
@@ -423,36 +449,61 @@ export const BookingModal: React.FC = () => {
                 </div>
               )}
 
-              {/* Stylist Selection */}
+              {/* Stylist Selection with Live Busy / Active Slot Status */}
               <div>
-                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-400 uppercase tracking-wider block mb-2">
-                  2. Select Master Stylist / Grooming Artist
-                </label>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <label className="text-xs font-bold text-zinc-700 dark:text-zinc-400 uppercase tracking-wider">
+                    2. Select Master Stylist / Grooming Artist
+                  </label>
+                  <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400">
+                    Slot: {effectiveCheckDate} • {effectiveCheckSlot}
+                  </span>
+                </div>
                 <div className="grid grid-cols-1 gap-2">
-                  {stylists.map((st) => (
-                    <label
-                      key={st}
-                      className={`p-3 rounded-2xl border cursor-pointer transition flex items-center justify-between text-xs font-medium ${
-                        selectedStylist === st
-                          ? 'border-purple-600 dark:border-amber-500 bg-purple-50 dark:bg-amber-500/15 text-purple-950 dark:text-white font-bold'
-                          : 'border-purple-100 dark:border-zinc-800 bg-white dark:bg-[#181820]/70 text-zinc-800 dark:text-zinc-400 hover:border-purple-300 dark:hover:border-zinc-700'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <input
-                          type="radio"
-                          name="stylist"
-                          checked={selectedStylist === st}
-                          onChange={() => setSelectedStylist(st)}
-                          className="accent-purple-600 dark:accent-amber-500"
-                        />
-                        <span>{st}</span>
-                      </div>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold">
-                        Available
-                      </span>
-                    </label>
-                  ))}
+                  {staffOptionsWithStatus.map(({ member, dyn, avgRating, reviewCount }) => {
+                    const stLabel = `${member.name} (${member.role})`;
+                    const isChosen = selectedStylist === member.name || selectedStylist === stLabel;
+                    const isActive = dyn.status === 'Active';
+                    const isBusy = dyn.status === 'Busy';
+
+                    return (
+                      <label
+                        key={member.id}
+                        className={`p-3 rounded-2xl border cursor-pointer transition flex items-center justify-between gap-2 text-xs font-medium ${
+                          isChosen
+                            ? 'border-purple-600 dark:border-amber-500 bg-purple-50 dark:bg-amber-500/15 text-purple-950 dark:text-white font-bold'
+                            : 'border-purple-100 dark:border-zinc-800 bg-white dark:bg-[#181820]/70 text-zinc-800 dark:text-zinc-400 hover:border-purple-300 dark:hover:border-zinc-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <input
+                            type="radio"
+                            name="stylist"
+                            checked={isChosen}
+                            onChange={() => setSelectedStylist(member.name)}
+                            className="accent-purple-600 dark:accent-amber-500 shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <div className="truncate font-semibold">{member.name}</div>
+                            <div className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
+                              {member.role} • ★ {avgRating} ({reviewCount})
+                            </div>
+                          </div>
+                        </div>
+                        <span
+                          className={`text-[10px] font-mono px-2 py-0.5 rounded-full border font-bold shrink-0 ${
+                            isActive
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                              : isBusy
+                              ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30'
+                              : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                          }`}
+                        >
+                          {isActive ? 'Active' : isBusy ? `Busy (${dyn.nextAvailableSlot})` : dyn.label}
+                        </span>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
             </div>

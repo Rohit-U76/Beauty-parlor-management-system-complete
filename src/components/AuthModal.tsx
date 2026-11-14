@@ -54,6 +54,8 @@ export const AuthModal: React.FC = () => {
   const [regPhone, setRegPhone] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
+  const [regConfirmPassword, setRegConfirmPassword] = useState('');
+  const [showRegConfirmPassword, setShowRegConfirmPassword] = useState(false);
   const [regServices, setRegServices] = useState<string[]>([]);
 
   // Forgot Password State
@@ -125,6 +127,17 @@ export const AuthModal: React.FC = () => {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
+
+    if (regPassword.length < 6) {
+      setErrorMsg('Password must be at least 6 characters long.');
+      return;
+    }
+
+    if (regPassword !== regConfirmPassword) {
+      setErrorMsg('Passwords do not match. Please enter the same password twice.');
+      return;
+    }
+
     setIsLoading(true);
 
     const res = await registerCustomer({
@@ -625,27 +638,82 @@ export const AuthModal: React.FC = () => {
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300">
-                  Password *
-                </label>
-                <div className="relative">
-                  <input
-                    type={showRegPassword ? 'text' : 'password'}
-                    required
-                    id="modal-reg-password"
-                    value={regPassword}
-                    onChange={(e) => setRegPassword(e.target.value)}
-                    placeholder="Create a password (min 6 chars)"
-                    className="w-full px-3 py-2 pr-9 rounded-xl bg-purple-50/40 dark:bg-zinc-950 border border-purple-200 dark:border-zinc-700 focus:border-purple-600 dark:focus:border-amber-500 text-xs text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowRegPassword(!showRegPassword)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700 dark:hover:text-white p-0.5 cursor-pointer"
-                  >
-                    {showRegPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300">
+                    Password *
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showRegPassword ? 'text' : 'password'}
+                      required
+                      minLength={6}
+                      id="modal-reg-password"
+                      value={regPassword}
+                      onChange={(e) => setRegPassword(e.target.value)}
+                      placeholder="Create password (min 6 chars)"
+                      className="w-full px-3 py-2 pr-9 rounded-xl bg-purple-50/40 dark:bg-zinc-950 border border-purple-200 dark:border-zinc-700 focus:border-purple-600 dark:focus:border-amber-500 text-xs text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowRegPassword(!showRegPassword)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700 dark:hover:text-white p-0.5 cursor-pointer"
+                      aria-label={showRegPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showRegPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300">
+                    Confirm Password *
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showRegConfirmPassword ? 'text' : 'password'}
+                      required
+                      minLength={6}
+                      id="modal-reg-confirm-password"
+                      value={regConfirmPassword}
+                      onChange={(e) => setRegConfirmPassword(e.target.value)}
+                      placeholder="Re-enter password"
+                      className={`w-full px-3 py-2 pr-9 rounded-xl bg-purple-50/40 dark:bg-zinc-950 border text-xs text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 outline-none transition ${
+                        regConfirmPassword.length > 0
+                          ? regPassword === regConfirmPassword
+                            ? 'border-emerald-500 focus:border-emerald-500'
+                            : 'border-rose-500 focus:border-rose-500'
+                          : 'border-purple-200 dark:border-zinc-700 focus:border-purple-600 dark:focus:border-amber-500'
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowRegConfirmPassword(!showRegConfirmPassword)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700 dark:hover:text-white p-0.5 cursor-pointer"
+                      aria-label={showRegConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                    >
+                      {showRegConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                  {regConfirmPassword.length > 0 && (
+                    <p className={`text-[10px] font-semibold flex items-center gap-1 ${
+                      regPassword === regConfirmPassword
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-rose-600 dark:text-rose-400'
+                    }`}>
+                      {regPassword === regConfirmPassword ? (
+                        <>
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span>Passwords match</span>
+                        </>
+                      ) : (
+                        <>
+                          <AlertCircle className="w-3 h-3" />
+                          <span>Passwords do not match</span>
+                        </>
+                      )}
+                    </p>
+                  )}
                 </div>
               </div>
 

@@ -126,7 +126,7 @@ export const FaqSection: React.FC = () => {
       id: 'faq-pay-1',
       category: 'Payments & Booking',
       question: 'When and how is the remaining 90% balance settled?',
-      answer: 'The remaining 90% balance is payable only after your treatment is completed to your satisfaction at our salon reception desk. We accept Google Pay, PhonePe, Paytm, Debit/Credit Cards, and Cash.',
+      answer: 'The remaining 90% balance is payable only after your treatment is completed to your satisfaction at our salon reception desk. We accept Google Pay, PhonePe, and Cash.',
       highlight: '90% balance settled at the salon desk after service completion.'
     },
     {

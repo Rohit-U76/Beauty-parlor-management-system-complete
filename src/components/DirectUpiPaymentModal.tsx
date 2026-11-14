@@ -4,7 +4,6 @@ import {
   ShieldCheck,
   CheckCircle2,
   Smartphone,
-  Building2,
   QrCode,
   Copy,
   Check,
@@ -43,7 +42,7 @@ export interface DirectUpiPaymentModalProps {
   onSuccess?: (paymentId: string, utr: string, scannerUsed: string, isBankVerified?: boolean, bankVerifiedSource?: 'SMS_WEBHOOK' | 'ADMIN_MANUAL' | 'NONE', bankName?: string, paymentScreenshotUrl?: string) => void;
 }
 
-type ScannerOption = 'scanner1' | 'scanner2' | 'bank';
+type ScannerOption = 'scanner1' | 'scanner2';
 
 // Primary confidential bank & UPI details (defined at module level to prevent re-creation on renders)
 const BANK_INFO = {
@@ -60,7 +59,7 @@ const BANK_INFO = {
     name: 'MODERN JENTS PARLOUR',
     subtitle: 'Primary Salon Current Account (PhonePe / UPI)',
     upiId: 'ghodakedinesh@ybl',
-    posterImage: '/assets/aistudio/image_d8a337a6.png'
+    posterImage: ''
   },
   scanner2: {
     id: 'scanner2',
@@ -117,22 +116,25 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
       url &&
         (url.startsWith('data:image/') ||
           url.startsWith('/uploads/qr/') ||
-          url === '/assets/aistudio/image_d8a337a6.png' ||
           url === '/assets/aistudio/image_0e674b10.png')
     );
 
   const shouldDefaultToUploadedQr = (opt: ScannerOption) => {
     if (opt === 'scanner2') {
-      return Boolean(settings.secondaryQrCustomOnly) || isUploadedQrAsset(settings.secondaryUpiQrCodeUrl || BANK_INFO.scanner2.posterImage);
+      const posterUrl = settings.secondaryUpiQrCodeUrl ?? BANK_INFO.scanner2.posterImage;
+      if (!posterUrl) return false;
+      return Boolean(settings.secondaryQrCustomOnly) || isUploadedQrAsset(posterUrl);
     }
     if (opt === 'scanner1') {
-      return Boolean(settings.primaryQrCustomOnly) || isUploadedQrAsset(settings.upiQrCodeUrl || BANK_INFO.scanner1.posterImage);
+      const posterUrl = settings.upiQrCodeUrl ?? '';
+      if (!posterUrl) return false;
+      return Boolean(settings.primaryQrCustomOnly) || isUploadedQrAsset(posterUrl);
     }
     return false;
   };
 
   useEffect(() => {
-    if (isOpen && selectedOption !== 'bank') {
+    if (isOpen) {
       // Show admin's uploaded QR scanner photo immediately whenever a custom QR was uploaded or VPA wasn't decoded
       setShowPosterStandee(shouldDefaultToUploadedQr(selectedOption));
     }
@@ -254,9 +256,9 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
         name: settings.secondaryAccountHolder || BANK_INFO.scanner2.name,
         subtitle: 'Secondary Owner Account (PhonePe / GPay)',
         upiId: settings.secondaryUpiId || BANK_INFO.scanner2.upiId,
-        posterImage: settings.secondaryUpiQrCodeUrl || BANK_INFO.scanner2.posterImage,
+        posterImage: settings.secondaryUpiQrCodeUrl ?? BANK_INFO.scanner2.posterImage,
         extraParams: settings.secondaryUpiExtraParams || '',
-        customOnly: Boolean(settings.secondaryQrCustomOnly)
+        customOnly: Boolean(settings.secondaryQrCustomOnly && (settings.secondaryUpiQrCodeUrl ?? BANK_INFO.scanner2.posterImage))
       };
     }
     // Scanner 1: Primary Salon Current Account (HDFC Bank / PhonePe / GPay)
@@ -265,21 +267,14 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
       name: settings.accountHolder || BANK_INFO.scanner1.name,
       subtitle: `${settings.bankName || BANK_INFO.bankName} (PhonePe / GPay)`,
       upiId: settings.merchantUpiId || settings.upiId || BANK_INFO.scanner1.upiId,
-      posterImage: settings.upiQrCodeUrl || BANK_INFO.scanner1.posterImage,
+      posterImage: settings.upiQrCodeUrl ?? '',
       extraParams: settings.primaryUpiExtraParams || '',
-      customOnly: Boolean(settings.primaryQrCustomOnly)
+      customOnly: Boolean(settings.primaryQrCustomOnly && settings.upiQrCodeUrl)
     };
   }, [selectedOption, settings]);
 
   // Stable session booking reference code (generated once per modal mount)
   const [sessionRefCode] = useState(() => `MS-${Math.floor(100000 + Math.random() * 900000)}`);
-
-  // Check if a verified Razorpay Merchant Gateway key is configured
-  const hasVerifiedRazorpayMerchant = Boolean(
-    settings.razorpayKeyId &&
-    settings.razorpayKeyId.trim() !== '' &&
-    settings.razorpayKeyId !== 'rzp_test_modern_salon_mohol'
-  );
 
   // Detect whether uploaded QR/settings carries true Business Merchant credentials (non-0000 MCC or NPCI signature)
   const extraParsedParams = useMemo(() => new URLSearchParams(currentUpiTarget.extraParams || ''), [currentUpiTarget.extraParams]);
@@ -289,7 +284,7 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
     Boolean(extraParsedParams.get('sign')) ||
     Boolean(extraParsedParams.get('orgid'))
   );
-  const canUseDirectPhonePeIntent = hasVerifiedRazorpayMerchant || hasVerifiedBusinessQr;
+  const canUseDirectPhonePeIntent = hasVerifiedBusinessQr;
 
   // Dynamic NPCI UPI QR & deep-link params (RFC-3986 %20 encoding + exact advance 'am' so PhonePe & Google Pay auto-fill amount)
   const cleanUpiId = (currentUpiTarget.upiId || 'ghodakedinesh@ybl').trim();
@@ -304,29 +299,36 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
       ['pa', cleanUpiId],
       ['pn', cleanPayeeName]
     ];
-    const hasExtraMc = Boolean(extraParsedParams.get('mc'));
-    const hasExtraMode = Boolean(extraParsedParams.get('mode'));
-    const hasExtraPurpose = Boolean(extraParsedParams.get('purpose'));
 
-    extraParsedParams.forEach((v, k) => {
-      if (!['pa', 'pn', 'am', 'cu', 'tn'].includes(k.toLowerCase()) && v) {
-        pairs.push([k, v]);
+    if (hasVerifiedBusinessQr) {
+      const hasExtraMc = Boolean(extraParsedParams.get('mc'));
+      const hasExtraMode = Boolean(extraParsedParams.get('mode'));
+      const hasExtraPurpose = Boolean(extraParsedParams.get('purpose'));
+
+      extraParsedParams.forEach((v, k) => {
+        if (!['pa', 'pn', 'am', 'cu', 'tn'].includes(k.toLowerCase()) && v) {
+          pairs.push([k, v]);
+        }
+      });
+      if (!hasExtraMc) pairs.push(['mc', '0000']);
+      if (!hasExtraMode) pairs.push(['mode', '02']);
+      if (!hasExtraPurpose) pairs.push(['purpose', '00']);
+      if (formattedAdvanceAmount) {
+        pairs.push(['am', formattedAdvanceAmount]);
       }
-    });
-    if (!hasExtraMc) pairs.push(['mc', '0000']);
-    if (!hasExtraMode) pairs.push(['mode', '02']);
-    if (!hasExtraPurpose) pairs.push(['purpose', '00']);
-    if (formattedAdvanceAmount) {
-      pairs.push(['am', formattedAdvanceAmount]);
+      pairs.push(['cu', 'INR']);
+      pairs.push(['tn', `Modern Salon ${sessionRefCode}`]);
+    } else {
+      // Clean static P2P VPA QR: omits un-signed am= & mc=0000 so PhonePe/GPay never throw P2P "declined for security reasons"
+      pairs.push(['cu', 'INR']);
+      pairs.push(['tn', `Modern Salon ${sessionRefCode}`]);
     }
-    pairs.push(['cu', 'INR']);
-    pairs.push(['tn', `Modern Salon ${sessionRefCode}`]);
 
     // NPCI UPI Linking Spec expects %20 for spaces, never '+'
     return pairs.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
-  }, [cleanUpiId, cleanPayeeName, extraParsedParams, formattedAdvanceAmount, sessionRefCode]);
+  }, [cleanUpiId, cleanPayeeName, hasVerifiedBusinessQr, extraParsedParams, formattedAdvanceAmount, sessionRefCode]);
 
-  // Clean NPCI App-Intent params (omits QR-only mc=0000 / mode=02 unless a verified Business QR is uploaded)
+  // Clean NPCI App-Intent params (only passes &am= when backed by verified business QR so PhonePe/GPay never block)
   const upiIntentQueryParams = useMemo(() => {
     const pairs: Array<[string, string]> = [
       ['pa', cleanUpiId],
@@ -338,9 +340,9 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
           pairs.push([k, v]);
         }
       });
-    }
-    if (formattedAdvanceAmount) {
-      pairs.push(['am', formattedAdvanceAmount]);
+      if (formattedAdvanceAmount) {
+        pairs.push(['am', formattedAdvanceAmount]);
+      }
     }
     pairs.push(['cu', 'INR']);
     pairs.push(['tn', `Modern Salon ${sessionRefCode}`]);
@@ -364,7 +366,7 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
     return false;
   }, [isAndroidDevice, isIosDevice]);
 
-  // PhonePe & Google Pay deep links — both use standard NPCI UPI intent targeted to their official Android packages
+  // PhonePe & Google Pay deep links — uses safe app launchers for personal VPAs and direct intents for verified Business QRs
   const upiAppLinks = useMemo(() => {
     const phonepeSchemePay = `phonepe://pay?${upiIntentQueryParams}`;
     const genericUpiPay = `upi://pay?${upiIntentQueryParams}`;
@@ -391,7 +393,7 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
 
   // Generate Dynamic QR Code image safely without infinite re-render loops
   useEffect(() => {
-    if (!isOpen || selectedOption === 'bank' || !upiQrPayload) return;
+    if (!isOpen || !upiQrPayload) return;
     let isCancelled = false;
 
     QRCode.toDataURL(upiQrPayload, {
@@ -453,109 +455,6 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
     setTimeout(() => setCopiedField(null), 2000);
   };
 
-  // Launch verified Razorpay Merchant UPI Intent Checkout (zero PhonePe personal-VPA blocks)
-  const handleRazorpayMerchantPay = async (preferredAppLabel: 'PhonePe' | 'Google Pay') => {
-    setVerificationError('');
-    setIsVerifying(true);
-    try {
-      const orderRes = await fetch('/api/payment/create-razorpay-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          advanceAmount: effectiveAdvance,
-          bookingRef: sessionRefCode,
-          serviceName: effectiveService,
-          customerName: effectiveName,
-          customerPhone: effectivePhone
-        })
-      });
-      const orderData = await orderRes.json();
-      if (!orderData.success || !orderData.orderId || !(window as any).Razorpay) {
-        setIsVerifying(false);
-        // Fall back smoothly to Direct UPI deep link
-        const fallbackHref = preferredAppLabel === 'Google Pay' ? upiAppLinks.gpayPay : upiAppLinks.phonepePay;
-        if (isMobileDevice) {
-          setHasLaunchedUpiApp(true);
-          window.location.href = fallbackHref;
-        } else {
-          setSelectedDesktopAppLabel(preferredAppLabel);
-          setShowDesktopScanNotice(true);
-        }
-        return;
-      }
-
-      const RazorpayConstructor = (window as any).Razorpay;
-      const rzp = new RazorpayConstructor({
-        key: orderData.keyId,
-        amount: orderData.amountPaise,
-        currency: orderData.currency || 'INR',
-        name: settings.salonName || 'Modern Unisex Salon',
-        description: `10% Booking Advance - ${effectiveService}`,
-        order_id: orderData.orderId,
-        prefill: {
-          name: effectiveName,
-          email: orderData?.customerEmail || propClientEmail || '',
-          contact: effectivePhone
-        },
-        config: {
-          display: {
-            blocks: {
-              upi_block: {
-                name: `Pay via ${preferredAppLabel} / UPI`,
-                instruments: [{ method: 'upi' }]
-              }
-            },
-            sequence: ['block.upi_block'],
-            preferences: { show_default_blocks: false }
-          }
-        },
-        theme: { color: preferredAppLabel === 'PhonePe' ? '#5f259f' : '#1a73e8' },
-        handler: async (response: any) => {
-          try {
-            const verifyRes = await fetch('/api/payment/verify-razorpay', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(response)
-            });
-            const verifyData = await verifyRes.json();
-            const payId = response.razorpay_payment_id || `rzp_${Date.now()}`;
-            setUtrNumber(payId);
-            setPaymentVerified(true);
-            setShowSuccessScreen(true);
-            triggerCelebration();
-            setTimeout(() => {
-              effectiveSuccess(
-                payId,
-                payId,
-                `Verified Gateway (${preferredAppLabel})`,
-                Boolean(verifyData.verified),
-                'SMS_WEBHOOK',
-                settings.bankName || 'HDFC Bank',
-                uploadedScreenshotUrl
-              );
-            }, 1400);
-          } catch {
-            setVerificationError('Payment received but verification callback failed. Please enter Payment ID below.');
-          } finally {
-            setIsVerifying(false);
-          }
-        },
-        modal: {
-          ondismiss: () => setIsVerifying(false)
-        }
-      });
-      rzp.open();
-    } catch {
-      setIsVerifying(false);
-      if (isMobileDevice) {
-        setHasLaunchedUpiApp(true);
-      } else {
-        setSelectedDesktopAppLabel(preferredAppLabel);
-        setShowDesktopScanNotice(true);
-      }
-    }
-  };
-
   // Synchronous handler paired with native custom-scheme <a href={...}> (no target="_top" so iframes allow OS app launch):
   // Never calls dlLink.click() inside app-launch links so Android/iOS immediately opens PhonePe / Google Pay.
   const handleUpiAppAnchorClick = (
@@ -563,11 +462,6 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
     appLabel: string,
     mode: 'direct' | 'safe_launcher' | 'safe_personal_phonepe' | 'copy_mobile' | 'open_app_only' = 'direct'
   ) => {
-    if (hasVerifiedRazorpayMerchant && (appLabel === 'PhonePe' || appLabel === 'Google Pay') && mode === 'safe_launcher') {
-      e.preventDefault();
-      handleRazorpayMerchantPay(appLabel as 'PhonePe' | 'Google Pay');
-      return;
-    }
 
     try {
       const textToCopy =
@@ -598,48 +492,74 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
     }
   };
 
-  // Submit UTR & optional payment screenshot directly to confirm booking
-  const handleVerifyPayment = () => {
+  // Submit PhonePe/GPay Reference, 12-Digit UTR, or uploaded screenshot to confirm booking smoothly
+  const handleVerifyPayment = async () => {
     setVerificationError('');
-    const cleanUtr = utrNumber.trim();
+    const cleanUtr = utrNumber.trim().replace(/\s+/g, '');
 
-    if (!cleanUtr) {
-      setVerificationError('Please enter the 12-digit UPI Reference Number / UTR from your PhonePe/GPay transaction receipt.');
+    if (!cleanUtr && !uploadedScreenshotUrl) {
+      setVerificationError('Please enter your 12-digit UTR / PhonePe or Google Pay Transaction ID, or attach your payment screenshot.');
       return;
     }
 
-    if (!/^\d{12}$/.test(cleanUtr)) {
-      setVerificationError('Invalid UTR format. A valid Indian banking UPI UTR must contain exactly 12 numeric digits (e.g. 431056789123).');
+    if (cleanUtr && !/^[A-Za-z0-9\-_]{6,40}$/.test(cleanUtr)) {
+      setVerificationError('Please enter a valid UTR / PhonePe / GPay Transaction ID (at least 6 letters or digits).');
       return;
     }
 
+    const finalRef = cleanUtr || `SCR-${Date.now().toString().slice(-8)}`;
     setIsVerifying(true);
-    const scannerLabel = selectedOption === 'bank'
-      ? 'HDFC Bank Direct Transfer'
-      : `UPI Scanner: ${currentUpiTarget.name}`;
-    const bankLabel = selectedOption === 'bank'
-      ? (settings?.bankName || 'HDFC Bank')
-      : currentUpiTarget.name;
 
+    const scannerLabel = `UPI Scanner: ${currentUpiTarget.name}`;
+    const bankLabel = currentUpiTarget.name;
+    let isBankVerified = true;
+    let verifiedSource: 'SMS_WEBHOOK' | 'ADMIN_MANUAL' | 'NONE' = 'ADMIN_MANUAL';
+
+    try {
+      const res = await fetch('/api/payment/verify-upi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          utr: finalRef,
+          advanceAmount: effectiveAdvance,
+          totalAmount: effectiveTotal,
+          scannerUsed: scannerLabel,
+          customerName: effectiveName,
+          serviceName: effectiveService,
+          paymentScreenshotUrl: uploadedScreenshotUrl || undefined
+        })
+      });
+      const data = await res.json().catch(() => null);
+      if (data && data.verified) {
+        isBankVerified = true;
+        verifiedSource = 'SMS_WEBHOOK';
+      }
+      // Note: Do not block booking on backend 400 unless strictly duplicate non-screenshot UTR
+      if (res.status === 400 && data?.error && String(data.error).toLowerCase().includes('duplicate')) {
+        setIsVerifying(false);
+        setVerificationError(data.error);
+        return;
+      }
+    } catch {
+      // Smooth offline/fallback confirmation so payment never stalls on transient network glitches
+    }
+
+    setUtrNumber(finalRef);
     setIsVerifying(false);
     setPaymentVerified(true);
     setShowSuccessScreen(true);
     triggerCelebration();
 
     setTimeout(() => {
-      effectiveSuccess(`upi_${cleanUtr}`, cleanUtr, scannerLabel, true, 'ADMIN_MANUAL', bankLabel, uploadedScreenshotUrl);
-    }, 1800);
+      effectiveSuccess(`upi_${finalRef}`, finalRef, scannerLabel, isBankVerified, verifiedSource, bankLabel, uploadedScreenshotUrl);
+    }, 1500);
   };
 
   const handleFinishSuccess = () => {
-    const cleanUtr = utrNumber.trim();
-    const scannerLabel = selectedOption === 'bank'
-      ? 'HDFC Bank Direct Transfer'
-      : `UPI Scanner: ${currentUpiTarget.name}`;
-    const bankLabel = selectedOption === 'bank'
-      ? (settings?.bankName || 'HDFC Bank')
-      : currentUpiTarget.name;
-    effectiveSuccess(`upi_${cleanUtr}`, cleanUtr, scannerLabel, true, 'ADMIN_MANUAL', bankLabel, uploadedScreenshotUrl);
+    const finalRef = utrNumber.trim() || `SCR-${Date.now().toString().slice(-8)}`;
+    const scannerLabel = `UPI Scanner: ${currentUpiTarget.name}`;
+    const bankLabel = currentUpiTarget.name;
+    effectiveSuccess(`upi_${finalRef}`, finalRef, scannerLabel, true, 'ADMIN_MANUAL', bankLabel, uploadedScreenshotUrl);
   };
 
   return (
@@ -699,29 +619,29 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
             </div>
           </div>
 
-          {/* Scanner / Payment Mode Switcher Tabs */}
+          {/* Scanner Switcher Tabs (PhonePe & Google Pay ONLY) */}
           <div>
             <label className="font-bold text-xs text-zinc-800 dark:text-zinc-200 block mb-2">
-              Select Payment Method:
+              Select PhonePe / Google Pay Scanner:
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2.5">
               <button
                 type="button"
                 onClick={() => {
                   setSelectedOption('scanner1');
                   setShowPosterStandee(shouldDefaultToUploadedQr('scanner1'));
                 }}
-                className={`p-2.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
                   selectedOption === 'scanner1'
                     ? 'bg-amber-500/15 border-amber-500 text-zinc-900 dark:text-white shadow-sm ring-1 ring-amber-500/50'
                     : 'bg-zinc-50 dark:bg-zinc-900/60 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400'
                 }`}
               >
-                <div className="flex items-center gap-1.5 font-bold text-[11px] text-zinc-900 dark:text-zinc-100">
-                  <Smartphone className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                  <span className="truncate">Scanner 1</span>
+                <div className="flex items-center gap-1.5 font-bold text-xs text-zinc-900 dark:text-zinc-100">
+                  <Smartphone className="w-3.5 h-3.5 text-[#5f259f] dark:text-amber-400 shrink-0" />
+                  <span className="truncate">Scanner 1 (PhonePe / GPay)</span>
                 </div>
-                <div className="text-[10px] opacity-80 truncate mt-1">{settings.accountHolder || 'MODERN JENTS'}</div>
+                <div className="text-[10px] opacity-80 truncate mt-1">{settings.accountHolder || 'MODERN JENTS PARLOUR'}</div>
               </button>
 
               <button
@@ -730,44 +650,27 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                   setSelectedOption('scanner2');
                   setShowPosterStandee(shouldDefaultToUploadedQr('scanner2'));
                 }}
-                className={`p-2.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
                   selectedOption === 'scanner2'
                     ? 'bg-amber-500/15 border-amber-500 text-zinc-900 dark:text-white shadow-sm ring-1 ring-amber-500/50'
                     : 'bg-zinc-50 dark:bg-zinc-900/60 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400'
                 }`}
               >
-                <div className="flex items-center gap-1.5 font-bold text-[11px] text-zinc-900 dark:text-zinc-100">
-                  <Smartphone className="w-3.5 h-3.5 text-purple-500 shrink-0" />
-                  <span className="truncate">Scanner 2</span>
+                <div className="flex items-center gap-1.5 font-bold text-xs text-zinc-900 dark:text-zinc-100">
+                  <Smartphone className="w-3.5 h-3.5 text-[#1a73e8] dark:text-blue-400 shrink-0" />
+                  <span className="truncate">Scanner 2 (PhonePe / GPay)</span>
                 </div>
-                <div className="text-[10px] opacity-80 truncate mt-1">{settings.secondaryAccountHolder || 'DINESH GHODAKE'}</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => { setSelectedOption('bank'); }}
-                className={`p-2.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
-                  selectedOption === 'bank'
-                    ? 'bg-amber-500/15 border-amber-500 text-zinc-900 dark:text-white shadow-sm ring-1 ring-amber-500/50'
-                    : 'bg-zinc-50 dark:bg-zinc-900/60 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400'
-                }`}
-              >
-                <div className="flex items-center gap-1.5 font-bold text-[11px] text-zinc-900 dark:text-zinc-100">
-                  <Building2 className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                  <span className="truncate">Bank Account</span>
-                </div>
-                <div className="text-[10px] opacity-80 truncate mt-1">{settings.bankName || BANK_INFO.bankName}</div>
+                <div className="text-[10px] opacity-80 truncate mt-1">{settings.secondaryAccountHolder || 'DINESH VITTHAL GHODAKE'}</div>
               </button>
             </div>
           </div>
 
-          {/* VIEW: SCANNER 1 OR 2 */}
-          {selectedOption !== 'bank' && (
-            <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900/90 border border-zinc-200 dark:border-zinc-800 space-y-3.5 text-center">
+          {/* VIEW: SCANNER 1 OR 2 (PhonePe & Google Pay ONLY) */}
+          <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900/90 border border-zinc-200 dark:border-zinc-800 space-y-3.5 text-center">
 
               {/* QR Code Container */}
               <div className="flex flex-col items-center justify-center p-3.5 bg-white rounded-2xl border-2 border-dashed border-purple-500/40 shadow-inner">
-                {showPosterStandee || currentUpiTarget.customOnly ? (
+                {Boolean(currentUpiTarget.posterImage) && (showPosterStandee || currentUpiTarget.customOnly) ? (
                   <div className="flex flex-col items-center">
                     <div className="mb-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-50 border border-purple-200 text-purple-700 text-[10px] font-extrabold">
                       <QrCode className="w-3 h-3 text-purple-600" />
@@ -805,28 +708,24 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                   <div className="flex flex-col items-center">
                     <div className="mb-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-extrabold">
                       <Zap className="w-3 h-3 text-emerald-600" />
-                      <span>Auto-Amount QR • Pre-fills ₹{effectiveAdvance} Automatically</span>
+                      <span>
+                        {hasVerifiedBusinessQr
+                          ? `Verified Merchant QR • Auto-fills ₹${effectiveAdvance}`
+                          : `Scan with PhonePe or Google Pay • Pay ₹${effectiveAdvance}`}
+                      </span>
                     </div>
 
                     {dynamicQrDataUrl ? (
-                      <a
-                        href={canUseDirectPhonePeIntent ? upiAppLinks.phonepePay : upiAppLinks.gpayPay}
-                        onClick={(e) =>
-                          handleUpiAppAnchorClick(
-                            e,
-                            canUseDirectPhonePeIntent ? 'PhonePe' : 'Google Pay',
-                            canUseDirectPhonePeIntent ? 'safe_launcher' : 'direct'
-                          )
-                        }
-                        className="p-2 bg-white rounded-xl shadow-md border border-purple-200 hover:border-purple-500 transition block cursor-pointer"
-                        title={`Scan or tap to pay ₹${effectiveAdvance}`}
+                      <div
+                        className="p-2 bg-white rounded-xl shadow-md border border-purple-200 inline-block"
+                        title={`Scan in PhonePe or Google Pay to pay ₹${effectiveAdvance}`}
                       >
                         <img
                           src={dynamicQrDataUrl}
                           alt={`Scan to pay ₹${effectiveAdvance}`}
                           className="w-44 sm:w-48 h-44 sm:h-48 object-contain"
                         />
-                      </a>
+                      </div>
                     ) : (
                       <div className="w-44 h-44 flex items-center justify-center text-zinc-400 text-xs">
                         Generating ₹{effectiveAdvance} QR...
@@ -835,13 +734,15 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
 
                     <div className="mt-2 text-center">
                       <div className="font-extrabold text-sm text-zinc-900 font-mono">
-                        Scan &amp; Pay Exact Advance: ₹{effectiveAdvance}
+                        Scan &amp; Pay Advance: ₹{effectiveAdvance}
                       </div>
                       <div className="text-[10px] text-purple-700 font-mono font-bold mt-0.5">
                         {cleanPayeeName} • {cleanUpiId}
                       </div>
                       <div className="text-[10px] text-zinc-600 font-medium mt-0.5">
-                        Scanning this QR in PhonePe or Google Pay auto-fills ₹{effectiveAdvance} automatically.
+                        {hasVerifiedBusinessQr
+                          ? `Scanning this QR in PhonePe or Google Pay pre-fills ₹${effectiveAdvance}.`
+                          : `Scan QR or Save & Import in PhonePe / Google Pay, then enter ₹${effectiveAdvance}.`}
                       </div>
                     </div>
 
@@ -852,15 +753,15 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                           download={`Modern-Salon-Pay-Rs${effectiveAdvance}-${sessionRefCode}.png`}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-800 text-[11px] font-bold transition"
                         >
-                          <span>⬇️ Save ₹{effectiveAdvance} QR to Gallery</span>
+                          <span>⬇️ Save QR to Gallery</span>
                         </a>
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* Toggle Standee View (only when Auto-Amount VPA QR matches the scanner) */}
-                {!currentUpiTarget.customOnly && (
+                {/* Toggle Standee View (only when Auto-Amount VPA QR matches the scanner and a poster image exists) */}
+                {!currentUpiTarget.customOnly && Boolean(currentUpiTarget.posterImage) && (
                   <button
                     type="button"
                     onClick={() => setShowPosterStandee(!showPosterStandee)}
@@ -880,13 +781,13 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                       <span>Pay ₹{effectiveAdvance} — Choose PhonePe or Google Pay</span>
                     </h4>
                     <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-                      {currentUpiTarget.customOnly
-                        ? `Save Store QR & scan in PhonePe/GPay • Pay ₹${effectiveAdvance}`
-                        : `Google Pay pre-fills ₹${effectiveAdvance} directly • PhonePe works via Mobile (${activePayeeMobile}) or Gallery QR`}
+                      {hasVerifiedBusinessQr
+                        ? `Tap PhonePe or Google Pay below to pay ₹${effectiveAdvance} directly.`
+                        : `Tapping PhonePe or Google Pay opens your app safely and copies ${activePayeeMobile} / ${cleanUpiId} — zero security decline!`}
                     </p>
                   </div>
                   <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 shrink-0">
-                    {hasVerifiedRazorpayMerchant ? '✓ Verified Merchant' : `Pay ₹${effectiveAdvance}`}
+                    {hasVerifiedBusinessQr ? '✓ Business QR' : `Pay ₹${effectiveAdvance}`}
                   </span>
                 </div>
 
@@ -912,7 +813,7 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                         <div className="text-[10px] font-medium text-purple-100 opacity-90 truncate">
                           {canUseDirectPhonePeIntent
                             ? `Pay ₹${effectiveAdvance}`
-                            : `Open App • Copy ${activePayeeMobile}`}
+                            : `Open PhonePe • Pay ₹${effectiveAdvance}`}
                         </div>
                       </div>
                     </div>
@@ -920,8 +821,14 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                   </a>
 
                   <a
-                    href={upiAppLinks.gpayPay}
-                    onClick={(e) => handleUpiAppAnchorClick(e, 'Google Pay', 'safe_launcher')}
+                    href={hasVerifiedBusinessQr ? upiAppLinks.gpayPay : upiAppLinks.gpayLauncher}
+                    onClick={(e) =>
+                      handleUpiAppAnchorClick(
+                        e,
+                        'Google Pay',
+                        hasVerifiedBusinessQr ? 'safe_launcher' : 'copy_mobile'
+                      )
+                    }
                     className="py-3 px-3.5 rounded-xl bg-gradient-to-r from-[#1a73e8] to-[#2b86f5] hover:from-[#1565c0] hover:to-[#1a73e8] text-white font-extrabold text-xs flex items-center justify-between gap-2 shadow-md transition cursor-pointer"
                   >
                     <div className="flex items-center gap-2 min-w-0">
@@ -931,7 +838,7 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                       <div className="text-left min-w-0">
                         <div className="leading-tight truncate">Google Pay</div>
                         <div className="text-[10px] font-medium text-blue-100 opacity-90 truncate">
-                          Pay ₹{effectiveAdvance}
+                          Open GPay • Pay ₹{effectiveAdvance}
                         </div>
                       </div>
                     </div>
@@ -945,7 +852,7 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                     <Smartphone className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                     <div className="space-y-2 flex-1">
                       <div className="font-bold flex items-center justify-between">
-                        <span>📱 Open {selectedDesktopAppLabel} on your Phone to Pay ₹{effectiveAdvance}</span>
+                        <span>📱 Pay ₹{effectiveAdvance} using {selectedDesktopAppLabel} on your Phone</span>
                         <button
                           type="button"
                           onClick={() => setShowDesktopScanNotice(false)}
@@ -955,25 +862,7 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                         </button>
                       </div>
                       <div className="text-[10px] leading-relaxed opacity-90">
-                        {showPosterStandee || currentUpiTarget.customOnly
-                          ? `Open PhonePe or Google Pay on your phone and scan the Store Scanner QR above, then enter ₹${effectiveAdvance}.`
-                          : `Open PhonePe or Google Pay on your phone and scan the Auto-Amount QR above (pre-fills ₹${effectiveAdvance} automatically).`}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                        <a
-                          href={canUseDirectPhonePeIntent ? upiAppLinks.phonepePay : upiAppLinks.phonepeLauncher}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#5f259f] hover:bg-[#511e8a] text-white text-[10px] font-bold transition"
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                          <span>{canUseDirectPhonePeIntent ? 'Try Opening PhonePe Link' : 'Open PhonePe App'}</span>
-                        </a>
-                        <a
-                          href={canUseDirectPhonePeIntent ? upiAppLinks.genericUpiPay : upiAppLinks.gpayPay}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-bold transition"
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                          <span>{canUseDirectPhonePeIntent ? 'Try UPI App Handler' : `Pay ₹${effectiveAdvance} on GPay`}</span>
-                        </a>
+                        Open <strong>PhonePe</strong> or <strong>Google Pay</strong> on your phone and scan the QR above, or pay directly to Mobile Number <strong>{activePayeeMobile}</strong> / UPI ID <strong>{cleanUpiId}</strong> ({copiedField ? 'Copied to clipboard!' : 'Ready to copy'}). Then enter your UTR / Transaction ID below.
                       </div>
                     </div>
                   </div>
@@ -982,11 +871,11 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                 {/* Quick QR Download & App Launchers */}
                 <div className="pt-2.5 border-t border-zinc-200 dark:border-zinc-800 space-y-2 text-[10px] text-zinc-600 dark:text-zinc-400">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    {((showPosterStandee || currentUpiTarget.customOnly) ? currentUpiTarget.posterImage : dynamicQrDataUrl) && (
+                    {((Boolean(currentUpiTarget.posterImage) && (showPosterStandee || currentUpiTarget.customOnly)) ? currentUpiTarget.posterImage : dynamicQrDataUrl) && (
                       <a
-                        href={(showPosterStandee || currentUpiTarget.customOnly) ? currentUpiTarget.posterImage : dynamicQrDataUrl}
+                        href={(Boolean(currentUpiTarget.posterImage) && (showPosterStandee || currentUpiTarget.customOnly)) ? currentUpiTarget.posterImage : dynamicQrDataUrl}
                         download={
-                          showPosterStandee || currentUpiTarget.customOnly
+                          Boolean(currentUpiTarget.posterImage) && (showPosterStandee || currentUpiTarget.customOnly)
                             ? `Modern-Salon-Store-QR-${currentUpiTarget.id}.png`
                             : `Modern-Salon-Pay-Rs${effectiveAdvance}-${sessionRefCode}.png`
                         }
@@ -994,7 +883,7 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                       >
                         <QrCode className="w-3 h-3" />
                         <span>
-                          {showPosterStandee || currentUpiTarget.customOnly
+                          {Boolean(currentUpiTarget.posterImage) && (showPosterStandee || currentUpiTarget.customOnly)
                             ? '1. Save Store QR'
                             : `1. Save ₹${effectiveAdvance} QR`}
                         </span>
@@ -1042,9 +931,9 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                     </button>
                   </div>
                   <p className="text-[10px] leading-relaxed">
-                    • {copiedField === 'mobile' ? `Mobile (${activePayeeMobile}) copied!` : `UPI ID (${cleanUpiId}) copied!`} In PhonePe, tap <strong>To Mobile Number</strong> (<strong>{activePayeeMobile}</strong>), <strong>To UPI ID</strong>, or <strong>Scan any QR → Gallery</strong> after saving the QR.<br />
+                    • {copiedField === 'mobile' ? `Mobile (${activePayeeMobile}) copied!` : `UPI ID (${cleanUpiId}) copied!`} In PhonePe or Google Pay, tap <strong>To Mobile Number</strong> (<strong>{activePayeeMobile}</strong>), <strong>To UPI ID</strong>, or <strong>Scan any QR → Gallery</strong> after saving the QR.<br />
                     • Enter <strong>₹{effectiveAdvance}</strong> and complete payment.<br />
-                    • Return here after paying, enter your <strong>12-digit UTR number</strong>, and optionally upload your receipt screenshot below.
+                    • Return here after paying, enter your <strong>Transaction ID / UTR</strong> (or upload your payment screenshot) below to confirm immediately.
                   </p>
                 </div>
               )}
@@ -1103,87 +992,15 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
                 </div>
               </div>
             </div>
-          )}
 
-          {/* VIEW: DIRECT BANK TRANSFER (HDFC BANK) */}
-          {selectedOption === 'bank' && (
-            <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900/90 border border-zinc-200 dark:border-zinc-800 space-y-3">
-              <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2">
-                <div className="flex items-center gap-2 text-xs font-bold text-blue-600 dark:text-blue-400">
-                  <Building2 className="w-4 h-4" />
-                  <span>Direct Bank Account Transfer</span>
-                </div>
-                <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-blue-600 text-white shadow-xs">
-                  {settings.bankName || BANK_INFO.bankName}
-                </span>
-              </div>
-
-              <div className="space-y-2 text-[11px]">
-                <div className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
-                  <span className="text-zinc-500 dark:text-zinc-400">Account Holder:</span>
-                  <div className="flex items-center gap-1.5">
-                    <strong className="font-semibold text-zinc-900 dark:text-zinc-100">{settings.accountHolder || BANK_INFO.accountHolder}</strong>
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(settings.accountHolder || BANK_INFO.accountHolder, 'holder')}
-                      className="text-amber-500 hover:text-amber-400 p-0.5 cursor-pointer"
-                    >
-                      {copiedField === 'holder' ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
-                  <span className="text-zinc-500 dark:text-zinc-400">Account Number:</span>
-                  <div className="flex items-center gap-1.5">
-                    <strong className="font-mono font-bold text-zinc-900 dark:text-zinc-100 text-xs">{settings.bankAccountNumber || BANK_INFO.accountNumber}</strong>
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(settings.bankAccountNumber || BANK_INFO.accountNumber, 'acc')}
-                      className="text-amber-500 hover:text-amber-400 p-0.5 cursor-pointer"
-                    >
-                      {copiedField === 'acc' ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
-                  <span className="text-zinc-500 dark:text-zinc-400">IFSC Code:</span>
-                  <div className="flex items-center gap-1.5">
-                    <strong className="font-mono font-bold text-zinc-900 dark:text-zinc-100">{settings.bankIfsc || BANK_INFO.ifsc}</strong>
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(settings.bankIfsc || BANK_INFO.ifsc, 'ifsc')}
-                      className="text-amber-500 hover:text-amber-400 p-0.5 cursor-pointer"
-                    >
-                      {copiedField === 'ifsc' ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
-                  <span className="text-zinc-500 dark:text-zinc-400">Bank &amp; Branch:</span>
-                  <strong className="font-semibold text-zinc-900 dark:text-zinc-100">
-                    {settings.bankName || BANK_INFO.bankName}, {settings.bankBranch || BANK_INFO.branch}
-                  </strong>
-                </div>
-
-                <div className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
-                  <span className="text-zinc-500 dark:text-zinc-400">Account Type:</span>
-                  <strong className="font-semibold text-zinc-900 dark:text-zinc-100">{settings.bankAccountType || BANK_INFO.accountType}</strong>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 2: VERIFICATION & ANTI-CHEATING SECTION */}
+          {/* STEP 2: VERIFICATION & CONFIRMATION SECTION */}
           <div className="p-4 rounded-2xl bg-amber-500/10 dark:bg-amber-500/5 border border-amber-500/30 space-y-3">
 
             {showReturnedFromAppBanner && !paymentVerified && (
               <div className="p-2.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-900 dark:text-purple-200 text-[11px] flex items-center gap-2 animate-pulse">
                 <Smartphone className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
                 <span>
-                  <strong>Welcome back from PhonePe!</strong> Please enter the 12-digit UPI UTR Number from your PhonePe receipt below to confirm your slot.
+                  <strong>Welcome back!</strong> Enter the 12-digit UTR or PhonePe / Google Pay Transaction ID (or attach screenshot) below to confirm your slot.
                 </span>
               </div>
             )}
@@ -1192,34 +1009,34 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
             <div className="p-3 rounded-2xl bg-gradient-to-r from-amber-500/20 via-purple-500/15 to-amber-500/20 border-2 border-amber-500/40 text-amber-950 dark:text-amber-200 text-xs font-bold flex items-start gap-2.5 shadow-sm">
               <Zap className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
               <div className="leading-snug">
-                <span>Enter your 12-digit UTR number after completing payment (screenshot upload is optional) and submit to confirm your booking.</span>
+                <span>Enter your 12-digit UTR or PhonePe/GPay Transaction ID (or upload payment screenshot) and submit to confirm your booking.</span>
               </div>
             </div>
 
             <div className="flex items-center justify-between">
               <label className="font-bold text-xs text-amber-900 dark:text-amber-300 flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                <span>Enter 12-Digit UPI Transaction ID / UTR *</span>
+                <span>UPI Transaction ID / UTR *</span>
               </label>
-              <span className="text-[10px] text-zinc-500 font-mono">12 Digits Only</span>
+              <span className="text-[10px] text-zinc-500 font-mono">12-Digit UTR or T.../GPay Ref</span>
             </div>
 
             <div className="relative">
               <input
                 id="upi-utr-input"
                 type="text"
-                maxLength={12}
-                placeholder="e.g. 431056789012"
+                maxLength={40}
+                placeholder="e.g. 431056789012 or T260324..."
                 value={utrNumber}
                 onChange={(e) => {
-                  const val = e.target.value.replace(/\D/g, '').slice(0, 12);
+                  const val = e.target.value.replace(/[^A-Za-z0-9\-_]/g, '').slice(0, 40);
                   setUtrNumber(val);
                   setVerificationError('');
                 }}
                 disabled={paymentVerified}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-zinc-950 border border-amber-500/40 text-zinc-900 dark:text-zinc-100 font-mono text-sm tracking-wider focus:outline-none focus:ring-2 focus:ring-amber-500/50"
               />
-              {utrNumber.length === 12 && (
+              {utrNumber.trim().length >= 6 && (
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 absolute right-3 top-3" />
               )}
             </div>
@@ -1227,7 +1044,7 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
             <p className="text-[10px] text-zinc-600 dark:text-zinc-400 flex items-start gap-1 leading-relaxed">
               <Info className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
               <span>
-                After paying in PhonePe/Google Pay, copy the <strong>"UTR"</strong> or <strong>"UPI Ref No"</strong> from your payment successful screen and submit below.
+                After paying in PhonePe or Google Pay, enter your <strong>"UTR"</strong> / <strong>"UPI Ref No"</strong> / <strong>"Transaction ID"</strong> (or upload screenshot below) to finish booking immediately.
               </span>
             </p>
 
@@ -1350,13 +1167,13 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
           <button
             type="button"
             onClick={handleVerifyPayment}
-            disabled={isVerifying || isUploadingScreenshot || paymentVerified || utrNumber.length !== 12}
+            disabled={isVerifying || isUploadingScreenshot || paymentVerified || (utrNumber.trim().length < 6 && !uploadedScreenshotUrl)}
             className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 dark:bg-amber-500 dark:hover:bg-amber-400 text-white dark:text-zinc-950 font-bold text-xs flex items-center gap-2 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-md"
           >
             {isVerifying ? (
               <>
                 <div className="w-3.5 h-3.5 border-2 border-white dark:border-zinc-950 border-t-transparent rounded-full animate-spin" />
-                <span>Submitting...</span>
+                <span>Confirming...</span>
               </>
             ) : paymentVerified ? (
               <>
@@ -1365,7 +1182,7 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
               </>
             ) : (
               <>
-                <span>Payment Successful — Submit UTR &amp; Confirm</span>
+                <span>Confirm Payment &amp; Book</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </>
             )}
@@ -1394,16 +1211,16 @@ export const DirectUpiPaymentModal: React.FC<DirectUpiPaymentModalProps> = ({
             {/* Displaying UTR Number prominently as requested */}
             <div className="mt-4 w-full max-w-md p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/90 border border-amber-500/30 space-y-2 text-left">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-zinc-500 dark:text-zinc-400 font-medium">12-Digit UTR Number:</span>
+                <span className="text-zinc-500 dark:text-zinc-400 font-medium">Transaction Ref / UTR:</span>
                 <span className="font-mono font-black text-amber-600 dark:text-amber-400 text-sm tracking-wider">
-                  {utrNumber || 'Pending'}
+                  {utrNumber || 'Screenshot Attached'}
                 </span>
               </div>
 
               <div className="flex items-center justify-between text-xs pt-1.5 border-t border-zinc-200 dark:border-zinc-800">
                 <span className="text-zinc-500 dark:text-zinc-400 font-medium">Payment Target:</span>
                 <span className="font-bold text-zinc-900 dark:text-zinc-200">
-                  {selectedOption === 'bank' ? 'HDFC Bank Account' : currentUpiTarget.name}
+                  {currentUpiTarget.name}
                 </span>
               </div>
 

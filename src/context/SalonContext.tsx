@@ -179,6 +179,7 @@ interface SalonContextType {
 
   // Offers & Automated WhatsApp Broadcast Management
   addOffer: (offer: Omit<OfferCoupon, 'id'>) => Promise<{ success: boolean; broadcast?: any; offer?: OfferCoupon }>;
+  updateOffer: (id: string, updates: Partial<OfferCoupon>) => Promise<{ success: boolean; offer?: OfferCoupon }>;
   broadcastOfferWhatsApp: (offerId: string) => Promise<{ success: boolean; broadcast?: any; message?: string }>;
   toggleOfferActive: (id: string) => void;
   deleteOffer: (id: string) => void;
@@ -284,10 +285,14 @@ const normalizeLegacySettings = (raw: any): SalonSettings => {
     ];
   }
 
-  if (s.upiQrCodeUrl === '/qr-union-bank-phonepe.jpg' || s.upiQrCodeUrl === '/assets/aistudio/image_2ca5cc29.png') {
-    s.upiQrCodeUrl = '/assets/aistudio/image_d8a337a6.png';
+  if (
+    s.upiQrCodeUrl === '/qr-union-bank-phonepe.jpg' ||
+    s.upiQrCodeUrl === '/assets/aistudio/image_2ca5cc29.png' ||
+    s.upiQrCodeUrl === '/assets/aistudio/image_d8a337a6.png'
+  ) {
+    s.upiQrCodeUrl = '';
   } else if (raw?.upiQrCodeUrl === undefined && !s.upiQrCodeUrl) {
-    s.upiQrCodeUrl = '/assets/aistudio/image_d8a337a6.png';
+    s.upiQrCodeUrl = '';
   }
 
   if (s.secondaryUpiQrCodeUrl === '/qr-dinesh-ghodake.jpg' || s.secondaryUpiQrCodeUrl === '/assets/aistudio/image_fce20bf8.png') {
@@ -2955,6 +2960,39 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     } catch (err) {}
   };
 
+  const updateOffer = async (id: string, updates: Partial<OfferCoupon>): Promise<{ success: boolean; offer?: OfferCoupon }> => {
+    const cleanUpdates: Partial<OfferCoupon> = {
+      ...updates,
+      ...(updates.code ? { code: updates.code.toUpperCase().trim() } : {})
+    };
+    let mergedOffer: OfferCoupon | undefined;
+    setOffers(prev => prev.map(off => {
+      if (off.id === id) {
+        mergedOffer = { ...off, ...cleanUpdates };
+        return mergedOffer;
+      }
+      return off;
+    }));
+    try {
+      setDoc(doc(db, 'offers', id), cleanFirestoreData(cleanUpdates), { merge: true }).catch(err => console.warn(err));
+    } catch {}
+    try {
+      const res = await fetch(`/api/offers/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cleanUpdates)
+      });
+      const data = await res.json();
+      if (data.success && data.offer) {
+        setOffers(prev => prev.map(off => (off.id === id ? data.offer : off)));
+        return { success: true, offer: data.offer };
+      }
+    } catch (err) {
+      console.warn('Error updating offer on server:', err);
+    }
+    return { success: true, offer: mergedOffer };
+  };
+
   const toggleOfferActive = (id: string) => {
     const target = offers.find(off => off.id === id);
     setOffers(prev => prev.map(off => off.id === id ? { ...off, active: !off.active } : off));
@@ -3564,6 +3602,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         updateGalleryItem,
         deleteGalleryItem,
         addOffer,
+        updateOffer,
         broadcastOfferWhatsApp,
         toggleOfferActive,
         deleteOffer,

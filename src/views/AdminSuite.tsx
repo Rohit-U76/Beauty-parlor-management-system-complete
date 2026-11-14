@@ -48,8 +48,6 @@ import {
   CreditCard,
   Building2,
   Lock,
-  Zap,
-  EyeOff,
   AlertCircle,
   Receipt,
   Printer,
@@ -74,6 +72,12 @@ import { AdminSlotBlackoutManager } from '../components/AdminSlotBlackoutManager
 import jsQR from 'jsqr';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { auth } from '../firebase';
+import {
+  SALON_TIME_SLOTS,
+  getCurrentSalonSlot,
+  getLocalDateString,
+  getStaffDynamicStatus
+} from '../utils/availability';
 
 export const AdminSuite: React.FC = () => {
   const {
@@ -96,6 +100,7 @@ export const AdminSuite: React.FC = () => {
     updateGalleryItem,
     deleteGalleryItem,
     addOffer,
+    updateOffer,
     broadcastOfferWhatsApp,
     toggleOfferActive,
     deleteOffer,
@@ -111,6 +116,7 @@ export const AdminSuite: React.FC = () => {
     currentUser,
     logout,
     isOwnerOnBreakToday,
+    blockedWindows,
     staffMembers,
     addStaffMember,
     updateStaffMember,
@@ -133,6 +139,17 @@ export const AdminSuite: React.FC = () => {
   const [editingGalleryItem, setEditingGalleryItem] = useState<GalleryItem | null>(null);
 
   const [showAddOfferModal, setShowAddOfferModal] = useState(false);
+  const [editingOffer, setEditingOffer] = useState<OfferCoupon | null>(null);
+  const [editOfferCode, setEditOfferCode] = useState('');
+  const [editOfferTitle, setEditOfferTitle] = useState('');
+  const [editOfferDesc, setEditOfferDesc] = useState('');
+  const [editOfferDiscountType, setEditOfferDiscountType] = useState<'percent' | 'amount'>('percent');
+  const [editOfferDiscountVal, setEditOfferDiscountVal] = useState(15);
+  const [editOfferMin, setEditOfferMin] = useState(1000);
+  const [editOfferValidTill, setEditOfferValidTill] = useState('2026-12-31');
+  const [editOfferActive, setEditOfferActive] = useState(true);
+  const [isSavingOffer, setIsSavingOffer] = useState(false);
+
   const [broadcastOffer, setBroadcastOffer] = useState<OfferCoupon | null>(null);
   const [broadcastResult, setBroadcastResult] = useState<WhatsAppBroadcastLog | null>(null);
   const [isBroadcastModalOpen, setIsBroadcastModalOpen] = useState(false);
@@ -146,12 +163,12 @@ export const AdminSuite: React.FC = () => {
   const [scannerDraft, setScannerDraft] = useState({
     accountHolder: settings.accountHolder || 'MODERN JENTS PARLOUR',
     merchantUpiId: settings.merchantUpiId || settings.upiId || 'ghodakedinesh@ybl',
-    upiQrCodeUrl: settings.upiQrCodeUrl || '/assets/aistudio/image_d8a337a6.png',
+    upiQrCodeUrl: settings.upiQrCodeUrl ?? '',
     primaryQrCustomOnly: !!settings.primaryQrCustomOnly,
     primaryUpiExtraParams: settings.primaryUpiExtraParams || '',
     secondaryAccountHolder: settings.secondaryAccountHolder || 'DINESH VITTHAL GHODAKE',
     secondaryUpiId: settings.secondaryUpiId || '8104026257@axl',
-    secondaryUpiQrCodeUrl: settings.secondaryUpiQrCodeUrl || '/assets/aistudio/image_0e674b10.png',
+    secondaryUpiQrCodeUrl: settings.secondaryUpiQrCodeUrl ?? '/assets/aistudio/image_0e674b10.png',
     secondaryQrCustomOnly: !!settings.secondaryQrCustomOnly,
     secondaryUpiExtraParams: settings.secondaryUpiExtraParams || '',
     bankName: settings.bankName || 'HDFC Bank',
@@ -172,12 +189,12 @@ export const AdminSuite: React.FC = () => {
     setScannerDraft({
       accountHolder: settings.accountHolder ?? 'MODERN JENTS PARLOUR',
       merchantUpiId: settings.merchantUpiId ?? settings.upiId ?? 'ghodakedinesh@ybl',
-      upiQrCodeUrl: settings.upiQrCodeUrl || '/assets/aistudio/image_d8a337a6.png',
+      upiQrCodeUrl: settings.upiQrCodeUrl ?? '',
       primaryQrCustomOnly: !!settings.primaryQrCustomOnly,
       primaryUpiExtraParams: settings.primaryUpiExtraParams || '',
       secondaryAccountHolder: settings.secondaryAccountHolder ?? 'DINESH VITTHAL GHODAKE',
       secondaryUpiId: settings.secondaryUpiId ?? '8104026257@axl',
-      secondaryUpiQrCodeUrl: settings.secondaryUpiQrCodeUrl || '/assets/aistudio/image_0e674b10.png',
+      secondaryUpiQrCodeUrl: settings.secondaryUpiQrCodeUrl ?? '/assets/aistudio/image_0e674b10.png',
       secondaryQrCustomOnly: !!settings.secondaryQrCustomOnly,
       secondaryUpiExtraParams: settings.secondaryUpiExtraParams || '',
       bankName: settings.bankName ?? 'HDFC Bank',
@@ -628,6 +645,8 @@ export const AdminSuite: React.FC = () => {
   // Staff State & Form
   const [staffSearch, setStaffSearch] = useState('');
   const [staffDepartmentFilter, setStaffDepartmentFilter] = useState('All');
+  const [staffCheckDate, setStaffCheckDate] = useState<string>(getLocalDateString());
+  const [staffCheckSlot, setStaffCheckSlot] = useState<string>(getCurrentSalonSlot());
   const [showAddStaffModal, setShowAddStaffModal] = useState(false);
   const [editingStaffMember, setEditingStaffMember] = useState<StaffMember | null>(null);
 
@@ -666,38 +685,6 @@ export const AdminSuite: React.FC = () => {
     updateAppointmentStatus(app.id, 'CONFIRMED');
     setActionFeedbackToast(`Booking #${app.bookingRef} reopened as CONFIRMED.`);
     setTimeout(() => setActionFeedbackToast(null), 3500);
-  };
-
-  // Real-world Payment Gateway Settings state
-  const [isTestingGateway, setIsTestingGateway] = useState(false);
-  const [gatewayTestResult, setGatewayTestResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [showRazorpaySecret, setShowRazorpaySecret] = useState(false);
-
-  const handleTestGatewayConnection = async () => {
-    setIsTestingGateway(true);
-    setGatewayTestResult(null);
-    try {
-      const res = await fetch('/api/payment/test-connection', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          razorpayKeyId: settings.razorpayKeyId,
-          razorpayKeySecret: settings.razorpayKeySecret
-        })
-      });
-      const data = await res.json();
-      setGatewayTestResult({
-        success: data.success,
-        message: data.message || (data.success ? 'Razorpay credentials verified successfully!' : 'Verification failed')
-      });
-    } catch (err: any) {
-      setGatewayTestResult({
-        success: false,
-        message: 'Could not reach server to test credentials: ' + err.message
-      });
-    } finally {
-      setIsTestingGateway(false);
-    }
   };
 
   const openAddStaffModal = () => {
@@ -1047,6 +1034,46 @@ export const AdminSuite: React.FC = () => {
     }
   };
 
+  const openEditOfferModal = (offer: OfferCoupon) => {
+    setEditingOffer(offer);
+    setEditOfferCode(offer.code || '');
+    setEditOfferTitle(offer.title || '');
+    setEditOfferDesc(offer.description || '');
+    if (offer.discountAmount && !offer.discountPercent) {
+      setEditOfferDiscountType('amount');
+      setEditOfferDiscountVal(Number(offer.discountAmount) || 0);
+    } else {
+      setEditOfferDiscountType('percent');
+      setEditOfferDiscountVal(Number(offer.discountPercent) || 0);
+    }
+    setEditOfferMin(Number(offer.minBookingAmount) || 0);
+    setEditOfferValidTill(offer.validTill || '2026-12-31');
+    setEditOfferActive(offer.active !== false);
+  };
+
+  const handleUpdateOfferSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingOffer || !editOfferCode.trim() || !editOfferTitle.trim()) return;
+    setIsSavingOffer(true);
+    try {
+      await updateOffer(editingOffer.id, {
+        code: editOfferCode.toUpperCase().trim(),
+        title: editOfferTitle.trim(),
+        description: editOfferDesc.trim() || 'Special promotional discount for our valued salon clients.',
+        discountPercent: editOfferDiscountType === 'percent' ? Number(editOfferDiscountVal) || 0 : undefined,
+        discountAmount: editOfferDiscountType === 'amount' ? Number(editOfferDiscountVal) || 0 : undefined,
+        minBookingAmount: Number(editOfferMin) || 0,
+        validTill: editOfferValidTill || '2026-12-31',
+        active: editOfferActive
+      });
+      setActionFeedbackToast(`Offer "${editOfferCode.toUpperCase().trim()}" updated successfully!`);
+      setTimeout(() => setActionFeedbackToast(null), 3500);
+      setEditingOffer(null);
+    } finally {
+      setIsSavingOffer(false);
+    }
+  };
+
   const handleBroadcastExistingOffer = async (offer: OfferCoupon) => {
     setIsBroadcastingOffer(true);
     const res = await broadcastOfferWhatsApp(offer.id);
@@ -1337,6 +1364,40 @@ export const AdminSuite: React.FC = () => {
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
         <div className="max-w-6xl mx-auto space-y-6">
+          {/* PERSISTENT DESKTOP TOP-RIGHT ADMIN ACTION BAR */}
+          <div className="hidden md:flex items-center justify-between gap-4 pb-3 border-b border-purple-200/80 dark:border-zinc-800/80">
+            <div className="flex items-center gap-2.5">
+              <span className="px-2.5 py-1 rounded-lg bg-purple-100 dark:bg-amber-500/15 text-purple-800 dark:text-amber-400 text-[11px] font-bold uppercase tracking-wider">
+                {navTabs.find(t => t.id === adminTab)?.label || 'Admin Console'}
+              </span>
+              {isOwnerOnBreakToday && (
+                <span className="px-2.5 py-1 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-[11px] font-bold">
+                  Owner Break Active Today
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2.5">
+              <ThemeToggle className="!px-2.5 !py-1.5" />
+              {currentUser && (
+                <div className="px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 text-xs font-semibold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                  <Crown className="w-3.5 h-3.5 text-purple-600 dark:text-amber-400" />
+                  <span>{currentUser.name}</span>
+                </div>
+              )}
+              <button
+                type="button"
+                id="admin-topbar-signout-btn"
+                onClick={() => logout()}
+                className="px-3.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/15 dark:hover:bg-rose-500/25 border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                title="Sign Out to Authorization Page"
+                aria-label="Sign Out"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Sign Out</span>
+              </button>
+            </div>
+          </div>
 
           {/* DASHBOARD TAB */}
           {adminTab === 'dashboard' && (
@@ -2212,15 +2273,15 @@ export const AdminSuite: React.FC = () => {
           {/* OFFERS TAB */}
           {adminTab === 'offers' && (
             <div className="space-y-5">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div>
-                  <h1 className="font-serif text-2xl font-bold text-zinc-100">Promo Offers &amp; Coupons</h1>
-                  <p className="text-xs text-zinc-400">Create and manage coupon codes for client discounts.</p>
+                  <h1 className="font-serif text-2xl font-bold text-zinc-900 dark:text-zinc-100">Promo Offers &amp; Coupons</h1>
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400">Create, edit, toggle, and broadcast coupon codes for client discounts.</p>
                 </div>
 
                 <button
                   onClick={() => setShowAddOfferModal(true)}
-                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs flex items-center gap-1.5 cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-sm"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Create Coupon</span>
@@ -2230,15 +2291,15 @@ export const AdminSuite: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 {offers.map(offer => (
                   <div key={offer.id} className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-3.5 hover:border-zinc-700 transition">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-base font-bold text-amber-400 bg-zinc-950 px-2.5 py-1 rounded-lg border border-amber-500/30">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-mono text-base font-bold text-amber-400 bg-zinc-950 px-2.5 py-1 rounded-lg border border-amber-500/30 truncate">
                           {offer.code}
                         </span>
                         <button
                           type="button"
                           onClick={() => toggleOfferActive(offer.id)}
-                          className={`text-[10px] px-2 py-0.5 rounded-full font-bold border transition cursor-pointer ${
+                          className={`text-[10px] px-2 py-0.5 rounded-full font-bold border transition cursor-pointer shrink-0 ${
                             offer.active !== false
                               ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
                               : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:bg-zinc-700'
@@ -2248,13 +2309,25 @@ export const AdminSuite: React.FC = () => {
                           {offer.active !== false ? '● Active' : '○ Inactive'}
                         </button>
                       </div>
-                      <button
-                        onClick={() => deleteOffer(offer.id)}
-                        className="text-zinc-500 hover:text-red-400 p-1 rounded-lg hover:bg-zinc-800 transition cursor-pointer"
-                        title="Delete offer"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          id={`edit-offer-${offer.id}`}
+                          onClick={() => openEditOfferModal(offer)}
+                          className="text-zinc-400 hover:text-amber-400 p-1.5 rounded-lg hover:bg-zinc-800 transition cursor-pointer"
+                          title="Edit offer"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteOffer(offer.id)}
+                          className="text-zinc-500 hover:text-red-400 p-1.5 rounded-lg hover:bg-zinc-800 transition cursor-pointer"
+                          title="Delete offer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
 
                     <div>
@@ -2603,265 +2676,353 @@ export const AdminSuite: React.FC = () => {
           )}
 
           {/* STAFF & TEAM MANAGEMENT TAB */}
-          {adminTab === 'staff' && (
-            <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h1 className="font-serif text-2xl font-bold text-zinc-100">Staff &amp; Salon Specialists</h1>
-                  <p className="text-xs text-zinc-400">
-                    Manage stylists, beauticians, shift hours, and specialties for Modern Unisex Salon Mohol.
-                  </p>
-                </div>
-                <button
-                  id="add-staff-btn"
-                  onClick={openAddStaffModal}
-                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs flex items-center gap-1.5 cursor-pointer shrink-0 shadow-lg shadow-amber-500/20 active:scale-95 transition"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Add Staff Member</span>
-                </button>
-              </div>
+          {adminTab === 'staff' && (() => {
+            const staffWithDynamic = staffMembers.map(member => {
+              const dyn = getStaffDynamicStatus(
+                member,
+                appointments,
+                staffCheckDate,
+                staffCheckSlot,
+                blockedWindows,
+                isOwnerOnBreakToday
+              );
+              const matchedRevs = reviews.filter(r => {
+                if (r.staffId && r.staffId === member.id) return true;
+                const rn = (r.staffName || r.stylistName || '').toLowerCase().trim();
+                const mn = member.name.toLowerCase().trim();
+                return Boolean(rn && mn && (rn === mn || rn.includes(mn) || mn.includes(rn)));
+              });
+              const liveRating = matchedRevs.length > 0
+                ? Number((matchedRevs.reduce((s, r) => s + (r.staffRating || r.stylistSkillRating || r.rating || 5), 0) / matchedRevs.length).toFixed(1))
+                : (member.rating || 4.9);
+              return {
+                member,
+                dyn,
+                liveRating,
+                liveReviewCount: matchedRevs.length
+              };
+            });
 
-              {/* Staff Stats Overview */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-1">
-                  <span className="text-[11px] text-zinc-400">Total Specialists</span>
-                  <div className="text-xl font-bold font-mono text-zinc-100">{staffMembers.length}</div>
-                  <span className="text-[10px] text-amber-400 font-medium">Verified Team</span>
-                </div>
-                <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-1">
-                  <span className="text-[11px] text-zinc-400">Available Today</span>
-                  <div className="text-xl font-bold font-mono text-emerald-400">
-                    {staffMembers.filter(s => s.status === 'Available Today').length}
-                  </div>
-                  <span className="text-[10px] text-emerald-400 font-medium">On Shift</span>
-                </div>
-                <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-1">
-                  <span className="text-[11px] text-zinc-400">Active Staff</span>
-                  <div className="text-xl font-bold font-mono text-blue-400">
-                    {staffMembers.filter(s => s.status === 'Active').length}
-                  </div>
-                  <span className="text-[10px] text-blue-400 font-medium">Roster</span>
-                </div>
-                <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-1">
-                  <span className="text-[11px] text-zinc-400">Avg Client Rating</span>
-                  <div className="text-xl font-bold font-mono text-amber-400">4.9 ★</div>
-                  <span className="text-[10px] text-zinc-400">Top Hospitality</span>
-                </div>
-              </div>
+            const activeInSlotCount = staffWithDynamic.filter(x => x.dyn.status === 'Active').length;
+            const busyInSlotCount = staffWithDynamic.filter(x => x.dyn.status === 'Busy').length;
+            const avgTeamRating = staffWithDynamic.length > 0
+              ? (staffWithDynamic.reduce((s, x) => s + x.liveRating, 0) / staffWithDynamic.length).toFixed(1)
+              : '4.9';
 
-              {/* Search & Department Filters */}
-              <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-3">
-                <div className="flex flex-col sm:flex-row items-center gap-3">
-                  <div className="relative flex-1 w-full">
-                    <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-2.5" />
+            const query = staffSearch.toLowerCase().trim();
+            const filteredStaff = staffWithDynamic.filter(({ member: m }) => {
+              const matchSearch = !query ||
+                m.name.toLowerCase().includes(query) ||
+                m.role.toLowerCase().includes(query) ||
+                m.specialties.some(s => s.toLowerCase().includes(query));
+              const matchDept = staffDepartmentFilter === 'All' || m.department === staffDepartmentFilter;
+              return matchSearch && matchDept;
+            });
+
+            return (
+              <div className="space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h1 className="font-serif text-2xl font-bold text-zinc-900 dark:text-zinc-100">Staff &amp; Salon Specialists</h1>
+                    <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                      Real-time slot occupancy (Busy vs Active), staff review ratings, shift hours &amp; roster controls.
+                    </p>
+                  </div>
+                  <button
+                    id="add-staff-btn"
+                    onClick={openAddStaffModal}
+                    className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs flex items-center gap-1.5 cursor-pointer shrink-0 shadow-lg shadow-amber-500/20 active:scale-95 transition"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add Staff Member</span>
+                  </button>
+                </div>
+
+                {/* Live Slot Occupancy Checker Strip */}
+                <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-400">
+                    <Clock className="w-4 h-4 shrink-0" />
+                    <span>Live Staff Slot Status Inspector:</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2.5 text-xs">
                     <input
-                      type="text"
-                      placeholder="Search staff by name, role, or specialty..."
-                      value={staffSearch}
-                      onChange={(e) => setStaffSearch(e.target.value)}
-                      className="w-full pl-9 pr-4 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                      type="date"
+                      aria-label="Inspect staff slot date"
+                      value={staffCheckDate}
+                      onChange={(e) => setStaffCheckDate(e.target.value)}
+                      className="px-3 py-1.5 rounded-xl bg-zinc-950 border border-zinc-700 text-zinc-100 font-semibold [color-scheme:dark]"
                     />
-                    {staffSearch && (
-                      <button
-                        onClick={() => setStaffSearch('')}
-                        className="absolute right-3 top-2 text-zinc-500 hover:text-zinc-300 text-xs"
-                      >
-                        ✕
-                      </button>
-                    )}
+                    <select
+                      aria-label="Inspect staff time slot"
+                      value={staffCheckSlot}
+                      onChange={(e) => setStaffCheckSlot(e.target.value)}
+                      className="px-3 py-1.5 rounded-xl bg-zinc-950 border border-zinc-700 text-zinc-100 font-semibold"
+                    >
+                      {SALON_TIME_SLOTS.map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStaffCheckDate(getLocalDateString());
+                        setStaffCheckSlot(getCurrentSalonSlot());
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold cursor-pointer"
+                    >
+                      Current Slot
+                    </button>
                   </div>
                 </div>
 
-                {/* Department Filter Pills */}
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
-                  {['All', 'Hair Care', 'Skin & Facial', 'Bridal & Makeup', 'Men Grooming', 'Spa & Wellness'].map(dept => (
-                    <button
-                      key={dept}
-                      onClick={() => setStaffDepartmentFilter(dept)}
-                      className={`px-3 py-1.5 rounded-xl whitespace-nowrap font-medium transition cursor-pointer ${
-                        staffDepartmentFilter === dept
-                          ? 'bg-amber-500 text-zinc-950 font-bold'
-                          : 'bg-zinc-950 text-zinc-400 hover:text-white border border-zinc-800'
-                      }`}
-                    >
-                      {dept}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Staff Grid */}
-              {(() => {
-                const query = staffSearch.toLowerCase().trim();
-                const filteredStaff = staffMembers.filter(m => {
-                  const matchSearch = !query ||
-                    m.name.toLowerCase().includes(query) ||
-                    m.role.toLowerCase().includes(query) ||
-                    m.specialties.some(s => s.toLowerCase().includes(query));
-                  const matchDept = staffDepartmentFilter === 'All' || m.department === staffDepartmentFilter;
-                  return matchSearch && matchDept;
-                });
-
-                if (filteredStaff.length === 0) {
-                  return (
-                    <div className="p-12 text-center rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-3">
-                      <Users className="w-10 h-10 text-zinc-600 mx-auto" />
-                      <p className="text-sm font-semibold text-zinc-300">No staff members found</p>
-                      <p className="text-xs text-zinc-500">
-                        {staffSearch ? `No specialists match "${staffSearch}".` : 'Get started by adding your first salon stylist or specialist.'}
-                      </p>
-                      <button
-                        onClick={openAddStaffModal}
-                        className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs inline-flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <Plus className="w-4 h-4" />
-                        <span>Add New Staff</span>
-                      </button>
+                {/* Dynamic Staff Stats Overview */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-1">
+                    <span className="text-[11px] text-zinc-400">Total Specialists</span>
+                    <div className="text-xl font-bold font-mono text-zinc-100">{staffMembers.length}</div>
+                    <span className="text-[10px] text-amber-400 font-medium">Verified Team</span>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-1">
+                    <span className="text-[11px] text-zinc-400">Active in Selected Slot</span>
+                    <div className="text-xl font-bold font-mono text-emerald-400">
+                      {activeInSlotCount}
                     </div>
-                  );
-                }
+                    <span className="text-[10px] text-emerald-400 font-medium">Free for Booking</span>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-1">
+                    <span className="text-[11px] text-zinc-400">Busy in Selected Slot</span>
+                    <div className="text-xl font-bold font-mono text-rose-400">
+                      {busyInSlotCount}
+                    </div>
+                    <span className="text-[10px] text-rose-400 font-medium">Booked Client Session</span>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-1">
+                    <span className="text-[11px] text-zinc-400">Avg Staff Rating</span>
+                    <div className="text-xl font-bold font-mono text-amber-400">{avgTeamRating} ★</div>
+                    <span className="text-[10px] text-zinc-400">Live Client Ratings</span>
+                  </div>
+                </div>
 
-                return (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredStaff.map(member => (
-                      <div
-                        key={member.id}
-                        className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 flex flex-col justify-between space-y-4 hover:border-zinc-700 transition shadow-sm"
+                {/* Search & Department Filters */}
+                <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-3">
+                  <div className="flex flex-col sm:flex-row items-center gap-3">
+                    <div className="relative flex-1 w-full">
+                      <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-2.5" />
+                      <input
+                        type="text"
+                        placeholder="Search staff by name, role, or specialty..."
+                        value={staffSearch}
+                        onChange={(e) => setStaffSearch(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                      />
+                      {staffSearch && (
+                        <button
+                          onClick={() => setStaffSearch('')}
+                          className="absolute right-3 top-2 text-zinc-500 hover:text-zinc-300 text-xs"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Department Filter Pills */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
+                    {['All', 'Hair Care', 'Skin & Facial', 'Bridal & Makeup', 'Men Grooming', 'Spa & Wellness'].map(dept => (
+                      <button
+                        key={dept}
+                        onClick={() => setStaffDepartmentFilter(dept)}
+                        className={`px-3 py-1.5 rounded-xl whitespace-nowrap font-medium transition cursor-pointer ${
+                          staffDepartmentFilter === dept
+                            ? 'bg-amber-500 text-zinc-950 font-bold'
+                            : 'bg-zinc-950 text-zinc-400 hover:text-white border border-zinc-800'
+                        }`}
                       >
-                        <div className="space-y-3">
-                          {/* Member Top Header */}
-                          <div className="flex items-start gap-3">
-                            <div className="relative shrink-0">
-                              <img
-                                src={member.image || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80'}
-                                alt={member.name}
-                                className="w-14 h-14 rounded-2xl object-cover border border-zinc-700 shadow-md"
-                              />
-                              <span
-                                className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-zinc-900 ${
-                                  member.status === 'Available Today'
-                                    ? 'bg-emerald-400'
-                                    : member.status === 'Active'
-                                    ? 'bg-blue-400'
-                                    : 'bg-amber-400'
-                                }`}
-                                title={member.status}
-                              />
-                            </div>
-
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between gap-1">
-                                <h3 className="font-bold text-sm text-zinc-100 truncate">{member.name}</h3>
-                                <div className="flex items-center gap-1 text-amber-400 text-xs font-bold shrink-0">
-                                  <Star className="w-3.5 h-3.5 fill-amber-400" />
-                                  <span>{member.rating || 4.9}</span>
-                                </div>
-                              </div>
-                              <p className="text-xs text-amber-400/90 font-medium truncate">{member.role}</p>
-                              <div className="flex items-center gap-1.5 mt-1 text-[10px] text-zinc-400 font-mono">
-                                <Briefcase className="w-3 h-3 text-zinc-500" />
-                                <span>{member.experience || '3+ Years'} Exp</span>
-                                <span>•</span>
-                                <span className="text-zinc-300">{member.department}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Shift & Status Bar */}
-                          <div className="p-2.5 rounded-xl bg-zinc-950/80 border border-zinc-800/80 flex items-center justify-between text-xs">
-                            <div className="flex items-center gap-1.5 text-zinc-300 text-[11px]">
-                              <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                              <span className="font-mono">{member.shiftHours || '9:00 AM - 7:00 PM'}</span>
-                            </div>
-
-                            {/* Status Quick Changer */}
-                            <select
-                              value={member.status}
-                              onChange={(e) => updateStaffMember(member.id, { status: e.target.value as any })}
-                              className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border cursor-pointer focus:outline-none ${
-                                member.status === 'Available Today'
-                                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                                  : member.status === 'Active'
-                                  ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
-                                  : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
-                              }`}
-                            >
-                              <option value="Available Today" className="bg-zinc-900 text-emerald-400">Available Today</option>
-                              <option value="Active" className="bg-zinc-900 text-blue-400">Active</option>
-                              <option value="On Leave" className="bg-zinc-900 text-amber-400">On Leave</option>
-                            </select>
-                          </div>
-
-                          {/* Specialties Tags */}
-                          {member.specialties && member.specialties.length > 0 && (
-                            <div className="flex flex-wrap gap-1 pt-1">
-                              {member.specialties.map((spec, idx) => (
-                                <span
-                                  key={idx}
-                                  className="px-2 py-0.5 rounded-md bg-zinc-800/80 text-zinc-300 text-[10px] border border-zinc-700/60"
-                                >
-                                  {spec}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* Bio */}
-                          {member.bio && (
-                            <p className="text-[11px] text-zinc-400 italic line-clamp-2 leading-relaxed">
-                              "{member.bio}"
-                            </p>
-                          )}
-
-                          {/* Phone / Email Contact info */}
-                          <div className="text-[11px] text-zinc-400 flex flex-wrap gap-2 pt-1">
-                            {member.phone && (
-                              <a href={`tel:${member.phone}`} className="flex items-center gap-1 hover:text-amber-400">
-                                <Phone className="w-3 h-3 text-zinc-500" />
-                                <span>{member.phone}</span>
-                              </a>
-                            )}
-                            {member.email && (
-                              <a href={`mailto:${member.email}`} className="flex items-center gap-1 hover:text-amber-400">
-                                <Mail className="w-3 h-3 text-zinc-500" />
-                                <span>{member.email}</span>
-                              </a>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Actions */}
-                        <div className="pt-3 border-t border-zinc-800 flex items-center justify-between gap-2">
-                          <span className="text-[10px] text-zinc-500 font-mono">
-                            {member.totalClients || 120}+ Clients
-                          </span>
-
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => openEditStaffModal(member)}
-                              className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold flex items-center gap-1 cursor-pointer transition active:scale-95"
-                              title="Edit Staff Member"
-                            >
-                              <Edit2 className="w-3.5 h-3.5 text-amber-400" />
-                              <span>Edit</span>
-                            </button>
-                            <button
-                              onClick={() => setStaffToDelete(member)}
-                              className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs cursor-pointer transition active:scale-95"
-                              title="Delete Staff Member"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
+                        {dept}
+                      </button>
                     ))}
                   </div>
-                );
-              })()}
-            </div>
-          )}
+                </div>
+
+                {/* Staff Grid */}
+                {filteredStaff.length === 0 ? (
+                  <div className="p-12 text-center rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-3">
+                    <Users className="w-10 h-10 text-zinc-600 mx-auto" />
+                    <p className="text-sm font-semibold text-zinc-300">No staff members found</p>
+                    <p className="text-xs text-zinc-500">
+                      {staffSearch ? `No specialists match "${staffSearch}".` : 'Get started by adding your first salon stylist or specialist.'}
+                    </p>
+                    <button
+                      onClick={openAddStaffModal}
+                      className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs inline-flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Add New Staff</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredStaff.map(({ member, dyn, liveRating, liveReviewCount }) => {
+                      const isBusy = dyn.status === 'Busy';
+                      const isActiveSlot = dyn.status === 'Active';
+
+                      return (
+                        <div
+                          key={member.id}
+                          className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 flex flex-col justify-between space-y-4 hover:border-zinc-700 transition shadow-sm"
+                        >
+                          <div className="space-y-3">
+                            {/* Member Top Header */}
+                            <div className="flex items-start gap-3">
+                              <div className="relative shrink-0">
+                                <img
+                                  src={member.image || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80'}
+                                  alt={member.name}
+                                  className="w-14 h-14 rounded-2xl object-cover border border-zinc-700 shadow-md"
+                                />
+                                <span
+                                  className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-zinc-900 ${
+                                    isActiveSlot
+                                      ? 'bg-emerald-400'
+                                      : isBusy
+                                      ? 'bg-rose-500'
+                                      : 'bg-amber-400'
+                                  }`}
+                                  title={dyn.label}
+                                />
+                              </div>
+
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-1">
+                                  <h3 className="font-bold text-sm text-zinc-100 truncate">{member.name}</h3>
+                                  <div className="flex items-center gap-1 text-amber-400 text-xs font-bold shrink-0">
+                                    <Star className="w-3.5 h-3.5 fill-amber-400" />
+                                    <span>{liveRating}</span>
+                                  </div>
+                                </div>
+                                <p className="text-xs text-amber-400/90 font-medium truncate">{member.role}</p>
+                                <div className="flex items-center gap-1.5 mt-1 text-[10px] text-zinc-400 font-mono flex-wrap">
+                                  <Briefcase className="w-3 h-3 text-zinc-500" />
+                                  <span>{member.experience || '3+ Years'}</span>
+                                  <span>•</span>
+                                  <span className="text-zinc-300">{member.department}</span>
+                                  <span>•</span>
+                                  <span className="text-purple-300">{liveReviewCount} staff review{liveReviewCount === 1 ? '' : 's'}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Live Slot Busy vs Active Status Pill */}
+                            <div className={`px-3 py-2 rounded-xl border text-[11px] flex items-center justify-between gap-2 ${
+                              isBusy
+                                ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                                : isActiveSlot
+                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                                : 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+                            }`}>
+                              <span className="font-bold flex items-center gap-1.5">
+                                <span className={`w-2 h-2 rounded-full ${isBusy ? 'bg-rose-400' : isActiveSlot ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                                {isBusy ? `Busy (${dyn.label})` : isActiveSlot ? 'Active (Free in Slot)' : dyn.label}
+                              </span>
+                              <span className="font-mono text-[10px] opacity-90">
+                                {isBusy ? `Next: ${dyn.nextAvailableSlot}` : `${dyn.slotsBookedCount} today`}
+                              </span>
+                            </div>
+
+                            {/* Shift & Manual Roster Override Bar */}
+                            <div className="p-2.5 rounded-xl bg-zinc-950/80 border border-zinc-800/80 flex items-center justify-between text-xs">
+                              <div className="flex items-center gap-1.5 text-zinc-300 text-[11px]">
+                                <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                <span className="font-mono">{member.shiftHours || '9:00 AM - 7:00 PM'}</span>
+                              </div>
+
+                              <select
+                                value={member.status}
+                                onChange={(e) => updateStaffMember(member.id, { status: e.target.value as any })}
+                                className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border cursor-pointer focus:outline-none ${
+                                  member.status === 'Available Today'
+                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                                    : member.status === 'Active'
+                                    ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
+                                    : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                                }`}
+                              >
+                                <option value="Available Today" className="bg-zinc-900 text-emerald-400">Available Today</option>
+                                <option value="Active" className="bg-zinc-900 text-blue-400">Active</option>
+                                <option value="On Leave" className="bg-zinc-900 text-amber-400">On Leave</option>
+                              </select>
+                            </div>
+
+                            {/* Specialties Tags */}
+                            {member.specialties && member.specialties.length > 0 && (
+                              <div className="flex flex-wrap gap-1 pt-1">
+                                {member.specialties.map((spec, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="px-2 py-0.5 rounded-md bg-zinc-800/80 text-zinc-300 text-[10px] border border-zinc-700/60"
+                                  >
+                                    {spec}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Bio */}
+                            {member.bio && (
+                              <p className="text-[11px] text-zinc-400 italic line-clamp-2 leading-relaxed">
+                                "{member.bio}"
+                              </p>
+                            )}
+
+                            {/* Phone / Email Contact info */}
+                            <div className="text-[11px] text-zinc-400 flex flex-wrap gap-2 pt-1">
+                              {member.phone && (
+                                <a href={`tel:${member.phone}`} className="flex items-center gap-1 hover:text-amber-400">
+                                  <Phone className="w-3 h-3 text-zinc-500" />
+                                  <span>{member.phone}</span>
+                                </a>
+                              )}
+                              {member.email && (
+                                <a href={`mailto:${member.email}`} className="flex items-center gap-1 hover:text-amber-400">
+                                  <Mail className="w-3 h-3 text-zinc-500" />
+                                  <span>{member.email}</span>
+                                </a>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Actions */}
+                          <div className="pt-3 border-t border-zinc-800 flex items-center justify-between gap-2">
+                            <span className="text-[10px] text-zinc-500 font-mono">
+                              {member.totalClients || 120}+ Clients
+                            </span>
+
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => openEditStaffModal(member)}
+                                className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold flex items-center gap-1 cursor-pointer transition active:scale-95"
+                                title="Edit Staff Member"
+                              >
+                                <Edit2 className="w-3.5 h-3.5 text-amber-400" />
+                                <span>Edit</span>
+                              </button>
+                              <button
+                                onClick={() => setStaffToDelete(member)}
+                                className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs cursor-pointer transition active:scale-95"
+                                title="Delete Staff Member"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* THEMES TAB */}
           {adminTab === 'themes' && (
@@ -3111,18 +3272,25 @@ export const AdminSuite: React.FC = () => {
                     <div className="pt-2 border-t border-purple-200/80 dark:border-zinc-800 space-y-2">
                       <label className="text-[10px] text-zinc-600 dark:text-zinc-400 font-semibold block">Store Standee QR Poster Image</label>
                       <div className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => setViewingScreenshotUrl(scannerDraft.upiQrCodeUrl || '/assets/aistudio/image_d8a337a6.png')}
-                          className="w-16 h-16 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 overflow-hidden flex items-center justify-center shrink-0 p-1 cursor-pointer hover:ring-2 hover:ring-purple-400 transition"
-                          title="Click to preview full Scanner 1 QR"
-                        >
-                          <img
-                            src={scannerDraft.upiQrCodeUrl || '/assets/aistudio/image_d8a337a6.png'}
-                            alt="Primary QR Standee"
-                            className="w-full h-full object-contain"
-                          />
-                        </button>
+                        {scannerDraft.upiQrCodeUrl ? (
+                          <button
+                            type="button"
+                            onClick={() => setViewingScreenshotUrl(scannerDraft.upiQrCodeUrl)}
+                            className="w-16 h-16 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 overflow-hidden flex items-center justify-center shrink-0 p-1 cursor-pointer hover:ring-2 hover:ring-purple-400 transition"
+                            title="Click to preview full Scanner 1 QR"
+                          >
+                            <img
+                              src={scannerDraft.upiQrCodeUrl}
+                              alt="Primary QR Standee"
+                              className="w-full h-full object-contain"
+                            />
+                          </button>
+                        ) : (
+                          <div className="w-16 h-16 rounded-xl bg-white/80 dark:bg-zinc-900 border border-dashed border-purple-300 dark:border-zinc-700 flex flex-col items-center justify-center shrink-0 text-center px-1">
+                            <ImageIcon className="w-4 h-4 text-zinc-400 mb-0.5" />
+                            <span className="text-[8px] font-semibold text-zinc-500 leading-tight">No Image</span>
+                          </div>
+                        )}
                         <div className="space-y-1.5 flex-1">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-100 hover:bg-purple-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-purple-900 dark:text-white text-[11px] font-bold cursor-pointer transition">
@@ -3139,39 +3307,46 @@ export const AdminSuite: React.FC = () => {
                                 }}
                               />
                             </label>
-                            <button
-                              type="button"
-                              onClick={() => setViewingScreenshotUrl(scannerDraft.upiQrCodeUrl || '/assets/aistudio/image_d8a337a6.png')}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 text-purple-700 dark:text-amber-300 text-[10px] font-bold cursor-pointer hover:bg-purple-50 transition"
-                            >
-                              <Eye className="w-3 h-3" />
-                              <span>View</span>
-                            </button>
+                            {scannerDraft.upiQrCodeUrl && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => setViewingScreenshotUrl(scannerDraft.upiQrCodeUrl)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 text-purple-700 dark:text-amber-300 text-[10px] font-bold cursor-pointer hover:bg-purple-50 transition"
+                                >
+                                  <Eye className="w-3 h-3" />
+                                  <span>View</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    draftEditVersionRef.current += 1;
+                                    const clearedData = {
+                                      upiQrCodeUrl: '',
+                                      primaryQrCustomOnly: false,
+                                      primaryUpiExtraParams: ''
+                                    };
+                                    setScannerDraft(prev => ({ ...prev, ...clearedData }));
+                                    setHasUnsavedScannerChanges(false);
+                                    await updateSettings(clearedData);
+                                    setScannerSaveNotice({
+                                      type: 'success',
+                                      text: 'Scanner 1 image cleared! Client checkout now shows the Auto-Amount Dynamic QR for your UPI ID.'
+                                    });
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/50 dark:hover:bg-rose-900/50 border border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-300 text-[10px] font-bold cursor-pointer transition"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                  <span>Clear Image</span>
+                                </button>
+                              </>
+                            )}
                           </div>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              draftEditVersionRef.current += 1;
-                              const resetData = {
-                                accountHolder: 'MODERN JENTS PARLOUR',
-                                upiQrCodeUrl: '/assets/aistudio/image_d8a337a6.png',
-                                merchantUpiId: 'ghodakedinesh@ybl',
-                                upiId: 'ghodakedinesh@ybl',
-                                primaryQrCustomOnly: false,
-                                primaryUpiExtraParams: ''
-                              };
-                              setScannerDraft(prev => ({ ...prev, ...resetData }));
-                              setHasUnsavedScannerChanges(false);
-                              await updateSettings(resetData);
-                              setScannerSaveNotice({
-                                type: 'success',
-                                text: 'Scanner 1 reset to Official PhonePe QR (ghodakedinesh@ybl) and saved!'
-                              });
-                            }}
-                            className="text-[10px] text-purple-700 dark:text-amber-400 hover:underline block cursor-pointer"
-                          >
-                            Reset to Official PhonePe QR (MODERN JENTS PARLOUR)
-                          </button>
+                          <span className="text-[10px] text-zinc-500 block">
+                            {scannerDraft.upiQrCodeUrl
+                              ? 'Uploaded poster photo active on checkout.'
+                              : 'No poster uploaded — client checkout auto-generates an exact-amount QR from your UPI ID above.'}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -3228,18 +3403,25 @@ export const AdminSuite: React.FC = () => {
                     <div className="pt-2 border-t border-purple-200/80 dark:border-zinc-800 space-y-2">
                       <label className="text-[10px] text-zinc-600 dark:text-zinc-400 font-semibold block">Scanner 2 Poster Standee</label>
                       <div className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => setViewingScreenshotUrl(scannerDraft.secondaryUpiQrCodeUrl || '/assets/aistudio/image_0e674b10.png')}
-                          className="w-16 h-16 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 overflow-hidden flex items-center justify-center shrink-0 p-1 cursor-pointer hover:ring-2 hover:ring-purple-400 transition"
-                          title="Click to preview full Scanner 2 QR"
-                        >
-                          <img
-                            src={scannerDraft.secondaryUpiQrCodeUrl || '/assets/aistudio/image_0e674b10.png'}
-                            alt="Secondary QR Standee"
-                            className="w-full h-full object-contain"
-                          />
-                        </button>
+                        {scannerDraft.secondaryUpiQrCodeUrl ? (
+                          <button
+                            type="button"
+                            onClick={() => setViewingScreenshotUrl(scannerDraft.secondaryUpiQrCodeUrl)}
+                            className="w-16 h-16 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 overflow-hidden flex items-center justify-center shrink-0 p-1 cursor-pointer hover:ring-2 hover:ring-purple-400 transition"
+                            title="Click to preview full Scanner 2 QR"
+                          >
+                            <img
+                              src={scannerDraft.secondaryUpiQrCodeUrl}
+                              alt="Secondary QR Standee"
+                              className="w-full h-full object-contain"
+                            />
+                          </button>
+                        ) : (
+                          <div className="w-16 h-16 rounded-xl bg-white/80 dark:bg-zinc-900 border border-dashed border-purple-300 dark:border-zinc-700 flex flex-col items-center justify-center shrink-0 text-center px-1">
+                            <ImageIcon className="w-4 h-4 text-zinc-400 mb-0.5" />
+                            <span className="text-[8px] font-semibold text-zinc-500 leading-tight">No Image</span>
+                          </div>
+                        )}
                         <div className="space-y-1.5 flex-1">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-100 hover:bg-purple-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-purple-900 dark:text-white text-[11px] font-bold cursor-pointer transition">
@@ -3256,14 +3438,40 @@ export const AdminSuite: React.FC = () => {
                                 }}
                               />
                             </label>
-                            <button
-                              type="button"
-                              onClick={() => setViewingScreenshotUrl(scannerDraft.secondaryUpiQrCodeUrl || '/assets/aistudio/image_0e674b10.png')}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 text-purple-700 dark:text-purple-300 text-[10px] font-bold cursor-pointer hover:bg-purple-50 transition"
-                            >
-                              <Eye className="w-3 h-3" />
-                              <span>View</span>
-                            </button>
+                            {scannerDraft.secondaryUpiQrCodeUrl && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => setViewingScreenshotUrl(scannerDraft.secondaryUpiQrCodeUrl)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-700 text-purple-700 dark:text-purple-300 text-[10px] font-bold cursor-pointer hover:bg-purple-50 transition"
+                                >
+                                  <Eye className="w-3 h-3" />
+                                  <span>View</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    draftEditVersionRef.current += 1;
+                                    const clearedData = {
+                                      secondaryUpiQrCodeUrl: '',
+                                      secondaryQrCustomOnly: false,
+                                      secondaryUpiExtraParams: ''
+                                    };
+                                    setScannerDraft(prev => ({ ...prev, ...clearedData }));
+                                    setHasUnsavedScannerChanges(false);
+                                    await updateSettings(clearedData);
+                                    setScannerSaveNotice({
+                                      type: 'success',
+                                      text: 'Scanner 2 image cleared! Client checkout now shows the Auto-Amount Dynamic QR for Scanner 2.'
+                                    });
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/50 dark:hover:bg-rose-900/50 border border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-300 text-[10px] font-bold cursor-pointer transition"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                  <span>Clear Image</span>
+                                </button>
+                              </>
+                            )}
                           </div>
                           <button
                             type="button"
@@ -3292,75 +3500,6 @@ export const AdminSuite: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                </div>
-
-                {/* Verified Merchant UPI Gateway (Razorpay) — Eliminates PhonePe Personal VPA Browser Security Blocks */}
-                <div className="p-4 rounded-xl bg-purple-50/60 dark:bg-zinc-950 border border-purple-300/70 dark:border-amber-500/30 space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div>
-                      <div className="text-xs font-bold text-purple-800 dark:text-amber-400 flex items-center gap-1.5">
-                        <Zap className="w-4 h-4" />
-                        <span>Verified Merchant UPI Gateway (PhonePe &amp; Google Pay Zero-Decline)</span>
-                      </div>
-                      <p className="text-[11px] text-zinc-600 dark:text-zinc-400 mt-0.5 leading-relaxed">
-                        PhonePe Protect blocks browser redirects to personal <code className="font-mono">@ybl/@axl</code> IDs. Add your live Razorpay Merchant API keys (or upload a <strong>PhonePe Business Merchant QR</strong> above) so tapping PhonePe / GPay completes payment directly with zero security block.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleTestGatewayConnection}
-                      disabled={isTestingGateway}
-                      className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 dark:bg-amber-500 dark:hover:bg-amber-400 text-white dark:text-zinc-950 text-[11px] font-bold shrink-0 cursor-pointer disabled:opacity-50 transition"
-                    >
-                      {isTestingGateway ? 'Verifying...' : 'Test Gateway Connection'}
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="font-semibold text-zinc-600 dark:text-zinc-400 block mb-1">Razorpay Key ID</label>
-                      <input
-                        type="text"
-                        value={settings.razorpayKeyId || ''}
-                        onChange={(e) => updateSettings({ razorpayKeyId: e.target.value.trim() })}
-                        placeholder="rzp_live_... or rzp_test_..."
-                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="font-semibold text-zinc-600 dark:text-zinc-400 block mb-1">Razorpay Key Secret</label>
-                      <div className="relative">
-                        <input
-                          type={showRazorpaySecret ? 'text' : 'password'}
-                          value={settings.razorpayKeySecret || ''}
-                          onChange={(e) => updateSettings({ razorpayKeySecret: e.target.value.trim() })}
-                          placeholder="Enter Razorpay Key Secret"
-                          className="w-full px-3 py-2 pr-9 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:outline-none focus:border-purple-500 dark:focus:border-amber-500"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowRazorpaySecret(prev => !prev)}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700 dark:hover:text-white cursor-pointer"
-                          title={showRazorpaySecret ? 'Hide secret' : 'Show secret'}
-                        >
-                          {showRazorpaySecret ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {gatewayTestResult && (
-                    <div
-                      className={`p-2.5 rounded-xl border text-[11px] font-semibold flex items-center gap-2 ${
-                        gatewayTestResult.success
-                          ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-600/40 text-emerald-700 dark:text-emerald-300'
-                          : 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-600/40 text-amber-800 dark:text-amber-300'
-                      }`}
-                    >
-                      {gatewayTestResult.success ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> : <AlertCircle className="w-3.5 h-3.5 shrink-0" />}
-                      <span>{gatewayTestResult.message}</span>
-                    </div>
-                  )}
                 </div>
 
                 {/* Bank Account Details */}
@@ -4596,6 +4735,129 @@ export const AdminSuite: React.FC = () => {
                   </>
                 )}
               </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Offer Modal */}
+      {editingOffer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="font-serif text-lg font-bold text-zinc-100">Edit Promo Offer / Coupon</h3>
+              <button type="button" onClick={() => setEditingOffer(null)} className="text-zinc-400 hover:text-white cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateOfferSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="text-zinc-300 block mb-1">Coupon Code *</label>
+                <input
+                  type="text"
+                  required
+                  value={editOfferCode}
+                  onChange={(e) => setEditOfferCode(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-white uppercase font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="text-zinc-300 block mb-1">Offer Title *</label>
+                <input
+                  type="text"
+                  required
+                  value={editOfferTitle}
+                  onChange={(e) => setEditOfferTitle(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-zinc-300 block mb-1">Description</label>
+                <textarea
+                  rows={2}
+                  value={editOfferDesc}
+                  onChange={(e) => setEditOfferDesc(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-white resize-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-zinc-300 block mb-1">Discount Type</label>
+                  <select
+                    value={editOfferDiscountType}
+                    onChange={(e) => setEditOfferDiscountType(e.target.value as 'percent' | 'amount')}
+                    className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-white"
+                  >
+                    <option value="percent">Percentage (%)</option>
+                    <option value="amount">Flat Amount (₹)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-zinc-300 block mb-1">
+                    {editOfferDiscountType === 'percent' ? 'Discount (%)' : 'Flat Discount (₹)'}
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={editOfferDiscountVal}
+                    onChange={(e) => setEditOfferDiscountVal(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-zinc-300 block mb-1">Min Booking (₹)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={editOfferMin}
+                    onChange={(e) => setEditOfferMin(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-zinc-300 block mb-1">Valid Till</label>
+                  <input
+                    type="date"
+                    value={editOfferValidTill}
+                    onChange={(e) => setEditOfferValidTill(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-white [color-scheme:dark]"
+                  />
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 pt-1 text-zinc-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editOfferActive}
+                  onChange={(e) => setEditOfferActive(e.target.checked)}
+                  className="accent-amber-500"
+                />
+                <span>Coupon is Active &amp; Redeemable by Clients</span>
+              </label>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingOffer(null)}
+                  className="flex-1 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-xs cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingOffer}
+                  className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs cursor-pointer disabled:opacity-50"
+                >
+                  {isSavingOffer ? 'Saving...' : 'Save Offer Changes'}
+                </button>
+              </div>
             </form>
           </div>
         </div>

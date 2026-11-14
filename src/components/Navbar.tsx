@@ -290,6 +290,19 @@ export const Navbar: React.FC = () => {
               <Calendar className="w-3.5 h-3.5 text-white shrink-0" />
               <span className="whitespace-nowrap font-bold">Book Appointment</span>
             </button>
+
+            {/* 5. Top-Right Sign Out Icon Button (easy access on both mobile & desktop) */}
+            <button
+              id="navbar-signout-btn"
+              type="button"
+              onClick={() => logout()}
+              className="w-8 h-8 sm:w-auto sm:h-9 sm:px-3 rounded-full sm:rounded-xl border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shrink-0 shadow-xs"
+              title="Sign Out"
+              aria-label="Sign Out"
+            >
+              <LogOut className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span className="hidden lg:inline whitespace-nowrap">Sign Out</span>
+            </button>
           </div>
         </div>
       </div>

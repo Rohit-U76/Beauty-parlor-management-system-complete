@@ -25,7 +25,8 @@ import {
   ShieldCheck,
   Award,
   ArrowUpRight,
-  Filter
+  Filter,
+  Download
 } from 'lucide-react';
 import { useSalon } from '../context/SalonContext';
 
@@ -43,6 +44,34 @@ const COLORS = {
 };
 
 const PIE_COLORS = ['#d4af37', '#e5c158', '#10b981', '#38bdf8', '#a855f7', '#f43f5e'];
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+const parseAppointmentMonthKey = (dateStr?: string, fallbackDate: Date = new Date()): string => {
+  if (dateStr) {
+    const clean = dateStr.trim().split('T')[0];
+    const match = clean.match(/^(\d{4})-(\d{1,2})/);
+    if (match) {
+      const y = Number(match[1]);
+      const m = Number(match[2]);
+      if (y >= 2020 && m >= 1 && m <= 12) {
+        return `${y}-${String(m).padStart(2, '0')}`;
+      }
+    }
+    const parsed = new Date(dateStr);
+    if (!isNaN(parsed.getTime())) {
+      return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}`;
+    }
+  }
+  return `${fallbackDate.getFullYear()}-${String(fallbackDate.getMonth() + 1).padStart(2, '0')}`;
+};
+
+const formatMonthKeyLabel = (key: string, includeYear = false): string => {
+  const [yStr, mStr] = key.split('-');
+  const y = Number(yStr);
+  const m = Number(mStr);
+  if (!y || !m || m < 1 || m > 12) return key;
+  return includeYear ? `${MONTH_NAMES[m - 1]} ${y}` : `${MONTH_NAMES[m - 1]} '${String(y).slice(-2)}`;
+};
 
 export const AdminCharts: React.FC = () => {
   const { appointments, services, customers, theme } = useSalon();
@@ -51,63 +80,157 @@ export const AdminCharts: React.FC = () => {
   const isActiveBooking = (a: { bookingStatus?: string; status?: string }) =>
     ((a.bookingStatus || a.status || 'CONFIRMED').toUpperCase() !== 'CANCELLED');
 
-  // Chart View Controls
+  // Chart & Filter View Controls
   const [revenueChartType, setRevenueChartType] = useState<'area' | 'bar'>('area');
-  const [revenueTimeframe, setRevenueTimeframe] = useState<'all' | 'recent'>('all');
+  const [filterMode, setFilterMode] = useState<'all' | 'single' | 'range'>('all');
   const [serviceMetric, setServiceMetric] = useState<'bookings' | 'revenue'>('bookings');
 
-  // 1. Monthly Revenue & 10% Advance Deposit Dataset (100% Real Appointments across all accounts)
-  const monthlyRevenueData = useMemo(() => {
-    const activeApts = appointments.filter(isActiveBooking);
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const now = new Date();
+  const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-    // Build rolling 6-month baseline buckets ending at current month
-    const buckets = new Map<string, { month: string; revenue: number; advance: number; bookings: number; avgTicket: number }>();
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      buckets.set(key, {
-        month: monthNames[d.getMonth()],
+  // Build complete continuous timeline from earliest booking month to latest/current month
+  const { monthOptions, activeAppointmentsWithKey } = useMemo(() => {
+    const activeApts = appointments.filter(isActiveBooking).map(apt => ({
+      apt,
+      monthKey: parseAppointmentMonthKey(apt.date || apt.createdAt, now)
+    }));
+
+    let minKey = currentMonthKey;
+    let maxKey = currentMonthKey;
+
+    if (activeApts.length > 0) {
+      activeApts.forEach(({ monthKey }) => {
+        if (monthKey < minKey) minKey = monthKey;
+        if (monthKey > maxKey) maxKey = monthKey;
+      });
+    } else {
+      const sixBack = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+      minKey = `${sixBack.getFullYear()}-${String(sixBack.getMonth() + 1).padStart(2, '0')}`;
+    }
+
+    const [minY, minM] = minKey.split('-').map(Number);
+    const [maxY, maxM] = maxKey.split('-').map(Number);
+    const options: Array<{ key: string; shortLabel: string; fullLabel: string }> = [];
+
+    let cursorY = minY;
+    let cursorM = minM;
+    let guard = 0;
+    while ((cursorY < maxY || (cursorY === maxY && cursorM <= maxM)) && guard < 120) {
+      const key = `${cursorY}-${String(cursorM).padStart(2, '0')}`;
+      options.push({
+        key,
+        shortLabel: formatMonthKeyLabel(key, false),
+        fullLabel: formatMonthKeyLabel(key, true)
+      });
+      cursorM += 1;
+      if (cursorM > 12) {
+        cursorM = 1;
+        cursorY += 1;
+      }
+      guard += 1;
+    }
+
+    return {
+      monthOptions: options,
+      activeAppointmentsWithKey: activeApts
+    };
+  }, [appointments, currentMonthKey]);
+
+  const firstAvailableKey = monthOptions[0]?.key || currentMonthKey;
+  const lastAvailableKey = monthOptions[monthOptions.length - 1]?.key || currentMonthKey;
+
+  const [singleMonthKey, setSingleMonthKey] = useState<string>(currentMonthKey);
+  const [startMonthKey, setStartMonthKey] = useState<string>(firstAvailableKey);
+  const [endMonthKey, setEndMonthKey] = useState<string>(lastAvailableKey);
+
+  // Resolve effective [start, end] window safely
+  const { effectiveStartKey, effectiveEndKey, periodBadgeText } = useMemo(() => {
+    const validKeys = new Set(monthOptions.map(o => o.key));
+    if (filterMode === 'single') {
+      const target = validKeys.has(singleMonthKey) ? singleMonthKey : lastAvailableKey;
+      return {
+        effectiveStartKey: target,
+        effectiveEndKey: target,
+        periodBadgeText: formatMonthKeyLabel(target, true)
+      };
+    }
+    if (filterMode === 'range') {
+      const rawStart = validKeys.has(startMonthKey) ? startMonthKey : firstAvailableKey;
+      const rawEnd = validKeys.has(endMonthKey) ? endMonthKey : lastAvailableKey;
+      const effStart = rawStart <= rawEnd ? rawStart : rawEnd;
+      const effEnd = rawStart <= rawEnd ? rawEnd : rawStart;
+      return {
+        effectiveStartKey: effStart,
+        effectiveEndKey: effEnd,
+        periodBadgeText: `${formatMonthKeyLabel(effStart, true)} → ${formatMonthKeyLabel(effEnd, true)}`
+      };
+    }
+    return {
+      effectiveStartKey: firstAvailableKey,
+      effectiveEndKey: lastAvailableKey,
+      periodBadgeText:
+        firstAvailableKey === lastAvailableKey
+          ? formatMonthKeyLabel(firstAvailableKey, true)
+          : `${formatMonthKeyLabel(firstAvailableKey, true)} → ${formatMonthKeyLabel(lastAvailableKey, true)} (All)`
+    };
+  }, [filterMode, singleMonthKey, startMonthKey, endMonthKey, firstAvailableKey, lastAvailableKey, monthOptions]);
+
+  // Filtered Appointments within selected month / range
+  const filteredActiveApts = useMemo(() => {
+    return activeAppointmentsWithKey
+      .filter(({ monthKey }) => monthKey >= effectiveStartKey && monthKey <= effectiveEndKey)
+      .map(({ apt }) => apt);
+  }, [activeAppointmentsWithKey, effectiveStartKey, effectiveEndKey]);
+
+  // 1. Monthly Revenue & 10% Advance Deposit Dataset for selected period
+  const monthlyRevenueData = useMemo(() => {
+    const selectedMonths = monthOptions.filter(
+      opt => opt.key >= effectiveStartKey && opt.key <= effectiveEndKey
+    );
+
+    const buckets = new Map<
+      string,
+      { key: string; month: string; fullLabel: string; revenue: number; advance: number; bookings: number; avgTicket: number }
+    >();
+
+    selectedMonths.forEach(opt => {
+      buckets.set(opt.key, {
+        key: opt.key,
+        month: opt.shortLabel,
+        fullLabel: opt.fullLabel,
         revenue: 0,
         advance: 0,
         bookings: 0,
         avgTicket: 0
       });
-    }
+    });
 
-    activeApts.forEach(a => {
-      const dateStr = a.date || a.createdAt || '';
-      const parsed = dateStr ? new Date(dateStr) : now;
-      const d = isNaN(parsed.getTime()) ? now : parsed;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const existing = buckets.get(key) || {
-        month: `${monthNames[d.getMonth()]} '${String(d.getFullYear()).slice(-2)}`,
+    activeAppointmentsWithKey.forEach(({ apt, monthKey }) => {
+      if (monthKey < effectiveStartKey || monthKey > effectiveEndKey) return;
+      const existing = buckets.get(monthKey) || {
+        key: monthKey,
+        month: formatMonthKeyLabel(monthKey, false),
+        fullLabel: formatMonthKeyLabel(monthKey, true),
         revenue: 0,
         advance: 0,
         bookings: 0,
         avgTicket: 0
       };
-      existing.revenue += Number(a.totalAmount) || 0;
-      existing.advance += Number(a.advancePaid) || 0;
+      existing.revenue += Number(apt.totalAmount) || 0;
+      existing.advance += Number(apt.advancePaid) || 0;
       existing.bookings += 1;
       existing.avgTicket = existing.bookings > 0 ? Math.round(existing.revenue / existing.bookings) : 0;
-      buckets.set(key, existing);
+      buckets.set(monthKey, existing);
     });
 
-    const sorted = Array.from(buckets.entries())
-      .sort(([kA], [kB]) => kA.localeCompare(kB))
-      .map(([, val]) => val);
+    return Array.from(buckets.values()).sort((a, b) => a.key.localeCompare(b.key));
+  }, [monthOptions, activeAppointmentsWithKey, effectiveStartKey, effectiveEndKey]);
 
-    return revenueTimeframe === 'recent' ? sorted.slice(-4) : sorted;
-  }, [appointments, revenueTimeframe]);
-
-  // 2. Service Popularity & Category Breakdown Dataset (100% Real Appointments across all accounts)
+  // 2. Service Popularity & Category Breakdown Dataset from filtered bookings
   const { servicePopularityData, categoryDistributionData, topPerformingService, activeBookingsCount } = useMemo(() => {
-    const activeApts = appointments.filter(isActiveBooking);
     const serviceCounts: Record<string, { bookings: number; revenue: number; category: string; price: number }> = {};
 
-    activeApts.forEach(a => {
+    filteredActiveApts.forEach(a => {
       const sName = a.serviceName || 'Salon Service';
       if (!serviceCounts[sName]) {
         serviceCounts[sName] = {
@@ -121,7 +244,6 @@ export const AdminCharts: React.FC = () => {
       serviceCounts[sName].revenue += Number(a.totalAmount) || 0;
     });
 
-    // Format for Service Popularity Bar Chart (Top 6 booked services)
     const popularityArray = Object.entries(serviceCounts)
       .map(([name, data]) => ({
         name: name.length > 20 ? name.substring(0, 18) + '...' : name,
@@ -131,10 +253,9 @@ export const AdminCharts: React.FC = () => {
         category: data.category,
         advanceCollected: Math.round(data.revenue * 0.1)
       }))
-      .sort((a, b) => b.bookings - a.bookings)
+      .sort((a, b) => (serviceMetric === 'revenue' ? b.revenue - a.revenue : b.bookings - a.bookings))
       .slice(0, 6);
 
-    // Format for Category Distribution Pie Chart
     const categoryTotals: Record<string, number> = {};
     Object.values(serviceCounts).forEach(item => {
       if (item.revenue > 0) {
@@ -150,32 +271,95 @@ export const AdminCharts: React.FC = () => {
       }))
       .sort((a, b) => b.value - a.value);
 
-    const topService = popularityArray[0] || { fullName: 'No bookings yet', bookings: 0, revenue: 0 };
+    const topService = popularityArray[0] || { fullName: 'No bookings in range', bookings: 0, revenue: 0 };
 
     return {
       servicePopularityData: popularityArray,
       categoryDistributionData: categoryArray,
       topPerformingService: topService,
-      activeBookingsCount: activeApts.length
+      activeBookingsCount: filteredActiveApts.length
     };
-  }, [appointments]);
+  }, [filteredActiveApts, serviceMetric]);
 
-  // Overall totals for overview metric cards (computed strictly from active appointments)
+  // Summary KPIs strictly for the selected filter window
   const totalRevenueSum = useMemo(() => {
-    return appointments
-      .filter(isActiveBooking)
-      .reduce((acc, cur) => acc + (Number(cur.totalAmount) || 0), 0);
-  }, [appointments]);
+    return filteredActiveApts.reduce((acc, cur) => acc + (Number(cur.totalAmount) || 0), 0);
+  }, [filteredActiveApts]);
 
   const totalAdvanceSum = useMemo(() => {
-    return appointments
-      .filter(isActiveBooking)
-      .reduce((acc, cur) => acc + (Number(cur.advancePaid) || 0), 0);
-  }, [appointments]);
+    return filteredActiveApts.reduce((acc, cur) => acc + (Number(cur.advancePaid) || 0), 0);
+  }, [filteredActiveApts]);
 
   const avgTicketValue = useMemo(() => {
     return activeBookingsCount > 0 ? Math.round(totalRevenueSum / activeBookingsCount) : 0;
   }, [totalRevenueSum, activeBookingsCount]);
+
+  // CSV Export Helper
+  const escapeCsv = (val: unknown) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+
+  const handleExportAnalyticsCSV = () => {
+    const lines: string[] = [];
+    lines.push('MODERN UNISEX SALON - ANALYTICS & REVENUE REPORT');
+    lines.push(`Selected Period,${escapeCsv(periodBadgeText)}`);
+    lines.push(`Exported On,${escapeCsv(new Date().toISOString())}`);
+    lines.push(`Total Bookings,${activeBookingsCount}`);
+    lines.push(`Total Revenue (INR),${totalRevenueSum}`);
+    lines.push(`10% Advance Collected (INR),${totalAdvanceSum}`);
+    lines.push(`Average Booking Ticket (INR),${avgTicketValue}`);
+    lines.push('');
+
+    lines.push('MONTHLY PERFORMANCE BREAKDOWN');
+    lines.push('Month,Month Key,Bookings,Total Revenue (INR),10% Advance Collected (INR),Avg Ticket Size (INR)');
+    monthlyRevenueData.forEach(row => {
+      lines.push(
+        [
+          escapeCsv(row.fullLabel),
+          escapeCsv(row.key),
+          row.bookings,
+          row.revenue,
+          row.advance,
+          row.avgTicket
+        ].join(',')
+      );
+    });
+    lines.push('');
+
+    lines.push('DETAILED BOOKING LEDGER (FILTERED)');
+    lines.push('Booking Ref,Date,Time Slot,Client Name,Phone,Service,Category,Stylist,Total Amount (INR),Advance Paid (INR),Balance Due (INR),Payment Status,Booking Status');
+    filteredActiveApts
+      .slice()
+      .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+      .forEach(a => {
+        lines.push(
+          [
+            escapeCsv(a.bookingRef || a.id),
+            escapeCsv((a.date || '').split('T')[0]),
+            escapeCsv(a.timeSlot),
+            escapeCsv(a.clientName),
+            escapeCsv(a.clientPhone),
+            escapeCsv(a.serviceName),
+            escapeCsv(a.category || 'General'),
+            escapeCsv(a.stylistName || 'Staff'),
+            Number(a.totalAmount) || 0,
+            Number(a.advancePaid) || 0,
+            Number(a.balanceDue) || 0,
+            escapeCsv(a.paymentStatus || 'PAID'),
+            escapeCsv(a.bookingStatus || a.status || 'CONFIRMED')
+          ].join(',')
+        );
+      });
+
+    const csvContent = lines.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `modern-salon-analytics-${effectiveStartKey}-to-${effectiveEndKey}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   // Custom Chart Tooltip for Revenue
   const CustomRevenueTooltip = ({ active, payload, label }: any) => {
@@ -183,12 +367,12 @@ export const AdminCharts: React.FC = () => {
       const data = payload[0].payload;
       return (
         <div className={`p-4 rounded-xl border shadow-xl text-xs space-y-2 backdrop-blur-md ${
-          isDark 
-            ? 'bg-zinc-950/95 border-zinc-700 text-zinc-100' 
+          isDark
+            ? 'bg-zinc-950/95 border-zinc-700 text-zinc-100'
             : 'bg-white/95 border-zinc-200 text-zinc-800 shadow-slate-300'
         }`}>
           <div className="font-bold text-sm font-serif text-yellow-500 flex items-center justify-between gap-4">
-            <span>{label} 2026</span>
+            <span>{data.fullLabel || label}</span>
             <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-yellow-500/10 text-yellow-500 font-normal">
               {data.bookings} Bookings
             </span>
@@ -225,8 +409,8 @@ export const AdminCharts: React.FC = () => {
       const data = payload[0].payload;
       return (
         <div className={`p-4 rounded-xl border shadow-xl text-xs space-y-2 backdrop-blur-md ${
-          isDark 
-            ? 'bg-zinc-950/95 border-zinc-700 text-zinc-100' 
+          isDark
+            ? 'bg-zinc-950/95 border-zinc-700 text-zinc-100'
             : 'bg-white/95 border-zinc-200 text-zinc-800 shadow-slate-300'
         }`}>
           <div className="font-bold text-sm text-yellow-500">{data.fullName}</div>
@@ -253,33 +437,165 @@ export const AdminCharts: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* SECTION HEADER & PERFORMANCE SUMMARY */}
-      <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b ${isDark ? 'border-zinc-800/80' : 'border-purple-200'}`}>
+      {/* SECTION HEADER & EXPORT CSV */}
+      <div className={`flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-3 border-b ${isDark ? 'border-zinc-800/80' : 'border-purple-200'}`}>
         <div>
           <h2 className="text-xl font-bold font-serif text-purple-800 dark:text-yellow-400 flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-purple-600 dark:text-yellow-500" />
             <span>Salon Performance Analytics &amp; Revenue Trends</span>
           </h2>
           <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
-            Combined multi-account performance across all {customers.length} CRM clients, {activeBookingsCount} bookings, and 10% advance deposit receipts.
+            Showing <strong className="text-purple-700 dark:text-amber-400">{periodBadgeText}</strong> • {activeBookingsCount} active bookings across {customers.length} CRM clients.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="px-3 py-1.5 rounded-xl bg-purple-100 dark:bg-yellow-500/10 border border-purple-200 dark:border-yellow-500/30 text-purple-800 dark:text-yellow-400 text-xs font-semibold flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>All Users Sync Active ({customers.length} Clients)</span>
+            <span>Start → End History ({monthOptions.length} Months)</span>
           </div>
+
+          <button
+            type="button"
+            id="admin-analytics-export-csv"
+            onClick={handleExportAnalyticsCSV}
+            className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Export CSV</span>
+          </button>
         </div>
       </div>
 
-      {/* 4 SUMMARY STAT STRIP */}
+      {/* MONTH & DATE-RANGE FILTER BAR */}
+      <div className={`p-4 rounded-2xl border flex flex-col lg:flex-row lg:items-center justify-between gap-3 ${
+        isDark ? 'bg-[#141418] border-zinc-800' : 'bg-white border-purple-200 shadow-sm'
+      }`}>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-bold text-zinc-600 dark:text-zinc-300 flex items-center gap-1.5 mr-1">
+            <Filter className="w-3.5 h-3.5 text-purple-600 dark:text-amber-400" />
+            <span>Report Period:</span>
+          </span>
+          <div className={`flex items-center p-1 rounded-xl border text-xs ${
+            isDark ? 'bg-zinc-900 border-zinc-700/60' : 'bg-purple-50 border-purple-200'
+          }`}>
+            <button
+              type="button"
+              id="analytics-filter-all"
+              onClick={() => setFilterMode('all')}
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                filterMode === 'all'
+                  ? 'bg-amber-500 text-zinc-950 font-bold shadow-sm'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+              }`}
+            >
+              All Months (Start → End)
+            </button>
+            <button
+              type="button"
+              id="analytics-filter-single"
+              onClick={() => {
+                setFilterMode('single');
+                if (!monthOptions.some(m => m.key === singleMonthKey)) {
+                  setSingleMonthKey(lastAvailableKey);
+                }
+              }}
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                filterMode === 'single'
+                  ? 'bg-amber-500 text-zinc-950 font-bold shadow-sm'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+              }`}
+            >
+              Single Month
+            </button>
+            <button
+              type="button"
+              id="analytics-filter-range"
+              onClick={() => {
+                setFilterMode('range');
+                if (!monthOptions.some(m => m.key === startMonthKey)) setStartMonthKey(firstAvailableKey);
+                if (!monthOptions.some(m => m.key === endMonthKey)) setEndMonthKey(lastAvailableKey);
+              }}
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                filterMode === 'range'
+                  ? 'bg-amber-500 text-zinc-950 font-bold shadow-sm'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+              }`}
+            >
+              Start → End Month
+            </button>
+          </div>
+        </div>
+
+        {/* Dynamic Month Dropdowns */}
+        <div className="flex flex-wrap items-center gap-2.5 text-xs">
+          {filterMode === 'single' && (
+            <div className="flex items-center gap-2">
+              <label className="font-semibold text-zinc-600 dark:text-zinc-400">Select Month:</label>
+              <select
+                id="analytics-single-month-select"
+                value={effectiveStartKey}
+                onChange={(e) => setSingleMonthKey(e.target.value)}
+                className={`px-3 py-1.5 rounded-xl border font-bold focus:outline-none focus:ring-2 focus:ring-amber-500/40 ${
+                  isDark ? 'bg-zinc-900 border-zinc-700 text-zinc-100' : 'bg-purple-50 border-purple-200 text-zinc-900'
+                }`}
+              >
+                {monthOptions.map(opt => (
+                  <option key={opt.key} value={opt.key}>{opt.fullLabel}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {filterMode === 'range' && (
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="font-semibold text-zinc-600 dark:text-zinc-400">Start Month:</label>
+              <select
+                id="analytics-start-month-select"
+                value={startMonthKey}
+                onChange={(e) => setStartMonthKey(e.target.value)}
+                className={`px-3 py-1.5 rounded-xl border font-bold focus:outline-none focus:ring-2 focus:ring-amber-500/40 ${
+                  isDark ? 'bg-zinc-900 border-zinc-700 text-zinc-100' : 'bg-purple-50 border-purple-200 text-zinc-900'
+                }`}
+              >
+                {monthOptions.map(opt => (
+                  <option key={opt.key} value={opt.key}>{opt.fullLabel}</option>
+                ))}
+              </select>
+
+              <span className="text-zinc-500 font-bold">to</span>
+
+              <label className="font-semibold text-zinc-600 dark:text-zinc-400">End Month:</label>
+              <select
+                id="analytics-end-month-select"
+                value={endMonthKey}
+                onChange={(e) => setEndMonthKey(e.target.value)}
+                className={`px-3 py-1.5 rounded-xl border font-bold focus:outline-none focus:ring-2 focus:ring-amber-500/40 ${
+                  isDark ? 'bg-zinc-900 border-zinc-700 text-zinc-100' : 'bg-purple-50 border-purple-200 text-zinc-900'
+                }`}
+              >
+                {monthOptions.map(opt => (
+                  <option key={opt.key} value={opt.key}>{opt.fullLabel}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {filterMode === 'all' && (
+            <span className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400">
+              Range: {formatMonthKeyLabel(firstAvailableKey, true)} — {formatMonthKeyLabel(lastAvailableKey, true)}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* 4 SUMMARY STAT STRIP (Filtered) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className={`p-4 rounded-2xl border transition-all ${
           isDark ? 'bg-[#141418] border-zinc-800' : 'bg-white border-purple-200 shadow-sm'
         }`}>
           <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400 mb-1">
-            <span>YTD Realized Revenue</span>
+            <span>{filterMode === 'all' ? 'All-Time Revenue' : 'Filtered Period Revenue'}</span>
             <DollarSign className="w-4 h-4 text-purple-600 dark:text-yellow-500" />
           </div>
           <div className="text-2xl font-bold text-purple-700 dark:text-yellow-400 font-serif">
@@ -287,7 +603,7 @@ export const AdminCharts: React.FC = () => {
           </div>
           <div className="text-[11px] text-emerald-600 dark:text-emerald-500 flex items-center gap-1 mt-1 font-semibold">
             <ArrowUpRight className="w-3.5 h-3.5" />
-            <span>{activeBookingsCount} active booking{activeBookingsCount === 1 ? '' : 's'}</span>
+            <span>{activeBookingsCount} booking{activeBookingsCount === 1 ? '' : 's'} in range</span>
           </div>
         </div>
 
@@ -302,7 +618,7 @@ export const AdminCharts: React.FC = () => {
             ₹{totalAdvanceSum.toLocaleString()}
           </div>
           <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1">
-            Direct Bank UPI verified capture
+            PhonePe / Google Pay UPI verified
           </div>
         </div>
 
@@ -343,56 +659,27 @@ export const AdminCharts: React.FC = () => {
       }`}>
         <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b ${isDark ? 'border-zinc-800/60' : 'border-purple-200/70'}`}>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h3 className="font-serif text-lg font-bold text-zinc-900 dark:text-zinc-100">
                 Monthly Revenue &amp; 10% Advance Realization
               </h3>
               <span className="px-2 py-0.5 rounded-full bg-purple-100 dark:bg-yellow-500/10 text-purple-700 dark:text-yellow-400 text-[10px] font-bold">
-                All Clients
+                {periodBadgeText}
               </span>
             </div>
             <p className="text-xs text-zinc-600 dark:text-zinc-400">
-              Tracking total appointment value alongside verified 10% advance deposit receipts month-by-month.
+              Complete monthly figures from start to end including 10% advance deposit receipts.
             </p>
           </div>
 
           <div className="flex items-center gap-2 self-end sm:self-auto">
-            {/* Timeframe selector */}
-            <div className={`flex items-center p-1 rounded-xl border text-xs ${
-              isDark ? 'bg-zinc-900 border-zinc-700/60' : 'bg-purple-50 border-purple-200'
-            }`}>
-              <button
-                type="button"
-                onClick={() => setRevenueTimeframe('all')}
-                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                  revenueTimeframe === 'all'
-                    ? 'bg-yellow-500 text-black font-bold shadow-sm'
-                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
-                }`}
-              >
-                All Months
-              </button>
-              <button
-                type="button"
-                onClick={() => setRevenueTimeframe('recent')}
-                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                  revenueTimeframe === 'recent'
-                    ? 'bg-yellow-500 text-black font-bold shadow-sm'
-                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
-                }`}
-              >
-                Recent (4 Mos)
-              </button>
-            </div>
-
-            {/* Type selector */}
             <div className={`flex items-center p-1 rounded-xl border text-xs ${
               isDark ? 'bg-zinc-900 border-zinc-700/60' : 'bg-zinc-100 border-zinc-300'
             }`}>
               <button
                 type="button"
                 onClick={() => setRevenueChartType('area')}
-                className={`p-1.5 rounded-lg transition-all ${
+                className={`p-1.5 rounded-lg transition-all cursor-pointer ${
                   revenueChartType === 'area'
                     ? 'bg-yellow-500 text-black font-bold shadow-sm'
                     : 'text-zinc-400 hover:text-zinc-200'
@@ -404,7 +691,7 @@ export const AdminCharts: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setRevenueChartType('bar')}
-                className={`p-1.5 rounded-lg transition-all ${
+                className={`p-1.5 rounded-lg transition-all cursor-pointer ${
                   revenueChartType === 'bar'
                     ? 'bg-yellow-500 text-black font-bold shadow-sm'
                     : 'text-zinc-400 hover:text-zinc-200'
@@ -452,7 +739,7 @@ export const AdminCharts: React.FC = () => {
                   fontSize={11}
                   tickLine={false}
                   axisLine={false}
-                  tickFormatter={(val) => `₹${val / 1000}k`}
+                  tickFormatter={(val) => `₹${val >= 1000 ? `${(val / 1000).toFixed(1)}k` : val}`}
                 />
                 <Tooltip content={<CustomRevenueTooltip />} />
                 <Legend
@@ -507,7 +794,7 @@ export const AdminCharts: React.FC = () => {
                   fontSize={11}
                   tickLine={false}
                   axisLine={false}
-                  tickFormatter={(val) => `₹${val / 1000}k`}
+                  tickFormatter={(val) => `₹${val >= 1000 ? `${(val / 1000).toFixed(1)}k` : val}`}
                 />
                 <Tooltip content={<CustomRevenueTooltip />} />
                 <Legend
@@ -541,8 +828,6 @@ export const AdminCharts: React.FC = () => {
 
       {/* 2-COLUMN GRID: SERVICE POPULARITY & CATEGORY REVENUE DISTRIBUTION */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* CHART 2: SERVICE POPULARITY (BAR CHART) */}
         <div className={`lg:col-span-7 p-5 sm:p-6 rounded-3xl border shadow-xl space-y-4 transition-all ${
           isDark ? 'bg-[#141418] border-zinc-800' : 'bg-white border-purple-200'
         }`}>
@@ -553,11 +838,10 @@ export const AdminCharts: React.FC = () => {
                 <span>Service Popularity &amp; Booking Volume</span>
               </h3>
               <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                Most requested treatments and cumulative client reservations across all accounts.
+                Most requested treatments for {periodBadgeText}.
               </p>
             </div>
 
-            {/* Metric Toggle */}
             <div className={`flex items-center p-1 rounded-xl border text-xs self-end sm:self-auto ${
               isDark ? 'bg-zinc-900 border-zinc-700/60' : 'bg-purple-50 border-purple-200'
             }`}>
@@ -586,12 +870,11 @@ export const AdminCharts: React.FC = () => {
             </div>
           </div>
 
-          {/* Popularity Bar Chart */}
           <div className="h-64 sm:h-72 w-full pt-1">
             {servicePopularityData.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center text-xs text-zinc-500 gap-2 border border-dashed border-zinc-800 rounded-2xl">
                 <Scissors className="w-6 h-6 text-zinc-600" />
-                <span>No service bookings recorded yet.</span>
+                <span>No service bookings recorded in this period.</span>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -640,7 +923,6 @@ export const AdminCharts: React.FC = () => {
           </div>
         </div>
 
-        {/* CHART 3: CATEGORY SHARE DONUT CHART */}
         <div className={`lg:col-span-5 p-5 sm:p-6 rounded-3xl border shadow-xl space-y-4 flex flex-col justify-between transition-all ${
           isDark ? 'bg-[#141418] border-zinc-800' : 'bg-white border-purple-200'
         }`}>
@@ -661,7 +943,7 @@ export const AdminCharts: React.FC = () => {
               {categoryDistributionData.length === 0 ? (
                 <div className="text-center text-xs text-zinc-500 space-y-1">
                   <PieIcon className="w-6 h-6 text-zinc-600 mx-auto" />
-                  <div>No category revenue recorded yet.</div>
+                  <div>No category revenue in this period.</div>
                 </div>
               ) : (
                 <>
@@ -698,7 +980,6 @@ export const AdminCharts: React.FC = () => {
                     </PieChart>
                   </ResponsiveContainer>
 
-                  {/* Center Stat Badge */}
                   <div className="absolute flex flex-col items-center justify-center pointer-events-none text-center">
                     <span className="text-[10px] text-zinc-400 uppercase font-mono tracking-widest">
                       DEPARTMENTS
@@ -712,7 +993,6 @@ export const AdminCharts: React.FC = () => {
             </div>
           </div>
 
-          {/* Category Legend List */}
           <div className={`space-y-1.5 pt-2 border-t text-xs ${isDark ? 'border-zinc-800/60' : 'border-purple-200/70'}`}>
             {categoryDistributionData.length === 0 ? (
               <div className="text-zinc-500 text-center py-1">No department earnings yet</div>
@@ -733,6 +1013,68 @@ export const AdminCharts: React.FC = () => {
               ))
             )}
           </div>
+        </div>
+      </div>
+
+      {/* MONTHLY BREAKDOWN TABLE (START TO END) */}
+      <div className={`p-5 sm:p-6 rounded-3xl border shadow-xl space-y-4 ${
+        isDark ? 'bg-[#141418] border-zinc-800' : 'bg-white border-purple-200'
+      }`}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h3 className="font-serif text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100">
+              Month-by-Month Performance Ledger
+            </h3>
+            <p className="text-xs text-zinc-600 dark:text-zinc-400">
+              Full chronological breakdown for {periodBadgeText} ({monthlyRevenueData.length} month{monthlyRevenueData.length === 1 ? '' : 's'})
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleExportAnalyticsCSV}
+            className="px-3 py-1.5 rounded-xl bg-zinc-900 dark:bg-zinc-800 hover:bg-zinc-800 dark:hover:bg-zinc-700 text-white text-xs font-semibold inline-flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Download Monthly &amp; Booking CSV</span>
+          </button>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs text-left border-collapse">
+            <thead>
+              <tr className={`border-b text-[11px] uppercase tracking-wider ${
+                isDark ? 'border-zinc-800 text-zinc-400' : 'border-purple-200 text-zinc-600'
+              }`}>
+                <th className="py-2.5 pr-4">Month</th>
+                <th className="py-2.5 px-3 text-right">Bookings</th>
+                <th className="py-2.5 px-3 text-right">Total Revenue</th>
+                <th className="py-2.5 px-3 text-right">10% Advance</th>
+                <th className="py-2.5 pl-3 text-right">Avg Ticket</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-200/60 dark:divide-zinc-800/60 font-mono">
+              {monthlyRevenueData.map(row => (
+                <tr key={row.key} className="hover:bg-purple-50/40 dark:hover:bg-zinc-900/60 transition">
+                  <td className="py-2.5 pr-4 font-sans font-semibold text-zinc-900 dark:text-zinc-100">{row.fullLabel}</td>
+                  <td className="py-2.5 px-3 text-right text-zinc-700 dark:text-zinc-300">{row.bookings}</td>
+                  <td className="py-2.5 px-3 text-right font-bold text-purple-700 dark:text-amber-400">₹{row.revenue.toLocaleString()}</td>
+                  <td className="py-2.5 px-3 text-right font-semibold text-emerald-600 dark:text-emerald-400">₹{row.advance.toLocaleString()}</td>
+                  <td className="py-2.5 pl-3 text-right text-zinc-600 dark:text-zinc-400">₹{row.avgTicket.toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className={`border-t-2 font-mono font-bold ${
+                isDark ? 'border-zinc-700 text-zinc-100' : 'border-purple-300 text-zinc-900'
+              }`}>
+                <td className="py-3 pr-4 font-sans">Period Total</td>
+                <td className="py-3 px-3 text-right">{activeBookingsCount}</td>
+                <td className="py-3 px-3 text-right text-purple-700 dark:text-amber-400">₹{totalRevenueSum.toLocaleString()}</td>
+                <td className="py-3 px-3 text-right text-emerald-600 dark:text-emerald-400">₹{totalAdvanceSum.toLocaleString()}</td>
+                <td className="py-3 pl-3 text-right">₹{avgTicketValue.toLocaleString()}</td>
+              </tr>
+            </tfoot>
+          </table>
         </div>
       </div>
     </div>

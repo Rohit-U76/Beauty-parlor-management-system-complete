@@ -524,7 +524,7 @@ export const SmartRecommendationQuiz: React.FC = () => {
                         </div>
 
                         <div className="border-t border-zinc-200 dark:border-zinc-800/80 pt-2 flex items-center justify-between">
-                          <span className="text-[11px] text-zinc-500">Pay {currentAdvPct}% online via Razorpay</span>
+                          <span className="text-[11px] text-zinc-500">Pay {currentAdvPct}% online via UPI</span>
                           <button
                             type="button"
                             onClick={() => handleBookPackage(pkg)}
