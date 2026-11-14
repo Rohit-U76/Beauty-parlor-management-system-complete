@@ -1208,7 +1208,7 @@ export const AdminSuite: React.FC = () => {
           </nav>
         </div>
 
-        {/* Admin Profile & Sign Out Controls */}
+        {/* Admin Profile & Theme Controls */}
         <div className="p-4 border-t border-purple-200 dark:border-zinc-800 space-y-3">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">Display Theme</span>
@@ -1231,17 +1231,6 @@ export const AdminSuite: React.FC = () => {
               </div>
             </div>
           )}
-
-          {/* Dedicated Sign Out button */}
-          <button
-            id="admin-sidebar-signout-btn"
-            onClick={() => logout()}
-            className="w-full py-2.5 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer"
-            title="Sign Out"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>Sign Out</span>
-          </button>
         </div>
       </aside>
 
@@ -1324,8 +1313,8 @@ export const AdminSuite: React.FC = () => {
             </div>
           </div>
 
-          {/* Drawer Footer with Admin Details & Exit */}
-          <div className="p-4 border-t border-purple-200 dark:border-zinc-800 bg-purple-50/90 dark:bg-zinc-900/90 space-y-3">
+          {/* Drawer Footer with Admin Details */}
+          <div className="p-4 border-t border-purple-200 dark:border-zinc-800 bg-purple-50/90 dark:bg-zinc-900/90">
             {currentUser && (
               <div className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-zinc-800/60 border border-purple-200 dark:border-zinc-700/60">
                 <div className="w-9 h-9 rounded-xl bg-purple-600 dark:bg-amber-500 text-white dark:text-zinc-950 flex items-center justify-center font-bold text-sm">
@@ -1342,15 +1331,6 @@ export const AdminSuite: React.FC = () => {
                 </div>
               </div>
             )}
-
-            <button
-              onClick={() => logout()}
-              className="w-full min-h-[44px] py-2.5 px-4 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/15 dark:hover:bg-rose-500/25 border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer"
-              title="Sign Out"
-            >
-              <LogOut className="w-4 h-4" />
-              <span>Sign Out</span>
-            </button>
           </div>
         </div>
       )}
